@@ -1,0 +1,51 @@
+{
+  "name": "Geko",
+  "version": "1.0.0",
+  "main": "expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^14.0.2",
+    "@op-engineering/op-sqlite": "^8.0.0",
+    "@react-native-async-storage/async-storage": "^1.23.1",
+    "@react-navigation/bottom-tabs": "^6.5.20",
+    "@react-navigation/native": "^6.1.17",
+    "@react-navigation/native-stack": "^6.9.26",
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
+    "@shopify/flash-list": "^1.6.4",
+    "@types/three": "^0.185.4",
+    "date-fns": "^3.6.0",
+    "expo": "~51.0.14",
+    "expo-blur": "~13.0.2",
+    "expo-build-properties": "^57.0.17",
+    "expo-font": "~12.0.10",
+    "expo-gl": "~14.0.2",
+    "expo-haptics": "~13.0.1",
+    "expo-status-bar": "~1.12.1",
+    "lucide-react-native": "^0.395.0",
+    "react": "18.2.0",
+    "react-native": "0.74.2",
+    "react-native-gesture-handler": "~2.16.1",
+    "react-native-reanimated": "~3.10.1",
+    "react-native-safe-area-context": "4.10.1",
+    "react-native-screens": "3.31.1",
+    "react-native-svg": "^15.2.0",
+    "sqlite-vec": "^0.1.1",
+    "three": "^0.185.1",
+    "uuid": "^10.0.0",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0",
+    "@babel/plugin-transform-class-static-block": "^7.29.7",
+    "@types/react": "~18.2.45",
+    "@types/uuid": "^10.0.0",
+    "typescript": "^5.1.3"
+  },
+  "private": true
+}
