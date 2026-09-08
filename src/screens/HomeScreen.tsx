@@ -41,7 +41,9 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
           <View style={[styles.avatarPlaceholder, { backgroundColor: colors.surfaceHighlight }]} />
         </View>
 
-        <BalanceCard balance={balance} dailyLimit={150} spentToday={spentToday} />
+        <View style={{ marginHorizontal: -20 }}>
+          <BalanceCard balance={balance} dailyLimit={150} spentToday={spentToday} />
+        </View>
         
         <ActionRow />
         
