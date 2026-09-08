@@ -4,7 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
 import { useCards, Card } from '../hooks/useCards';
 import { formatCurrency } from '../utils/formatters';
-import { Plus, MoreHorizontal, Wallet, TrendingUp } from 'lucide-react-native';
+import { Plus, MoreHorizontal, Wallet, TrendingUp, Sparkles } from 'lucide-react-native';
+import { GekoCard3D } from '../components/wallet/GekoCard3D';
 
 const { width } = Dimensions.get('window');
 
@@ -26,10 +27,10 @@ export const WalletScreen = () => {
   const renderCard = (card: Card, index: number) => {
     // We treat all seeded cards as Debit right now, can be adjusted later
     const accountType = 'Debit • PHP';
-    
+
     return (
-      <TouchableOpacity 
-        key={card.id} 
+      <TouchableOpacity
+        key={card.id}
         style={[styles.accountCard, { backgroundColor: card.color1 }]}
         activeOpacity={0.9}
       >
@@ -56,7 +57,7 @@ export const WalletScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
@@ -70,6 +71,20 @@ export const WalletScreen = () => {
             </TouchableOpacity>
           </View>
           <Text style={styles.subtitle}>Manage your wallets and balances</Text>
+
+          {/* Featured 3D Geko Platinum Card */}
+          <View style={styles.featuredCardContainer}>
+            <GekoCard3D
+              balance={netWorth}
+              spentToday={760}
+              dailyLimit={150}
+              cardNumber="4289 •••• •••• 9012"
+              cardholderName="GEKO MEMBER"
+              accountType="DEBIT • PLATINUM"
+              expiryDate="10/29"
+              height={220}
+            />
+          </View>
         </View>
 
         {/* Green Section & Net Worth */}
@@ -92,10 +107,10 @@ export const WalletScreen = () => {
           {/* Filters */}
           <View style={styles.filtersContainer}>
             {(['All', 'Debit', 'Credit'] as const).map(f => (
-              <TouchableOpacity 
+              <TouchableOpacity
                 key={f}
                 style={[
-                  styles.filterBtn, 
+                  styles.filterBtn,
                   filter === f ? styles.filterBtnActive : styles.filterBtnInactive
                 ]}
                 onPress={() => setFilter(f)}
@@ -118,7 +133,7 @@ export const WalletScreen = () => {
               <Text style={styles.insightLink}>Forecast cashflow {'>'}</Text>
             </View>
             <Text style={styles.insightQuote}>
-              That's a solid amount of liquidity. <Text style={{fontWeight: 'bold'}}>Very adult</Text>, in the best boring and financially useful way.
+              That's a solid amount of liquidity. <Text style={{ fontWeight: 'bold' }}>Very adult</Text>, in the best boring and financially useful way.
             </Text>
           </View>
 
@@ -130,7 +145,7 @@ export const WalletScreen = () => {
                 <View key={i} style={styles.barColumn}>
                   <View style={[styles.barFill, { flex: height, backgroundColor: i === 6 ? '#4A7C59' : '#A9C9B4' }]} />
                   <Text style={[styles.barDay, { fontWeight: i === 6 ? 'bold' : 'normal', color: i === 6 ? '#000' : '#888' }]}>
-                    {['T','W','T','F','S','S','M'][i]}
+                    {['T', 'W', 'T', 'F', 'S', 'S', 'M'][i]}
                   </Text>
                 </View>
               ))}
@@ -160,8 +175,9 @@ const styles = StyleSheet.create({
   addAccountBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F3EB', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, gap: 6 },
   addAccountText: { color: '#4A7C59', fontWeight: '700', fontSize: 14 },
   subtitle: { color: '#666', fontSize: 16 },
-  
-  greenSection: { backgroundColor: '#4A7C59', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 32, marginTop: 40 },
+  featuredCardContainer: { marginTop: 14 },
+
+  greenSection: { backgroundColor: '#4A7C59', borderTopLeftRadius: 32, borderTopRightRadius: 32, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 32, marginTop: 24 },
   netWorthCard: { backgroundColor: '#fff', borderRadius: 24, padding: 24, marginTop: -60, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
   netWorthHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
   netWorthLabel: { fontSize: 12, fontWeight: '700', color: '#888', letterSpacing: 1 },
@@ -170,7 +186,7 @@ const styles = StyleSheet.create({
   netWorthValue: { fontSize: 36, fontWeight: '800', color: '#111', letterSpacing: -1, marginBottom: 12 },
   netWorthFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   netWorthDesc: { color: '#888', fontSize: 14 },
-  
+
   filtersContainer: { flexDirection: 'row', gap: 12, marginTop: 24, justifyContent: 'center' },
   filterBtn: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
   filterBtnActive: { backgroundColor: '#fff' },
@@ -185,7 +201,7 @@ const styles = StyleSheet.create({
   insightLabel: { fontSize: 12, fontWeight: '800', color: '#4A7C59', letterSpacing: 1 },
   insightLink: { fontSize: 12, color: '#888' },
   insightQuote: { fontSize: 14, color: '#444', lineHeight: 22 },
-  
+
   chartPanel: { flex: 1, backgroundColor: '#fff', borderRadius: 24, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 5 },
   chartLabel: { fontSize: 11, fontWeight: '800', color: '#888', letterSpacing: 1, marginBottom: 16, textAlign: 'center' },
   chartBars: { flexDirection: 'row', justifyContent: 'space-between', height: 60, alignItems: 'flex-end' },
@@ -196,7 +212,7 @@ const styles = StyleSheet.create({
   gridContainer: { paddingHorizontal: 24, marginTop: 32 },
   gridInstruction: { color: '#888', fontSize: 14, marginBottom: 16 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 16 },
-  
+
   accountCard: { width: (width - 64) / 2, borderRadius: 24, padding: 20, minHeight: 180, justifyContent: 'space-between' },
   accountCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   accountLogoContainer: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },

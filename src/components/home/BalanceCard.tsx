@@ -1,11 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { formatCurrency } from '../../utils/formatters';
-import { Eye, EyeOff } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
-import { Card } from '../common/Card';
-import Animated, { Layout } from 'react-native-reanimated';
+import { GekoCard3D } from '../wallet/GekoCard3D';
 
 interface BalanceCardProps {
   balance: number;
@@ -13,87 +10,62 @@ interface BalanceCardProps {
   spentToday?: number;
 }
 
-export const BalanceCard: React.FC<BalanceCardProps> = ({ 
-  balance, 
-  dailyLimit = 150, 
-  spentToday = 45 
+export const BalanceCard: React.FC<BalanceCardProps> = ({
+  balance,
+  dailyLimit = 150,
+  spentToday = 760
 }) => {
   const { colors } = useTheme();
-  const [isHidden, setIsHidden] = useState(false);
-
-  const toggleHidden = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsHidden(!isHidden);
-  };
 
   return (
-    <Card style={styles.container}>
-      <View style={styles.header}>
-        <Text style={[styles.label, { color: colors.textMuted }]}>Total Balance</Text>
-        <Pressable onPress={toggleHidden} hitSlop={10} style={styles.eyeBtn}>
-          {isHidden ? 
-            <EyeOff size={20} color={colors.textMuted} /> : 
-            <Eye size={20} color={colors.textMuted} />
-          }
-        </Pressable>
-      </View>
-      
-      <Animated.View layout={Layout.springify()}>
-        <Text style={[styles.balance, { color: colors.text }]}>
-          {isHidden ? '••••••' : formatCurrency(balance)}
-        </Text>
-      </Animated.View>
-      
-      <View style={[styles.footer, { borderTopColor: colors.border }]}>
-        <View style={styles.statsRow}>
-          <View>
-            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Spent Today</Text>
-            <Text style={[styles.statValue, { color: colors.text }]}>{formatCurrency(spentToday)}</Text>
-          </View>
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          <View>
-            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Daily Limit</Text>
-            <Text style={[styles.statValue, { color: colors.text }]}>{formatCurrency(dailyLimit)}</Text>
-          </View>
+    <View style={styles.container}>
+      {/* The Direct 3D GEKO Platinum Card (Balance rendered directly on the physical 3D card surface!) */}
+      <GekoCard3D
+        balance={balance}
+        cardholderName="GEKO MEMBER"
+        accountType="DEBIT • PLATINUM"
+        expiryDate="10/29"
+        height={340}
+      />
+
+      {/* Clean Stats Row directly below the card: Spent Today & Daily Limit */}
+      <View style={[styles.statsContainer, { backgroundColor: colors.surfaceHighlight || 'rgba(255,255,255,0.05)', borderColor: colors.border }]}>
+        <View style={styles.statCol}>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Spent Today</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {formatCurrency(spentToday)}
+          </Text>
+        </View>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <View style={styles.statCol}>
+          <Text style={[styles.statLabel, { color: colors.textMuted }]}>Daily Limit</Text>
+          <Text style={[styles.statValue, { color: colors.text }]}>
+            {formatCurrency(dailyLimit)}
+          </Text>
         </View>
       </View>
-    </Card>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 16,
+    marginVertical: 8,
   },
-  header: {
+  statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginTop: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 18,
+    borderWidth: 1,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  eyeBtn: {
-    minHeight: 48,
-    minWidth: 48,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  balance: {
-    fontSize: 40,
-    fontWeight: '700',
-    letterSpacing: -1,
-  },
-  footer: {
-    marginTop: 24,
-    paddingTop: 16,
-    borderTopWidth: 1,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  statCol: {
+    flex: 1,
   },
   statLabel: {
     fontSize: 12,
@@ -102,10 +74,12 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   divider: {
     width: 1,
+    height: 26,
     marginHorizontal: 16,
-  }
+  },
 });
