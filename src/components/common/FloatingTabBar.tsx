@@ -18,7 +18,7 @@ export const FloatingTabBar = ({ state, descriptors, navigation }: BottomTabBarP
   const { colors, theme } = useTheme();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}>
       <BlurView intensity={80} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.blur}>
         <View style={styles.content}>
           {state.routes.map((route, index) => {
@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'transparent',
   },
   blur: {
     flex: 1,

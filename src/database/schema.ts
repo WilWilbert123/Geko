@@ -55,3 +55,17 @@ export const CARDS_TABLE = `
     cardNumber TEXT NOT NULL
   );
 `;
+
+export const INSTALLMENTS_TABLE = `
+  CREATE TABLE IF NOT EXISTS installments (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    totalAmount REAL NOT NULL,
+    monthlyAmount REAL NOT NULL,
+    totalMonths INTEGER NOT NULL,
+    paidMonths INTEGER NOT NULL,
+    startDate INTEGER NOT NULL,
+    nextCutoff INTEGER NOT NULL,
+    status TEXT NOT NULL
+  );
+`;

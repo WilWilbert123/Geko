@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import { View, StyleSheet, Text, ScrollView } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { useTransactions } from '../../hooks/useTransactions';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
@@ -46,37 +46,49 @@ export const RecentActivity = () => {
   const { colors } = useTheme();
   const { transactions } = useTransactions();
 
-  // Sort and group transactions
-  const sorted = [...transactions].sort((a, b) => b.date - a.date);
-  
-  const grouped = sorted.reduce((acc: any, t) => {
+  // Sort newest-first, then group
+  const sorted = [...transactions].sort((a, b) => Number(b.date) - Number(a.date));
+
+  const grouped: Record<string, any[]> = {};
+  for (const t of sorted) {
     let group = 'Earlier';
     if (isToday(t.date)) group = 'Today';
     else if (isYesterday(t.date)) group = 'Yesterday';
-    
-    if (!acc[group]) acc[group] = [];
-    acc[group].push(t);
-    return acc;
-  }, {});
+    if (!grouped[group]) grouped[group] = [];
+    grouped[group].push(t);
+  }
+
+  // Always render groups in this fixed order so newest always appears first
+  const GROUP_ORDER = ['Today', 'Yesterday', 'Earlier'];
+  const orderedGroups = GROUP_ORDER.filter(g => grouped[g]);
 
   return (
     <View style={styles.container}>
       <Text style={[styles.title, { color: colors.text }]}>Recent Activity</Text>
-      
-      {Object.keys(grouped).length === 0 ? (
+
+      {orderedGroups.length === 0 ? (
         <View style={styles.emptyState}>
           <Wallet size={48} color={colors.border} />
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>No recent activity</Text>
         </View>
       ) : (
-        Object.entries(grouped).map(([group, items]: [string, any]) => (
-          <View key={group} style={styles.groupContainer}>
-            <Text style={[styles.groupTitle, { color: colors.textMuted }]}>{group}</Text>
-            {items.map((item: any, index: number) => (
-              <TransactionItem key={item.id} item={item} index={index} />
+        <View style={styles.scrollWrapper}>
+          <ScrollView
+            style={styles.scrollArea}
+            contentContainerStyle={styles.scrollContent}
+            nestedScrollEnabled={true}
+            showsVerticalScrollIndicator={false}
+          >
+            {orderedGroups.map(group => (
+              <View key={group} style={styles.groupContainer}>
+                <Text style={[styles.groupTitle, { color: colors.textMuted }]}>{group}</Text>
+                {grouped[group].map((item: any, index: number) => (
+                  <TransactionItem key={item.id} item={item} index={index} />
+                ))}
+              </View>
             ))}
-          </View>
-        ))
+          </ScrollView>
+        </View>
       )}
     </View>
   );
@@ -90,6 +102,16 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 16,
+  },
+  scrollWrapper: {
+    height: 300,
+    overflow: 'hidden',
+  },
+  scrollArea: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   groupContainer: {
     marginBottom: 16,
