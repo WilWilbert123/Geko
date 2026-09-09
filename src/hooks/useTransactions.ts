@@ -12,8 +12,12 @@ export const useTransactions = () => {
   const load = useCallback(async () => {
     const db = getDb();
     try {
-      const res = await db.execute('SELECT * FROM transactions ORDER BY date DESC');
-      const data = (res.rows?._array || []) as Transaction[];
+      const res = await db.execute('SELECT * FROM transactions ORDER BY CAST(date AS INTEGER) DESC');
+      // Coerce date to number — SQLite may return INTEGER columns as strings
+      const data = ((res.rows?._array || []) as any[]).map(row => ({
+        ...row,
+        date: Number(row.date),
+      })) as Transaction[];
       setTransactions(data);
       
       const sum = data.reduce((acc, t) => 

@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import * as Haptics from 'expo-haptics';
 import { RotateCw, Eye, EyeOff } from 'lucide-react-native';
 import { formatCurrency } from '../../utils/formatters';
+import { useCurrency } from '../../hooks/useCurrency';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_ASPECT = 1.586;
@@ -34,6 +35,7 @@ const FONT: Record<string, number[]> = {
   '8': [0x36, 0x49, 0x49, 0x49, 0x36],
   '9': [0x06, 0x49, 0x49, 0x29, 0x1E],
   '$': [0x12, 0x2A, 0x7F, 0x2A, 0x24],
+  '₱': [0x7F, 0x15, 0x15, 0x15, 0x0E],
   ',': [0x00, 0xA0, 0x60, 0x00, 0x00],
   '.': [0x00, 0x60, 0x60, 0x00, 0x00],
   '•': [0x00, 0x1C, 0x1C, 0x1C, 0x00],
@@ -81,6 +83,7 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
   height = 230,
   interactive = true,
 }) => {
+  const { currency } = useCurrency();
   const [isFlipped, setIsFlipped] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
 
@@ -94,6 +97,7 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
   const touchActive = useRef(false);
   const lightPos = useRef({ x: 0.5, y: 0.5 });
   const targetLightPos = useRef({ x: 0.5, y: 0.5 });
+  const shineIntensity = useRef(0);
   const animFrameId = useRef<number | null>(null);
 
   // Three.js texture ref for dynamic text updates
@@ -162,7 +166,7 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
     if (textTextureRef.current) {
       textTextureRef.current.needsUpdate = true;
     }
-  }, [balance, isHidden, cardholderName, expiryDate]);
+  }, [balance, isHidden, cardholderName, expiryDate, currency]);
 
   useEffect(() => {
     updateCardText();
@@ -316,6 +320,7 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
       uTime: { value: 0 },
       uLightPos: { value: new THREE.Vector2(0.5, 0.5) },
       uTextTexture: { value: textTexture },
+      uShineIntensity: { value: 0.0 },
     };
 
     const vertexShader = `
@@ -331,6 +336,7 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
       uniform float uTime;
       uniform vec2 uLightPos;
       uniform sampler2D uTextTexture;
+      uniform float uShineIntensity;
       varying vec2 vUv;
 
       float sdRoundedBox(vec2 p, vec2 b, float r) {
@@ -505,10 +511,10 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
           col = mix(col, textSilver, textSample.a);
         }
 
-        // 8. Dynamic Shining Silver Light Sweep
+        // 8. Dynamic Shining Silver Light Sweep (only visible when held/moved)
         float sweepCoord = vUv.x + vUv.y * 0.45;
         float sweepCenter = uLightPos.x * 1.4 + 0.1;
-        float sweep = smoothstep(0.24, 0.0, abs(sweepCoord - sweepCenter));
+        float sweep = smoothstep(0.24, 0.0, abs(sweepCoord - sweepCenter)) * uShineIntensity;
         
         vec3 holoRainbow = 0.5 + 0.5 * cos(6.28318 * (sweepCoord * 1.5 + uTime * 0.25 + vec3(0.0, 0.33, 0.67)));
         vec3 pureSilverSheen = vec3(0.96, 0.98, 1.0) * sweep * 0.5;
@@ -535,12 +541,14 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
     const backUniforms = {
       uTime: { value: 0 },
       uLightPos: { value: new THREE.Vector2(0.5, 0.5) },
+      uShineIntensity: { value: 0.0 },
     };
 
     const backFragmentShader = `
       precision highp float;
       uniform float uTime;
       uniform vec2 uLightPos;
+      uniform float uShineIntensity;
       varying vec2 vUv;
 
       float sdRoundedBox(vec2 p, vec2 b, float r) {
@@ -589,7 +597,7 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
           col = mix(col, vec3(0.55, 0.58, 0.64), microText);
         }
 
-        float sweep = smoothstep(0.20, 0.0, abs(vUv.x - uLightPos.x));
+        float sweep = smoothstep(0.20, 0.0, abs(vUv.x - uLightPos.x)) * uShineIntensity;
         col += vec3(sweep * 0.08);
 
         gl_FragColor = vec4(col, 1.0);
@@ -652,17 +660,16 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
       rotY.current += (targetRotY.current - rotY.current) * lerpSpeed;
       currentFlipY.current += (targetFlipY.current - currentFlipY.current) * 0.12;
 
-      let idlePitch = 0;
-      let idleYaw = 0;
-      let idleRoll = 0;
-      if (!touchActive.current) {
-        idlePitch = Math.sin(elapsedTime * 1.3) * 0.05;
-        idleYaw = Math.cos(elapsedTime * 0.9) * 0.08;
-        idleRoll = Math.sin(elapsedTime * 0.7) * 0.02;
+      // Shine only activates when the user touches / holds / moves the card
+      const targetShine = touchActive.current ? 1.0 : 0.0;
+      shineIntensity.current += (targetShine - shineIntensity.current) * 0.14;
 
-        const autoLightX = 0.5 + Math.sin(elapsedTime * 0.8) * 0.45;
-        const autoLightY = 0.5 + Math.cos(elapsedTime * 1.1) * 0.25;
-        targetLightPos.current = { x: autoLightX, y: autoLightY };
+      frontUniforms.uShineIntensity.value = shineIntensity.current;
+      backUniforms.uShineIntensity.value = shineIntensity.current;
+
+      if (!touchActive.current) {
+        // Resting stationary center light - completely remove auto shine sweep
+        targetLightPos.current = { x: 0.5, y: 0.5 };
       }
 
       lightPos.current.x += (targetLightPos.current.x - lightPos.current.x) * 0.1;
@@ -671,15 +678,16 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
       frontUniforms.uLightPos.value.set(lightPos.current.x, lightPos.current.y);
       backUniforms.uLightPos.value.set(lightPos.current.x, lightPos.current.y);
 
+      specularLight.intensity = 0.2 + 1.3 * shineIntensity.current;
       specularLight.position.set(
         (lightPos.current.x - 0.5) * 3.5,
         (lightPos.current.y - 0.5) * 2.5,
         2.2
       );
 
-      cardGroup.rotation.x = rotX.current + idlePitch;
-      cardGroup.rotation.y = rotY.current + currentFlipY.current + idleYaw;
-      cardGroup.rotation.z = idleRoll;
+      cardGroup.rotation.x = rotX.current;
+      cardGroup.rotation.y = rotY.current + currentFlipY.current;
+      cardGroup.rotation.z = 0;
 
       renderer.render(scene, camera);
       gl.endFrameEXP();

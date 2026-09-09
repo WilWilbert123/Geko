@@ -5,7 +5,8 @@ import {
   VECTORS_TABLE,
   GOALS_TABLE,
   BUDGETS_TABLE,
-  CARDS_TABLE 
+  CARDS_TABLE,
+  INSTALLMENTS_TABLE 
 } from './schema';
 import { uuidv4 } from '../utils/uuid';
 import { Transaction, Category } from '../types/transaction';
@@ -24,6 +25,7 @@ export const initDb = async () => {
     await db.execute(GOALS_TABLE);
     await db.execute(BUDGETS_TABLE);
     await db.execute(CARDS_TABLE);
+    await db.execute(INSTALLMENTS_TABLE);
     
     // Seed default categories if empty
     const resCat = await db.execute('SELECT count(*) as count FROM categories');
@@ -103,6 +105,37 @@ export const initDb = async () => {
           );
         }
       });
+    }
+
+    // Seed Installments
+    const resInst = await db.execute('SELECT count(*) as count FROM installments');
+    const countInst = (resInst.rows?._array[0] as any).count;
+    if (countInst === 0) {
+      const defaultInstallment = {
+        id: uuidv4(),
+        title: 'MacBook Air M2 (3-Mo Installment)',
+        totalAmount: 900.0,
+        monthlyAmount: 300.0,
+        totalMonths: 3,
+        paidMonths: 0,
+        startDate: Date.now(),
+        nextCutoff: Date.now() + 30 * 86400000,
+        status: 'active'
+      };
+      await db.execute(
+        'INSERT INTO installments (id, title, totalAmount, monthlyAmount, totalMonths, paidMonths, startDate, nextCutoff, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          defaultInstallment.id,
+          defaultInstallment.title,
+          defaultInstallment.totalAmount,
+          defaultInstallment.monthlyAmount,
+          defaultInstallment.totalMonths,
+          defaultInstallment.paidMonths,
+          defaultInstallment.startDate,
+          defaultInstallment.nextCutoff,
+          defaultInstallment.status
+        ]
+      );
     }
     
     console.log('Database initialized successfully');
