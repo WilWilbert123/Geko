@@ -3,6 +3,7 @@ export interface ParsedTransaction {
   type: 'expense' | 'income';
   categoryId: string;
   note: string;
+  bankName?: string;
 }
 
 const INCOME_KEYWORDS = [
@@ -19,6 +20,16 @@ const INCOME_KEYWORDS = [
   'received',
   'got paid',
 ];
+
+const BANK_KEYWORDS: Record<string, string[]> = {
+  GCash: ['gcash', 'g-cash', 'g cash'],
+  GoTyme: ['gotyme', 'go tyme', 'tyme'],
+  BPI: ['bpi'],
+  Maya: ['maya', 'paymaya', 'pay maya'],
+  Landbank: ['landbank', 'land bank'],
+  PNB: ['pnb'],
+  Metrobank: ['metrobank'],
+};
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   Food: [
@@ -144,7 +155,26 @@ const FILLER_WORDS = [
   'paid',
   'add',
   'deduct',
+  'using',
+  'via',
+  'thru',
+  'through',
+  'gcash',
+  'bpi',
+  'gotyme',
+  'maya',
+  'landbank',
 ];
+
+const detectBank = (text: string): string | undefined => {
+  const lower = text.toLowerCase();
+  for (const [bank, keywords] of Object.entries(BANK_KEYWORDS)) {
+    if (keywords.some((kw) => lower.includes(kw))) {
+      return bank;
+    }
+  }
+  return undefined;
+};
 
 const detectCategory = (text: string, isIncome: boolean): string => {
   if (isIncome) return 'Salary';
@@ -169,6 +199,7 @@ export const parseTransactionsFromText = (input: string): ParsedTransaction[] =>
   if (!trimmed) return [];
 
   const results: ParsedTransaction[] = [];
+  const defaultBank = detectBank(trimmed);
 
   // Split by explicit connectors first (comma, 'at', 'and', 'tapos', 'saka', '&', newline)
   const segments = trimmed
@@ -177,13 +208,13 @@ export const parseTransactionsFromText = (input: string): ParsedTransaction[] =>
     .filter(Boolean);
 
   for (const segment of segments) {
+    const segmentBank = detectBank(segment) || defaultBank;
+
     // Check if segment has multiple transactions, e.g. "kumain kami 100 bumili ulam 200"
-    // Regex matches [words] [number] pairs
     const pairRegex = /([a-zA-Z\s\-ñÑ]+?)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:pesos|php|dollars|\$|p)?/gi;
     let match: RegExpExecArray | null;
     let foundPairs = false;
 
-    // Check count of numbers in segment
     const numbersInSegment = segment.match(/\d+(?:\.\d+)?/g);
     if (numbersInSegment && numbersInSegment.length > 1) {
       while ((match = pairRegex.exec(segment)) !== null) {
@@ -198,6 +229,7 @@ export const parseTransactionsFromText = (input: string): ParsedTransaction[] =>
             type: isIncome ? 'income' : 'expense',
             categoryId,
             note: cleaned || rawNote,
+            bankName: segmentBank,
           });
           foundPairs = true;
         }
@@ -218,6 +250,7 @@ export const parseTransactionsFromText = (input: string): ParsedTransaction[] =>
             type: isIncome ? 'income' : 'expense',
             categoryId,
             note: cleaned || 'Expenses',
+            bankName: segmentBank,
           });
         }
       }

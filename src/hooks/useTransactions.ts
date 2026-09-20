@@ -38,19 +38,37 @@ export const useTransactions = () => {
   const addTransaction = async (t: Omit<Transaction, 'id' | 'vectorId'>) => {
     const db = getDb();
     const id = uuidv4();
+    const bankName = t.bankName || 'GCash';
     
     try {
       // 1. Insert into relational DB
       const res = await db.execute(
-        'INSERT INTO transactions (id, amount, type, categoryId, date, note) VALUES (?, ?, ?, ?, ?, ?)',
-        [id, t.amount, t.type, t.categoryId, t.date, t.note || '']
+        'INSERT INTO transactions (id, amount, type, categoryId, date, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [id, t.amount, t.type, t.categoryId, t.date, t.note || '', bankName]
       );
       const rowId = res.insertId;
+
+      // 2. Update card balance
+      try {
+        if (t.type === 'expense') {
+          await db.execute(
+            'UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)',
+            [t.amount, bankName]
+          );
+        } else if (t.type === 'income') {
+          await db.execute(
+            'UPDATE cards SET balance = balance + ? WHERE LOWER(bankName) = LOWER(?)',
+            [t.amount, bankName]
+          );
+        }
+      } catch (e) {
+        console.warn('Failed to update card balance', e);
+      }
       
-      // 2. Generate vector embedding asynchronously so UI doesn't block
+      // 3. Generate vector embedding asynchronously so UI doesn't block
       setTimeout(async () => {
         try {
-          const textToEmbed = `${t.type} of ${t.amount} in category ${t.categoryId} on ${new Date(t.date).toISOString()}. Note: ${t.note}`;
+          const textToEmbed = `${t.type} of ${t.amount} in category ${t.categoryId} ${bankName} on ${new Date(t.date).toISOString()}. Note: ${t.note}`;
           const embedding = await generateEmbedding(textToEmbed);
           if (rowId !== undefined) {
             await insertVector(rowId, embedding);

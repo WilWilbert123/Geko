@@ -11,11 +11,21 @@ import {
 import { uuidv4 } from '../utils/uuid';
 import { Transaction, Category } from '../types/transaction';
 
-// Singleton instance
-const db = open({
-  name: 'geko.sqlite',
-  encryptionKey: 'geko-secure-key', // Hardcoded for demo, normally from keychain
-});
+// Singleton instance with global cache to survive Fast Refresh
+let dbInstance: ReturnType<typeof open> | null = (global as any)._gekoDb || null;
+if (!dbInstance) {
+  try {
+    dbInstance = open({
+      name: 'geko.sqlite',
+      encryptionKey: 'geko-secure-key', // Hardcoded for demo, normally from keychain
+    });
+    (global as any)._gekoDb = dbInstance;
+  } catch (e) {
+    dbInstance = (global as any)._gekoDb;
+  }
+}
+
+const db = dbInstance!;
 
 export const initDb = async () => {
   try {
@@ -49,24 +59,42 @@ export const initDb = async () => {
       });
     }
 
-    // Seed Cards
-    const resCards = await db.execute('SELECT count(*) as count FROM cards');
-    const countCards = (resCards.rows?._array[0] as any).count;
-    if (countCards === 0) {
-      const defaultCards = [
-        { id: uuidv4(), bankName: 'GCash', balance: 12500.50, color1: '#0052FF', color2: '#FFFFFF', cardNumber: '•••• 4029' },
-        { id: uuidv4(), bankName: 'BPI', balance: 45000.00, color1: '#B30000', color2: '#FFFFFF', cardNumber: '•••• 1123' },
-        { id: uuidv4(), bankName: 'GoTyme', balance: 5200.75, color1: '#00D1FF', color2: '#002B5E', cardNumber: '•••• 8832' },
-        { id: uuidv4(), bankName: 'PNB', balance: 18400.00, color1: '#FFD700', color2: '#003366', cardNumber: '•••• 9941' },
-      ];
-      await db.transaction(async (tx) => {
-        for (const c of defaultCards) {
-          await tx.execute(
-            'INSERT INTO cards (id, bankName, balance, color1, color2, cardNumber) VALUES (?, ?, ?, ?, ?, ?)',
-            [c.id, c.bankName, c.balance, c.color1, c.color2, c.cardNumber]
-          );
-        }
-      });
+    // Migration: add budget column if not exists
+    try {
+      await db.execute('ALTER TABLE cards ADD COLUMN budget REAL DEFAULT 0');
+    } catch (e) {
+      // Column already exists
+    }
+
+    // Migration: add bankName column to transactions if not exists
+    try {
+      await db.execute('ALTER TABLE transactions ADD COLUMN bankName TEXT');
+    } catch (e) {
+      // Column already exists
+    }
+
+    // Seed / Ensure Popular Philippine Bank Cards Exist
+    const popularBanks = [
+      { bankName: 'GCash', balance: 12500.50, color1: '#0026B3', color2: '#0055FF', cardNumber: '•••• 4029', budget: 15000 },
+      { bankName: 'GoTyme', balance: 5200.75, color1: '#0099B8', color2: '#00D1FF', cardNumber: '•••• 8832', budget: 10000 },
+      { bankName: 'BPI', balance: 45000.00, color1: '#8B0000', color2: '#C8102E', cardNumber: '•••• 1123', budget: 30000 },
+      { bankName: 'PNB', balance: 18500.00, color1: '#D4AF37', color2: '#E6CA65', cardNumber: '•••• 7740', budget: 20000 },
+      { bankName: 'BDO', balance: 32400.00, color1: '#002B66', color2: '#004080', cardNumber: '•••• 3091', budget: 25000 },
+      { bankName: 'MariBank', balance: 9800.25, color1: '#E64A19', color2: '#FF7043', cardNumber: '•••• 6612', budget: 15000 },
+      { bankName: 'Metrobank', balance: 28000.00, color1: '#002277', color2: '#0044CC', cardNumber: '•••• 5104', budget: 20000 },
+      { bankName: 'Maya', balance: 8400.00, color1: '#0B0E14', color2: '#00E676', cardNumber: '•••• 5519', budget: 12000 },
+      { bankName: 'Landbank', balance: 10000.00, color1: '#004D25', color2: '#0A8A43', cardNumber: '•••• 9941', budget: 15000 },
+      { bankName: 'UnionBank', balance: 15600.00, color1: '#E65100', color2: '#FF8800', cardNumber: '•••• 2284', budget: 18000 },
+    ];
+
+    for (const b of popularBanks) {
+      const existRes = await db.execute('SELECT id FROM cards WHERE LOWER(bankName) = LOWER(?)', [b.bankName]);
+      if (!existRes.rows || existRes.rows.length === 0) {
+        await db.execute(
+          'INSERT INTO cards (id, bankName, balance, color1, color2, cardNumber, budget) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [uuidv4(), b.bankName, b.balance, b.color1, b.color2, b.cardNumber, b.budget]
+        );
+      }
     }
 
     // Seed Budgets
