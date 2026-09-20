@@ -26,6 +26,7 @@
     "expo-font": "~12.0.10",
     "expo-gl": "~14.0.2",
     "expo-haptics": "~13.0.1",
+    "expo-image-picker": "^57.0.19",
     "expo-status-bar": "~1.12.1",
     "lucide-react-native": "^0.395.0",
     "react": "18.2.0",

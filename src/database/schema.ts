@@ -6,6 +6,7 @@ export const TRANSACTIONS_TABLE = `
     categoryId TEXT NOT NULL,
     date INTEGER NOT NULL,
     note TEXT,
+    bankName TEXT,
     vectorId TEXT
   );
 `;
@@ -53,7 +54,26 @@ export const CARDS_TABLE = `
     color1 TEXT NOT NULL,
     color2 TEXT NOT NULL,
     cardNumber TEXT NOT NULL,
-    budget REAL DEFAULT 0
+    budget REAL DEFAULT 0,
+    type TEXT DEFAULT 'EWALLET',
+    institution TEXT,
+    paymentNetwork TEXT DEFAULT 'OTHER',
+    creditLimit REAL DEFAULT 0,
+    availableCredit REAL DEFAULT 0,
+    outstandingBalance REAL DEFAULT 0,
+    statementDate TEXT,
+    dueDate TEXT,
+    minimumPayment REAL DEFAULT 0
+  );
+`;
+
+export const PROFILE_TABLE = `
+  CREATE TABLE IF NOT EXISTS profile (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    currency TEXT DEFAULT 'PHP',
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
   );
 `;
 
@@ -70,3 +90,4 @@ export const INSTALLMENTS_TABLE = `
     status TEXT NOT NULL
   );
 `;
+

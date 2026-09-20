@@ -6,6 +6,7 @@ import {
   GOALS_TABLE,
   BUDGETS_TABLE,
   CARDS_TABLE,
+  PROFILE_TABLE,
   INSTALLMENTS_TABLE 
 } from './schema';
 import { uuidv4 } from '../utils/uuid';
@@ -35,6 +36,7 @@ export const initDb = async () => {
     await db.execute(GOALS_TABLE);
     await db.execute(BUDGETS_TABLE);
     await db.execute(CARDS_TABLE);
+    await db.execute(PROFILE_TABLE);
     await db.execute(INSTALLMENTS_TABLE);
     
     // Seed default categories if empty
@@ -46,7 +48,9 @@ export const initDb = async () => {
         { id: uuidv4(), name: 'Food', color: '#10B981', icon: 'coffee' },
         { id: uuidv4(), name: 'Transport', color: '#3B82F6', icon: 'car' },
         { id: uuidv4(), name: 'Housing', color: '#8B5CF6', icon: 'home' },
+        { id: uuidv4(), name: 'Shopping', color: '#EC4899', icon: 'shopping-bag' },
         { id: uuidv4(), name: 'Salary', color: '#F59E0B', icon: 'dollar-sign' },
+        { id: uuidv4(), name: 'Adjustment', color: '#6B7280', icon: 'help-circle' },
       ];
       
       await db.transaction(async (tx) => {
@@ -57,13 +61,39 @@ export const initDb = async () => {
           );
         }
       });
+    } else {
+      // Ensure Adjustment category exists for lost money tracking
+      try {
+        const adjRes = await db.execute('SELECT id FROM categories WHERE name = "Adjustment"');
+        if (!adjRes.rows || adjRes.rows.length === 0) {
+          await db.execute(
+            'INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)',
+            [uuidv4(), 'Adjustment', '#6B7280', 'help-circle']
+          );
+        }
+      } catch (e) {}
     }
 
-    // Migration: add budget column if not exists
-    try {
-      await db.execute('ALTER TABLE cards ADD COLUMN budget REAL DEFAULT 0');
-    } catch (e) {
-      // Column already exists
+    // Migrations for cards table
+    const cardMigrations = [
+      'ALTER TABLE cards ADD COLUMN budget REAL DEFAULT 0',
+      'ALTER TABLE cards ADD COLUMN type TEXT DEFAULT "EWALLET"',
+      'ALTER TABLE cards ADD COLUMN institution TEXT',
+      'ALTER TABLE cards ADD COLUMN paymentNetwork TEXT DEFAULT "OTHER"',
+      'ALTER TABLE cards ADD COLUMN creditLimit REAL DEFAULT 0',
+      'ALTER TABLE cards ADD COLUMN availableCredit REAL DEFAULT 0',
+      'ALTER TABLE cards ADD COLUMN outstandingBalance REAL DEFAULT 0',
+      'ALTER TABLE cards ADD COLUMN statementDate TEXT',
+      'ALTER TABLE cards ADD COLUMN dueDate TEXT',
+      'ALTER TABLE cards ADD COLUMN minimumPayment REAL DEFAULT 0'
+    ];
+
+    for (const mig of cardMigrations) {
+      try {
+        await db.execute(mig);
+      } catch (e) {
+        // Column already exists
+      }
     }
 
     // Migration: add bankName column to transactions if not exists
@@ -73,29 +103,74 @@ export const initDb = async () => {
       // Column already exists
     }
 
+    // Migration: add imageUrl column to goals if not exists
+    try {
+      await db.execute('ALTER TABLE goals ADD COLUMN imageUrl TEXT');
+    } catch (e) {
+      // Column already exists
+    }
+
     // Seed / Ensure Popular Philippine Bank Cards Exist
     const popularBanks = [
-      { bankName: 'GCash', balance: 12500.50, color1: '#0026B3', color2: '#0055FF', cardNumber: '•••• 4029', budget: 15000 },
-      { bankName: 'GoTyme', balance: 5200.75, color1: '#0099B8', color2: '#00D1FF', cardNumber: '•••• 8832', budget: 10000 },
-      { bankName: 'BPI', balance: 45000.00, color1: '#8B0000', color2: '#C8102E', cardNumber: '•••• 1123', budget: 30000 },
-      { bankName: 'PNB', balance: 18500.00, color1: '#D4AF37', color2: '#E6CA65', cardNumber: '•••• 7740', budget: 20000 },
-      { bankName: 'BDO', balance: 32400.00, color1: '#002B66', color2: '#004080', cardNumber: '•••• 3091', budget: 25000 },
-      { bankName: 'MariBank', balance: 9800.25, color1: '#E64A19', color2: '#FF7043', cardNumber: '•••• 6612', budget: 15000 },
-      { bankName: 'Metrobank', balance: 28000.00, color1: '#002277', color2: '#0044CC', cardNumber: '•••• 5104', budget: 20000 },
-      { bankName: 'Maya', balance: 8400.00, color1: '#0B0E14', color2: '#00E676', cardNumber: '•••• 5519', budget: 12000 },
-      { bankName: 'Landbank', balance: 10000.00, color1: '#004D25', color2: '#0A8A43', cardNumber: '•••• 9941', budget: 15000 },
-      { bankName: 'UnionBank', balance: 15600.00, color1: '#E65100', color2: '#FF8800', cardNumber: '•••• 2284', budget: 18000 },
+      { bankName: 'GCash', balance: 12500.50, color1: '#0026B3', color2: '#0055FF', cardNumber: '•••• 4029', budget: 15000, type: 'EWALLET', paymentNetwork: 'OTHER' },
+      { bankName: 'GoTyme', balance: 5200.75, color1: '#0F172A', color2: '#00D2C8', cardNumber: '•••• 8832', budget: 10000, type: 'BANK', paymentNetwork: 'VISA' },
+      { bankName: 'BPI', balance: 45000.00, color1: '#8B0000', color2: '#C8102E', cardNumber: '•••• 1123', budget: 30000, type: 'BANK', paymentNetwork: 'MASTERCARD' },
+      { bankName: 'PNB', balance: 18500.00, color1: '#D4AF37', color2: '#E6CA65', cardNumber: '•••• 7740', budget: 20000, type: 'BANK', paymentNetwork: 'VISA' },
+      { bankName: 'BDO', balance: 32400.00, color1: '#002B66', color2: '#004080', cardNumber: '•••• 3091', budget: 25000, type: 'BANK', paymentNetwork: 'VISA' },
+      { bankName: 'MariBank', balance: 9800.25, color1: '#E64A19', color2: '#FF7043', cardNumber: '•••• 6612', budget: 15000, type: 'BANK', paymentNetwork: 'MASTERCARD' },
+      { bankName: 'Metrobank', balance: 28000.00, color1: '#002277', color2: '#0044CC', cardNumber: '•••• 5104', budget: 20000, type: 'BANK', paymentNetwork: 'VISA' },
+      { bankName: 'Maya', balance: 8400.00, color1: '#0B0E14', color2: '#00E676', cardNumber: '•••• 5519', budget: 12000, type: 'EWALLET', paymentNetwork: 'MASTERCARD' },
+      { bankName: 'Landbank', balance: 10000.00, color1: '#004D25', color2: '#0A8A43', cardNumber: '•••• 9941', budget: 15000, type: 'BANK', paymentNetwork: 'MASTERCARD' },
+      { bankName: 'UnionBank', balance: 15600.00, color1: '#E65100', color2: '#FF8800', cardNumber: '•••• 2284', budget: 18000, type: 'BANK', paymentNetwork: 'VISA' },
+      { 
+        bankName: 'Visa', 
+        balance: 0, 
+        color1: '#1A1F71', 
+        color2: '#0055FF', 
+        cardNumber: '•••• 4882', 
+        budget: 20000, 
+        type: 'CREDIT_CARD', 
+        paymentNetwork: 'VISA',
+        creditLimit: 50000,
+        availableCredit: 40000,
+        outstandingBalance: 10000,
+        statementDate: '15th',
+        dueDate: '30th',
+        minimumPayment: 1000
+      },
     ];
 
     for (const b of popularBanks) {
       const existRes = await db.execute('SELECT id FROM cards WHERE LOWER(bankName) = LOWER(?)', [b.bankName]);
       if (!existRes.rows || existRes.rows.length === 0) {
         await db.execute(
-          'INSERT INTO cards (id, bankName, balance, color1, color2, cardNumber, budget) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [uuidv4(), b.bankName, b.balance, b.color1, b.color2, b.cardNumber, b.budget]
+          `INSERT INTO cards (id, bankName, balance, color1, color2, cardNumber, budget, type, paymentNetwork, creditLimit, availableCredit, outstandingBalance, statementDate, dueDate, minimumPayment) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            uuidv4(), 
+            b.bankName, 
+            b.balance, 
+            b.color1, 
+            b.color2, 
+            b.cardNumber, 
+            b.budget, 
+            b.type || 'EWALLET',
+            b.paymentNetwork || 'OTHER',
+            b.creditLimit || 0,
+            b.availableCredit || 0,
+            b.outstandingBalance || 0,
+            b.statementDate || '',
+            b.dueDate || '',
+            b.minimumPayment || 0
+          ]
         );
       }
     }
+
+    // Update existing GoTyme card to sleek dark obsidian color scheme
+    try {
+      await db.execute("UPDATE cards SET color1 = '#0F172A', color2 = '#00D2C8' WHERE LOWER(bankName) = 'gotyme'");
+    } catch (e) {}
 
     // Seed Budgets
     const resBudgets = await db.execute('SELECT count(*) as count FROM budgets');

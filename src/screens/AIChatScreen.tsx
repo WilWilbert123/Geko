@@ -5,11 +5,9 @@ import { useTheme } from '../hooks/useTheme';
 import { useRAGChat } from '../hooks/useRAGChat';
 import { ChatBubble } from '../components/ai/ChatBubble';
 import { StreamingText } from '../components/ai/StreamingText';
-import { ModelStatusBadge } from '../components/ai/ModelStatusBadge';
-import { Send, ShieldCheck } from 'lucide-react-native';
+import { Send } from 'lucide-react-native';
 import { loadModel } from '../services/ai/engine/llamaService';
 import { getModelPath } from '../utils/fileSystem';
-import { Button } from '../components/common/Button';
 
 const PROMPT_CHIPS = [
   "Analyze my grocery spending this week",
@@ -52,12 +50,12 @@ export const AIChatScreen = () => {
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: colors.border }]}>
-        <View style={styles.badgeContainer}>
-          <ShieldCheck size={16} color={colors.primary} />
-          <Text style={[styles.badgeText, { color: colors.primary }]}>100% Offline & Private</Text>
+      <View style={[styles.header, { paddingTop: insets.top + 12, borderBottomColor: colors.border }]}>
+        <View style={styles.headerLeft}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Geko</Text>
+          <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />
         </View>
-        <ModelStatusBadge />
+        <Text style={[styles.headerSub, { color: colors.textMuted }]}>Offline AI Assistant</Text>
       </View>
       
       {error && (
@@ -124,23 +122,29 @@ export const AIChatScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    paddingBottom: 10,
+    paddingBottom: 14,
     borderBottomWidth: 1,
     alignItems: 'center',
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    justifyContent: 'space-between'
+    paddingHorizontal: 20,
+    justifyContent: 'space-between',
   },
-  badgeContainer: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
+    gap: 8,
   },
-  badgeText: {
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  activeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  headerSub: {
     fontSize: 12,
     fontWeight: '600',
   },

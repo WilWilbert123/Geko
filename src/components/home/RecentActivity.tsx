@@ -4,23 +4,52 @@ import { useTheme } from '../../hooks/useTheme';
 import { useTransactions } from '../../hooks/useTransactions';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
 import { formatCurrency } from '../../utils/formatters';
-import { Coffee, ShoppingCart, Train, DollarSign, Wallet } from 'lucide-react-native';
-import { format, isToday, isYesterday } from 'date-fns';
+import { Wallet } from 'lucide-react-native';
+import { isToday, isYesterday } from 'date-fns';
 
-const getCategoryIcon = (category: string) => {
-  switch (category.toLowerCase()) {
-    case 'food': return Coffee;
-    case 'shopping': return ShoppingCart;
-    case 'transport': return Train;
-    case 'salary': return DollarSign;
-    default: return Wallet;
+const BANK_COLOR_MAP: Record<string, { bg: string; border: string; text: string }> = {
+  gcash: { bg: '#0055FF', border: '#3B82F6', text: 'GCash' },
+  gotyme: { bg: '#0D1117', border: '#00D2C8', text: 'GoTyme' },
+  bpi: { bg: '#8B0000', border: '#C8102E', text: 'BPI' },
+  pnb: { bg: '#B8860B', border: '#E6CA65', text: 'PNB' },
+  bdo: { bg: '#002B66', border: '#0055FF', text: 'BDO' },
+  maribank: { bg: '#E64A19', border: '#FF7043', text: 'Mari' },
+  metrobank: { bg: '#002277', border: '#0044CC', text: 'Metro' },
+  maya: { bg: '#0B0E14', border: '#00E676', text: 'Maya' },
+  landbank: { bg: '#004D25', border: '#0A8A43', text: 'Landbank' },
+  unionbank: { bg: '#111115', border: '#FF6B00', text: 'Union' },
+  visa: { bg: '#1A1F71', border: '#0055FF', text: 'VISA' },
+};
+
+const getBankStyle = (bankName?: string) => {
+  if (!bankName) return BANK_COLOR_MAP.gcash;
+  const key = bankName.toLowerCase().replace(/[^a-z]/g, '');
+  for (const [k, val] of Object.entries(BANK_COLOR_MAP)) {
+    if (key.includes(k)) return val;
   }
+  return { bg: '#1E293B', border: '#475569', text: bankName.slice(0, 5) };
+};
+
+const MiniCardView = ({ bankName }: { bankName?: string }) => {
+  const bankStyle = getBankStyle(bankName);
+
+  return (
+    <View style={[styles.miniCard, { backgroundColor: bankStyle.bg, borderColor: bankStyle.border }]}>
+      {/* Micro Gold EMV Chip */}
+      <View style={styles.miniChip} />
+
+      {/* Mini Bank Logo Text */}
+      <Text style={styles.miniBankText} numberOfLines={1}>
+        {bankStyle.text}
+      </Text>
+    </View>
+  );
 };
 
 const TransactionItem = ({ item, index }: { item: any; index: number }) => {
   const { colors } = useTheme();
-  const Icon = getCategoryIcon(item.categoryId);
   const isIncome = item.type === 'income';
+  const targetBank = item.bankName || 'GCash';
 
   return (
     <Animated.View 
@@ -28,14 +57,19 @@ const TransactionItem = ({ item, index }: { item: any; index: number }) => {
       layout={Layout.springify()}
       style={[styles.itemContainer, { borderBottomColor: colors.border }]}
     >
-      <View style={[styles.iconBox, { backgroundColor: colors.surfaceHighlight }]}>
-        <Icon size={20} color={isIncome ? colors.income : colors.text} />
-      </View>
+      {/* Sleek Miniature Bank Card View */}
+      <MiniCardView bankName={targetBank} />
+
       <View style={styles.itemDetails}>
-        <Text style={[styles.itemCategory, { color: colors.text }]}>{item.categoryId}</Text>
+        <View style={styles.titleRow}>
+          <Text style={[styles.itemCategory, { color: colors.text }]}>{item.categoryId}</Text>
+          <Text style={[styles.bankTag, { color: colors.textMuted }]}>• {targetBank}</Text>
+        </View>
         <Text style={[styles.itemNote, { color: colors.textMuted }]}>{item.note || 'No note'}</Text>
       </View>
-      <Text style={[styles.itemAmount, { color: isIncome ? colors.income : colors.text }]}>
+
+      {/* Red text for deductions (-), Green text for added balance (+) */}
+      <Text style={[styles.itemAmount, { color: isIncome ? '#10B981' : '#EF4444' }]}>
         {isIncome ? '+' : '-'}{formatCurrency(item.amount)}
       </Text>
     </Animated.View>
@@ -58,7 +92,6 @@ export const RecentActivity = () => {
     grouped[group].push(t);
   }
 
-  // Always render groups in this fixed order so newest always appears first
   const GROUP_ORDER = ['Today', 'Yesterday', 'Earlier'];
   const orderedGroups = GROUP_ORDER.filter(g => grouped[g]);
 
@@ -104,7 +137,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   scrollWrapper: {
-    height: 300,
+    height: 320,
     overflow: 'hidden',
   },
   scrollArea: {
@@ -129,19 +162,50 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
+  /* Miniature Card View Styles */
+  miniCard: {
+    width: 52,
+    height: 34,
+    borderRadius: 7,
+    borderWidth: 1.2,
+    marginRight: 14,
+    padding: 3,
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  miniChip: {
+    width: 7,
+    height: 5,
+    borderRadius: 1.5,
+    backgroundColor: '#FFD700',
+  },
+  miniBankText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+    alignSelf: 'flex-end',
+    marginBottom: 1,
   },
   itemDetails: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   itemCategory: {
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  bankTag: {
+    fontSize: 12,
     fontWeight: '500',
     marginBottom: 2,
   },
@@ -150,7 +214,7 @@ const styles = StyleSheet.create({
   },
   itemAmount: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   emptyState: {
     padding: 32,
@@ -160,5 +224,5 @@ const styles = StyleSheet.create({
   emptyText: {
     marginTop: 12,
     fontSize: 14,
-  }
+  },
 });

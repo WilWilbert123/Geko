@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useSyncExternalStore } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,6 +6,9 @@ import {
   Text,
   TouchableOpacity,
   RefreshControl,
+  Modal,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
@@ -16,10 +19,23 @@ import { BudgetMeters } from '../components/home/BudgetMeters';
 import { RecentActivity } from '../components/home/RecentActivity';
 import { useTodayStats } from '../hooks/useTodayStats';
 import { useCurrency } from '../hooks/useCurrency';
-import { Sun, Moon, User } from 'lucide-react-native';
+import { useCards } from '../hooks/useCards';
+import { getDisplayName, setDisplayName, subscribeUserStore } from '../store/userStore';
+import { Sun, Moon, User, Check, Trash2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 type Props = any;
+
+const getTimeBasedGreeting = (name?: string) => {
+  const hour = new Date().getHours();
+  let timeStr = 'Good evening';
+  if (hour >= 5 && hour < 12) {
+    timeStr = 'Good morning';
+  } else if (hour >= 12 && hour < 18) {
+    timeStr = 'Good afternoon';
+  }
+  return name ? `${timeStr}, ${name}` : `${timeStr} 👋`;
+};
 
 export const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -27,8 +43,16 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const { balance, refresh: refreshTransactions } = useTransactions();
   const { spentToday, refresh: refreshStats } = useTodayStats();
   const { currency, toggleCurrency, symbol } = useCurrency();
+  const { resetAllCardBalances } = useCards();
+
+  const displayName = useSyncExternalStore(subscribeUserStore, getDisplayName);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [inputName, setInputName] = useState(displayName || '');
+
+  // Show onboarding prompt if user has not set a name yet
+  const showOnboarding = !displayName || displayName.trim().length === 0;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -36,6 +60,34 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
     require('react-native').DeviceEventEmitter.emit('transactions_updated');
     setRefreshing(false);
   }, [refreshTransactions, refreshStats]);
+
+  const handleSaveName = (nameToSave: string) => {
+    const trimmed = nameToSave.trim();
+    if (trimmed) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setDisplayName(trimmed);
+      setProfileModalVisible(false);
+    }
+  };
+
+  const handleResetData = () => {
+    Alert.alert(
+      'Reset All Financial Data?',
+      'This will permanently delete your local accounts, transactions, budgets, and financial history. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Everything',
+          style: 'destructive',
+          onPress: async () => {
+            await resetAllCardBalances(0);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            setProfileModalVisible(false);
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -49,7 +101,15 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
         {/* ── Header ── */}
         <View style={styles.header}>
           {/* Left: avatar + greeting */}
-          <View style={styles.headerLeft}>
+          <TouchableOpacity
+            style={styles.headerLeft}
+            activeOpacity={0.8}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setInputName(displayName || '');
+              setProfileModalVisible(true);
+            }}
+          >
             <View
               style={[
                 styles.avatar,
@@ -62,16 +122,17 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
               <User size={18} color={colors.primary} strokeWidth={2} />
             </View>
             <View>
-              <Text style={[styles.greeting, { color: colors.text }]}>Hello, User 👋</Text>
+              <Text style={[styles.greeting, { color: colors.text }]}>
+                {getTimeBasedGreeting(displayName)}
+              </Text>
               <Text style={[styles.subGreeting, { color: colors.textMuted }]}>
-                Welcome back
+                Personal Finance Companion
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Right: currency pill + theme toggle */}
           <View style={styles.headerRight}>
-            {/* Currency pill */}
             <TouchableOpacity
               style={[styles.pill, { backgroundColor: colors.surface, borderColor: colors.border }]}
               onPress={() => {
@@ -85,7 +146,6 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
               </Text>
             </TouchableOpacity>
 
-            {/* Sun / Moon theme toggle */}
             <TouchableOpacity
               style={[
                 styles.themeBtn,
@@ -109,7 +169,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         </View>
 
-        {/* ── 3D Card ── */}
+        {/* ── 3D Card (Preserving approved 3D design) ── */}
         <View style={{ marginHorizontal: -20 }}>
           <BalanceCard balance={balance} spentToday={spentToday} />
         </View>
@@ -119,6 +179,61 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
         <RecentActivity />
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Onboarding / Profile Name Modal */}
+      <Modal
+        visible={showOnboarding || profileModalVisible}
+        transparent
+        animationType="fade"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                {showOnboarding ? "What's your name?" : 'Local Profile & Data'}
+              </Text>
+              {!showOnboarding && (
+                <TouchableOpacity onPress={() => setProfileModalVisible(false)}>
+                  <X size={20} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
+              {showOnboarding
+                ? 'Welcome to Geko! Enter your name for local device personalization.'
+                : 'Your financial data is stored 100% locally on your device.'}
+            </Text>
+
+            <View style={styles.inputRow}>
+              <TextInput
+                style={[styles.nameInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                placeholder="Enter your name (e.g. Wilbert)"
+                placeholderTextColor={colors.textMuted}
+                value={inputName}
+                onChangeText={setInputName}
+                autoFocus={showOnboarding}
+              />
+              <TouchableOpacity
+                style={[styles.saveBtn, { backgroundColor: colors.primary }]}
+                onPress={() => handleSaveName(inputName)}
+              >
+                <Check size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            {!showOnboarding && (
+              <TouchableOpacity
+                style={[styles.dangerBtn, { borderColor: '#EF444422', backgroundColor: '#EF444411' }]}
+                onPress={handleResetData}
+              >
+                <Trash2 size={16} color="#EF4444" />
+                <Text style={styles.dangerBtnText}>Reset All Financial Data</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -130,7 +245,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
   },
-  /* ── Header ── */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -185,5 +299,68 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  profileCard: {
+    width: '100%',
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  nameInput: {
+    flex: 1,
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    fontSize: 15,
+  },
+  saveBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dangerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+    marginTop: 8,
+  },
+  dangerBtnText: {
+    color: '#EF4444',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });
