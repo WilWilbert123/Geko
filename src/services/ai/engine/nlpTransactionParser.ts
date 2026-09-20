@@ -1,9 +1,11 @@
 export interface ParsedTransaction {
   amount: number;
-  type: 'expense' | 'income';
+  type: 'expense' | 'income' | 'transfer' | 'credit_purchase' | 'credit_payment';
   categoryId: string;
   note: string;
   bankName?: string;
+  sourceBank?: string;
+  destinationBank?: string;
 }
 
 const INCOME_KEYWORDS = [
@@ -28,7 +30,11 @@ const BANK_KEYWORDS: Record<string, string[]> = {
   Maya: ['maya', 'paymaya', 'pay maya'],
   Landbank: ['landbank', 'land bank'],
   PNB: ['pnb'],
-  Metrobank: ['metrobank'],
+  BDO: ['bdo'],
+  MariBank: ['maribank', 'mari bank'],
+  Metrobank: ['metrobank', 'metro bank'],
+  UnionBank: ['unionbank', 'union bank', 'ub'],
+  Visa: ['visa', 'visa credit', 'credit card', 'creditcard', 'cc'],
 };
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
@@ -47,7 +53,15 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     'snack',
     'kape',
     'coffee',
+    'coffe',
+    'coffie',
+    'kopi',
     'milktea',
+    'starbucks',
+    'cafe',
+    'espresso',
+    'latte',
+    'cappuccino',
     'restaurant',
     'resto',
     'jollibee',
@@ -105,7 +119,9 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     'damit',
     'shoes',
     'sapatos',
-    'gamit',
+    'tshirt',
+    't-shirt',
+    'shirt',
     'mall',
     'bili',
     'bumili',
@@ -118,6 +134,23 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     'salary',
     'income',
     'payroll',
+  ],
+  Adjustment: [
+    'nawala',
+    'nawalan',
+    'nahulog',
+    'nanakaw',
+    'kinaltas',
+    'kulang',
+    'lost',
+    'missing',
+    'stolen',
+    'dropped',
+    'misplaced',
+    'discrepancy',
+    'adjustment',
+    'scam',
+    'scammed',
   ],
 };
 
@@ -159,14 +192,51 @@ const FILLER_WORDS = [
   'via',
   'thru',
   'through',
+  'gamit',
+  'gamitan',
+  'pambili',
+  'pambayad',
+  'pang',
+  'nito',
+  'ito',
+  'dito',
+  'mula',
+  'galing',
+  'nawala',
+  'nawalan',
+  'yung',
+  'ang',
+  'lost',
+  'missing',
+  'stolen',
+  'nanakaw',
+  'nahulog',
+  'hulog',
   'gcash',
   'bpi',
   'gotyme',
   'maya',
   'landbank',
+  'bdo',
+  'pnb',
+  'maribank',
+  'metrobank',
+  'unionbank',
+  'visa',
 ];
 
-const detectBank = (text: string): string | undefined => {
+export const normalizeAmount = (text: string): number => {
+  // Support 2k, 2.5k, 2K, 2,000, 2000
+  const kMatch = text.match(/(\d+(?:\.\d+)?)\s*k\b/i);
+  if (kMatch) {
+    return parseFloat(kMatch[1]) * 1000;
+  }
+  const cleanStr = text.replace(/,/g, '');
+  const numMatch = cleanStr.match(/(\d+(?:\.\d+)?)/);
+  return numMatch ? parseFloat(numMatch[1]) : 0;
+};
+
+export const detectBank = (text: string): string | undefined => {
   const lower = text.toLowerCase();
   for (const [bank, keywords] of Object.entries(BANK_KEYWORDS)) {
     if (keywords.some((kw) => lower.includes(kw))) {
@@ -184,76 +254,135 @@ const detectCategory = (text: string, isIncome: boolean): string => {
       return cat;
     }
   }
-  return 'Food'; // sensible default for everyday Philippine retail / street expenses
+  return 'Food';
 };
 
 const cleanNote = (rawText: string): string => {
-  let words = rawText.toLowerCase().split(/\s+/);
-  words = words.filter((w) => !FILLER_WORDS.includes(w) && !/^\d+$/.test(w));
-  const result = words.join(' ').trim();
-  return result.length > 0 ? result : rawText.trim();
+  const lower = rawText.toLowerCase();
+  const isLost = ['nawala', 'nawalan', 'lost', 'missing', 'stolen', 'nanakaw', 'nahulog'].some(w => lower.includes(w));
+
+  let words = lower.split(/\s+/);
+  words = words.filter((w) => !FILLER_WORDS.includes(w) && !/^\d+$/.test(w) && !/^\d+k$/i.test(w));
+  let result = words.join(' ').trim();
+
+  // Normalize coffee typos
+  if (result === 'coffe' || result === 'coffie' || result === 'kape' || result === 'coffee') {
+    result = 'Coffee';
+  }
+
+  if (isLost) {
+    return result.length > 0 && result.toLowerCase() !== 'lost money' ? `Lost Money - ${result}` : 'Lost Money';
+  }
+
+  if (!result) {
+    return rawText.trim();
+  }
+
+  // Capitalize title case nicely
+  return result
+    .split(' ')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 };
 
 export const parseTransactionsFromText = (input: string): ParsedTransaction[] => {
   const trimmed = input.trim();
   if (!trimmed) return [];
 
+  const lowerInput = trimmed.toLowerCase();
+
+  // 1. Check for TRANSFER intent (e.g., "nagtransfer ako 2000 from Maya to Maribank" or "transfer 2k Maya to Maribank")
+  if (lowerInput.includes('transfer') || lowerInput.includes('nagtransfer') || lowerInput.includes('lipat')) {
+    const amount = normalizeAmount(trimmed);
+    if (amount > 0) {
+      let sourceBank = 'Maya';
+      let destinationBank = 'MariBank';
+
+      const fromToMatch = trimmed.match(/(?:from|galing|sa)\s+([a-zA-Z]+)\s+(?:to|papunta|sa)\s+([a-zA-Z]+)/i);
+      if (fromToMatch) {
+        sourceBank = detectBank(fromToMatch[1]) || sourceBank;
+        destinationBank = detectBank(fromToMatch[2]) || destinationBank;
+      } else {
+        const banksFound: string[] = [];
+        for (const [bank, keywords] of Object.entries(BANK_KEYWORDS)) {
+          if (keywords.some((kw) => lowerInput.includes(kw))) {
+            banksFound.push(bank);
+          }
+        }
+        if (banksFound.length >= 2) {
+          sourceBank = banksFound[0];
+          destinationBank = banksFound[1];
+        }
+      }
+
+      return [
+        {
+          amount,
+          type: 'transfer',
+          categoryId: 'Housing',
+          note: `Transfer from ${sourceBank} to ${destinationBank}`,
+          sourceBank,
+          destinationBank,
+        },
+      ];
+    }
+  }
+
+  // 2. Check for CREDIT CARD PAYMENT intent (e.g., "nagbayad ako ng Visa 5000 gamit GCash" or "pay 5k Visa from GCash")
+  if (
+    (lowerInput.includes('nagbayad') || lowerInput.includes('pay') || lowerInput.includes('paid')) &&
+    (lowerInput.includes('visa') || lowerInput.includes('credit card') || lowerInput.includes('cc')) &&
+    !lowerInput.includes('bumili')
+  ) {
+    const amount = normalizeAmount(trimmed);
+    if (amount > 0) {
+      let sourceBank = 'GCash';
+      const sourceMatch = trimmed.match(/(?:gamit|using|via|from|thru)\s+([a-zA-Z]+)/i);
+      if (sourceMatch) {
+        sourceBank = detectBank(sourceMatch[1]) || sourceBank;
+      }
+
+      return [
+        {
+          amount,
+          type: 'credit_payment',
+          categoryId: 'Housing',
+          note: 'Visa Credit Card Payment',
+          bankName: 'Visa',
+          sourceBank,
+          destinationBank: 'Visa',
+        },
+      ];
+    }
+  }
+
+  // 3. Multi-transaction or standard expense / income / credit purchase parsing
   const results: ParsedTransaction[] = [];
   const defaultBank = detectBank(trimmed);
 
-  // Split by explicit connectors first (comma, 'at', 'and', 'tapos', 'saka', '&', newline)
+  // Split by explicit connectors (comma, 'at', 'and', 'tapos', 'saka', '&', newline)
   const segments = trimmed
     .split(/(?:,|\bat\b|\band\b|\btapos\b|\bsaka\b|&|\n)/i)
     .map((s) => s.trim())
     .filter(Boolean);
 
   for (const segment of segments) {
-    const segmentBank = detectBank(segment) || defaultBank;
+    const segmentBank = detectBank(segment) || defaultBank || 'GCash';
+    const amount = normalizeAmount(segment);
 
-    // Check if segment has multiple transactions, e.g. "kumain kami 100 bumili ulam 200"
-    const pairRegex = /([a-zA-Z\s\-ñÑ]+?)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(?:pesos|php|dollars|\$|p)?/gi;
-    let match: RegExpExecArray | null;
-    let foundPairs = false;
+    if (amount > 0) {
+      const isIncome = INCOME_KEYWORDS.some((kw) => segment.toLowerCase().includes(kw));
+      const categoryId = detectCategory(segment, isIncome);
+      const note = cleanNote(segment) || (isIncome ? 'Salary / Income' : 'Expense');
+      const isCredit = segmentBank.toLowerCase() === 'visa';
 
-    const numbersInSegment = segment.match(/\d+(?:\.\d+)?/g);
-    if (numbersInSegment && numbersInSegment.length > 1) {
-      while ((match = pairRegex.exec(segment)) !== null) {
-        const rawNote = match[1].trim();
-        const amount = parseFloat(match[2]);
-        if (amount > 0 && rawNote.length > 0) {
-          const isIncome = INCOME_KEYWORDS.some((kw) => rawNote.toLowerCase().includes(kw));
-          const cleaned = cleanNote(rawNote);
-          const categoryId = detectCategory(rawNote, isIncome);
-          results.push({
-            amount,
-            type: isIncome ? 'income' : 'expense',
-            categoryId,
-            note: cleaned || rawNote,
-            bankName: segmentBank,
-          });
-          foundPairs = true;
-        }
-      }
-    }
-
-    if (!foundPairs) {
-      // Single transaction in this segment
-      const numMatch = segment.match(/(\d+(?:\.\d+)?)/);
-      if (numMatch) {
-        const amount = parseFloat(numMatch[1]);
-        if (amount > 0) {
-          const isIncome = INCOME_KEYWORDS.some((kw) => segment.toLowerCase().includes(kw));
-          const cleaned = cleanNote(segment);
-          const categoryId = detectCategory(segment, isIncome);
-          results.push({
-            amount,
-            type: isIncome ? 'income' : 'expense',
-            categoryId,
-            note: cleaned || 'Expenses',
-            bankName: segmentBank,
-          });
-        }
-      }
+      results.push({
+        amount,
+        type: isIncome ? 'income' : isCredit ? 'credit_purchase' : 'expense',
+        categoryId,
+        note,
+        bankName: segmentBank,
+      });
     }
   }
 

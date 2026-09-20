@@ -180,7 +180,7 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
     // Draw embossed details directly onto card surface:
     // In WebGL UV coordinates: Y=0 is bottom, Y=323 is top.
     const currentBank = bankName || (accountType?.includes('DEBIT') ? accountType.split('•')[1]?.trim() : '');
-    const isGeko = !currentBank || currentBank.toLowerCase().includes('geko') || currentBank.toLowerCase().includes('all');
+    const isGeko = !currentBank || currentBank.toLowerCase().includes('geko') || currentBank.toLowerCase().includes('all') || currentBank.toLowerCase().includes('platinum');
     
     const titleText = isGeko ? 'TOTAL BALANCE' : `${currentBank.toUpperCase()} BALANCE`;
     drawString(titleText, 46, 155, 2);
@@ -216,7 +216,7 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 3 || Math.abs(gestureState.dy) > 3;
+        return Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2;
       },
       onPanResponderGrant: (evt) => {
         touchActive.current = true;
@@ -230,11 +230,12 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
       },
       onPanResponderMove: (evt, gestureState) => {
         touchActive.current = true;
-        const normalizedX = gestureState.dx / 110;
-        const normalizedY = gestureState.dy / 90;
+        // Direct, ultra-responsive 1:1 rotation mapping (no sluggish lag delay)
+        const normalizedX = gestureState.dx / 120;
+        const normalizedY = gestureState.dy / 100;
 
-        targetRotY.current = Math.max(-0.6, Math.min(0.6, normalizedX));
-        targetRotX.current = Math.max(-0.45, Math.min(0.45, -normalizedY));
+        targetRotY.current = Math.max(-0.65, Math.min(0.65, normalizedX));
+        targetRotX.current = Math.max(-0.50, Math.min(0.50, -normalizedY));
 
         const curX = evt.nativeEvent.locationX;
         const curY = evt.nativeEvent.locationY;
@@ -372,6 +373,7 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
       if (str.includes('metrobank')) return 9;
       if (str.includes('unionbank') || str.includes('unibank') || str.includes('union')) return 10;
       if (str.includes('security')) return 11;
+      if (str.includes('visa')) return 12;
       return 0;
     };
 
@@ -444,15 +446,34 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
           col = mix(col, vec3(0.85, 0.92, 1.0), gRingMask * 0.35);
 
         } else if (uCardType == 2) {
-          // ── GOTYME BESPOKE 3D SHADER MOTIF ──
-          // Geometric Isometric Hex Prism Grid
-          vec2 hexUv = vUv * vec2(32.0, 20.0);
-          vec2 fHex = fract(hexUv) - 0.5;
-          float hexDist = length(fHex);
-          float hexPulse = sin((floor(hexUv.x) + floor(hexUv.y)) * 0.5 - uTime * 0.18) * 0.5 + 0.5;
-          float hexDots = smoothstep(0.38, 0.28, hexDist);
-          vec3 gotymeCyan = vec3(0.0, 0.88, 1.0);
-          col = mix(col, gotymeCyan, hexDots * hexPulse * 0.45);
+          // ── GOTYME REAL-WORLD BESPOKE 3D SHADER MOTIF ──
+          // Sleek Dark Obsidian Top + Electric Cyan/Teal Bottom + Expanding Horizontal Line Grid
+          vec3 gotymeDark = vec3(0.07, 0.09, 0.12);
+          vec3 gotymeCyan = vec3(0.0, 0.82, 0.78);
+
+          // 1. Vertical Split Background (Dark Top half, Electric Cyan Bottom half)
+          float cyanCoverage = smoothstep(0.48, 0.40, vUv.y);
+          col = mix(gotymeDark, gotymeCyan, cyanCoverage);
+
+          // 2. Iconic GoTyme Horizontal Stripe Transition Grid
+          if (vUv.y > 0.38 && vUv.y < 0.92) {
+            float lineFreq = 68.0;
+            float linePattern = sin(vUv.y * lineFreq);
+            // Line gaps expand as vUv.y moves higher up the card
+            float lineProgress = (vUv.y - 0.38) / 0.54;
+            float threshold = mix(-0.25, 0.65, lineProgress);
+            float stripeMask = smoothstep(threshold, threshold + 0.08, linePattern);
+            
+            if (vUv.y >= 0.42) {
+              col = mix(col, gotymeCyan, stripeMask * 0.95);
+            } else {
+              col = mix(col, gotymeDark, (1.0 - stripeMask) * 0.85);
+            }
+          }
+
+          // 3. Subtle Metallic Cyber Sheen Reflection
+          float gotymeSheen = smoothstep(0.22, 0.0, abs((vUv.x + vUv.y * 0.3) - (uLightPos.x + 0.1))) * uShineIntensity;
+          col += vec3(0.3, 0.95, 0.90) * gotymeSheen * 0.35;
 
         } else if (uCardType == 3) {
           // ── BPI BESPOKE REAL-WORLD 3D SHADER MOTIF ──
@@ -743,6 +764,28 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
           vec3 secGold = vec3(0.95, 0.80, 0.30);
           col = mix(col, secGold, smoothstep(0.2, 0.8, secLattice) * 0.30);
 
+        } else if (uCardType == 12) {
+          // ── VISA REAL-WORLD 3D SHADER MOTIF ──
+          // Deep Royal Cobalt Blue with halftone security matrix & golden glint
+          vec3 visaNavyDark = vec3(0.0, 0.16, 0.58);
+          vec3 visaNavyBright = vec3(0.0, 0.38, 0.88);
+          col = mix(visaNavyDark, visaNavyBright, vUv.y * 0.7 + vUv.x * 0.3);
+
+          // Halftone Dot Security Matrix
+          vec2 grid = vec2(52.0, 32.0);
+          vec2 fCell = fract(vUv * grid) - 0.5;
+          vec2 cellCenter = (floor(vUv * grid) + 0.5) / grid;
+          float distToLight = length(cellCenter - uLightPos);
+          float matrixGlow = pow(max(0.0, 1.0 - distToLight * 1.2), 3.0);
+          float dotRadius = mix(0.08, 0.38, matrixGlow);
+          float dotMask = smoothstep(dotRadius, dotRadius - 0.05, length(fCell));
+          vec3 dotCol = mix(vec3(0.2, 0.5, 0.95), vec3(0.7, 0.88, 1.0), matrixGlow);
+          col = mix(col, dotCol, dotMask * 0.45);
+
+          // Specular Sheen Reflection
+          float visaSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * uShineIntensity;
+          col += vec3(0.6, 0.85, 1.0) * visaSheen * 0.40;
+
         } else {
           // ── DEFAULT GEKO PLATINUM 3D SHADER MOTIF ──
           vec2 grid = vec2(68.0, 43.0);
@@ -860,12 +903,6 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
 
             col = mix(col, logoChrome, gekoLogo);
           }
-
-          // PLATINUM Badge beneath GEKO logo
-          vec2 platPos = vUv - vec2(0.80, 0.705);
-          float dPlatBorder = sdRoundedBox(platPos, vec2(0.085, 0.016), 0.007);
-          float platBorderMask = smoothstep(0.0025, 0.0, abs(dPlatBorder));
-          col = mix(col, vec3(0.80, 0.83, 0.90), platBorderMask * 0.75);
         }
 
         // 6. VISA / Platinum Foil Emblem (Bottom-Right)
@@ -900,8 +937,11 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
           if (uCardType == 6) {
             // PNB Gold Visa: Deep obsidian / navy black embossed lettering for contrast on Gold
             textColor = vec3(0.08, 0.06, 0.02);
+          } else if (uCardType == 2 && vUv.y < 0.40) {
+            // GoTyme: Sleek dark obsidian lettering on bottom electric cyan half (matching real card)
+            textColor = vec3(0.06, 0.08, 0.12);
           } else {
-            // Crisp bright white embossed lettering with specular gleam (GCash, BPI, BDO, GoTyme, MariBank, etc.)
+            // Crisp bright white embossed lettering with specular gleam (GCash, BPI, BDO, GoTyme top, MariBank, etc.)
             vec3 textWhite = mix(vec3(0.95, 0.97, 1.0), vec3(1.0, 1.0, 1.0), vUv.y);
             float textLightDist = length(vUv - uLightPos);
             float textGlint = pow(max(0.0, 1.0 - textLightDist * 1.5), 14.0) * 1.1;
@@ -1071,14 +1111,15 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
       backUniforms.uColor1.value.copy(frontUniforms.uColor1.value);
       backUniforms.uColor2.value.copy(frontUniforms.uColor2.value);
 
-      const lerpSpeed = touchActive.current ? 0.18 : 0.08;
+      // Ultra-responsive rotation lerp (0.48 for instant finger tracking, 0.14 for spring snap-back)
+      const lerpSpeed = touchActive.current ? 0.48 : 0.14;
       rotX.current += (targetRotX.current - rotX.current) * lerpSpeed;
       rotY.current += (targetRotY.current - rotY.current) * lerpSpeed;
-      currentFlipY.current += (targetFlipY.current - currentFlipY.current) * 0.12;
+      currentFlipY.current += (targetFlipY.current - currentFlipY.current) * 0.16;
 
       // Shine only activates when the user touches / holds / moves the card
       const targetShine = touchActive.current ? 1.0 : 0.0;
-      shineIntensity.current += (targetShine - shineIntensity.current) * 0.14;
+      shineIntensity.current += (targetShine - shineIntensity.current) * 0.20;
 
       frontUniforms.uShineIntensity.value = shineIntensity.current;
       backUniforms.uShineIntensity.value = shineIntensity.current;
@@ -1088,8 +1129,8 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
         targetLightPos.current = { x: 0.5, y: 0.5 };
       }
 
-      lightPos.current.x += (targetLightPos.current.x - lightPos.current.x) * 0.1;
-      lightPos.current.y += (targetLightPos.current.y - lightPos.current.y) * 0.1;
+      lightPos.current.x += (targetLightPos.current.x - lightPos.current.x) * 0.18;
+      lightPos.current.y += (targetLightPos.current.y - lightPos.current.y) * 0.18;
 
       frontUniforms.uLightPos.value.set(lightPos.current.x, lightPos.current.y);
       backUniforms.uLightPos.value.set(lightPos.current.x, lightPos.current.y);
