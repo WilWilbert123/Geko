@@ -44,22 +44,40 @@ export const generateStream = async (
   if (parsed.length > 0) {
     try {
       const db = getDb();
-      const savedItems: { note: string; amount: number; categoryId: string; type: string }[] = [];
+      const savedItems: { note: string; amount: number; categoryId: string; type: string; bankName?: string }[] = [];
 
       for (const item of parsed) {
         const newId = uuidv4();
         const date = Date.now();
+        const bankName = item.bankName || 'GCash';
 
         await db.execute(
-          'INSERT INTO transactions (id, amount, date, categoryId, type, note) VALUES (?, ?, ?, ?, ?, ?)',
-          [newId, item.amount, date, item.categoryId, item.type, item.note]
+          'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [newId, item.amount, date, item.categoryId, item.type, item.note, bankName]
         );
+
+        // Deduct / Add to targeted bank card balance
+        try {
+          if (item.type === 'expense') {
+            await db.execute(
+              'UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)',
+              [item.amount, bankName]
+            );
+          } else {
+            await db.execute(
+              'UPDATE cards SET balance = balance + ? WHERE LOWER(bankName) = LOWER(?)',
+              [item.amount, bankName]
+            );
+          }
+        } catch (cardErr) {
+          console.warn('Failed to update card balance', cardErr);
+        }
 
         // Vector indexing
         try {
           const res = await db.execute('SELECT last_insert_rowid() as id');
           const rowId = res.rows?._array[0]?.id || 0;
-          const embedding = await generateEmbedding(`${item.note} ${item.categoryId} ${item.type} ${item.amount}`);
+          const embedding = await generateEmbedding(`${item.note} ${item.categoryId} ${bankName} ${item.type} ${item.amount}`);
           await db.execute(
             'INSERT INTO vec_transactions (rowid, embedding) VALUES (?, ?)',
             [rowId, embedding]
@@ -68,7 +86,7 @@ export const generateStream = async (
           console.warn('Vector indexing warning:', e);
         }
 
-        savedItems.push(item);
+        savedItems.push({ ...item, bankName });
       }
 
       DeviceEventEmitter.emit('transactions_updated');
@@ -83,26 +101,28 @@ export const generateStream = async (
       if (isTagalog) {
         if (savedItems.length === 1) {
           const single = savedItems[0];
+          const targetBank = single.bankName || 'GCash';
           if (single.type === 'expense') {
-            fullResponse = `Sige! Na-record ko na ang ${single.note} worth ${symbol}${single.amount.toFixed(2)} (${single.categoryId}). Nabawas na ito sa GEKO card mo! (-${symbol}${single.amount.toFixed(2)})`;
+            fullResponse = `Sige! Na-record ko na ang ${single.note} worth ${symbol}${single.amount.toFixed(2)} (${single.categoryId}). Nabawas na ito sa ${targetBank} card mo! (-${symbol}${single.amount.toFixed(2)})`;
           } else {
-            fullResponse = `Ayos! Na-record ko na ang natanggap mong ${single.note} worth +${symbol}${single.amount.toFixed(2)} (${single.categoryId}). Nadagdag na ito sa GEKO card mo!`;
+            fullResponse = `Ayos! Na-record ko na ang natanggap mong ${single.note} worth +${symbol}${single.amount.toFixed(2)} (${single.categoryId}). Nadagdag na ito sa ${targetBank} card mo!`;
           }
         } else {
           const listStr = savedItems
-            .map(i => `• ${i.note}: ${i.type === 'expense' ? '-' : '+'}${symbol}${i.amount.toFixed(2)} (${i.categoryId})`)
+            .map(i => `• ${i.note}: ${i.type === 'expense' ? '-' : '+'}${symbol}${i.amount.toFixed(2)} (${i.categoryId}) [${i.bankName || 'GCash'}]`)
             .join('\n');
-          fullResponse = `Sige! Na-record ko na ang ${savedItems.length} transactions:\n${listStr}\n\nKabuuang nabawas sa GEKO card mo: -${symbol}${totalDeducted.toFixed(2)}!`;
+          fullResponse = `Sige! Na-record ko na ang ${savedItems.length} transactions:\n${listStr}\n\nKabuuang nabawas sa GEKO cards mo: -${symbol}${totalDeducted.toFixed(2)}!`;
         }
       } else {
         if (savedItems.length === 1) {
           const single = savedItems[0];
-          fullResponse = `Got it! I've logged ${single.type === 'expense' ? 'an expense' : 'income'} of ${symbol}${single.amount.toFixed(2)} for "${single.note}" under ${single.categoryId}. Deducted from your Geko card.`;
+          const targetBank = single.bankName || 'GCash';
+          fullResponse = `Got it! I've logged ${single.type === 'expense' ? 'an expense' : 'income'} of ${symbol}${single.amount.toFixed(2)} for "${single.note}" under ${single.categoryId}. Deducted from your ${targetBank} card.`;
         } else {
           const listStr = savedItems
-            .map(i => `• ${i.note}: ${i.type === 'expense' ? '-' : '+'}${symbol}${i.amount.toFixed(2)} (${i.categoryId})`)
+            .map(i => `• ${i.note}: ${i.type === 'expense' ? '-' : '+'}${symbol}${i.amount.toFixed(2)} (${i.categoryId}) [${i.bankName || 'GCash'}]`)
             .join('\n');
-          fullResponse = `Got it! I've logged ${savedItems.length} transactions:\n${listStr}\n\nTotal deducted: -${symbol}${totalDeducted.toFixed(2)} from your Geko card.`;
+          fullResponse = `Got it! I've logged ${savedItems.length} transactions:\n${listStr}\n\nTotal deducted: -${symbol}${totalDeducted.toFixed(2)} across your Geko cards.`;
         }
       }
     } catch (err) {

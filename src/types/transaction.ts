@@ -7,6 +7,7 @@ export interface Transaction {
   categoryId: string;
   date: number; // unix timestamp
   note: string;
+  bankName?: string;
   vectorId?: string;
 }
 

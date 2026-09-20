@@ -52,7 +52,8 @@ export const CARDS_TABLE = `
     balance REAL NOT NULL,
     color1 TEXT NOT NULL,
     color2 TEXT NOT NULL,
-    cardNumber TEXT NOT NULL
+    cardNumber TEXT NOT NULL,
+    budget REAL DEFAULT 0
   );
 `;
 
