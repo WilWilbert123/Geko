@@ -141,7 +141,21 @@ export const generateStream = async (
     lowerUserText.includes('speend') ||
     lowerUserText.includes('gastos') ||
     lowerUserText.includes('saan ako') ||
-    lowerUserText.includes('ano ang');
+    lowerUserText.includes('ano ang') ||
+    lowerUserText.includes('ilan') ||
+    lowerUserText.includes('laman') ||
+    lowerUserText.includes('pila') ||
+    lowerUserText.includes('pera') ||
+    lowerUserText.includes('utang') ||
+    lowerUserText.includes('bpi') ||
+    lowerUserText.includes('gcash') ||
+    lowerUserText.includes('gotyme') ||
+    lowerUserText.includes('maya') ||
+    lowerUserText.includes('maribank') ||
+    lowerUserText.includes('bdo') ||
+    lowerUserText.includes('metrobank') ||
+    lowerUserText.includes('unionbank') ||
+    lowerUserText.includes('seabank');
 
   // 1. Check if user is asking a Financial Question (Local RAG / SQL query)
   if (isFinancialQuery) {
@@ -378,38 +392,43 @@ export const generateStream = async (
           ? `Narito ang kasalukuyang balance ng iyong mga cards & e-wallets:\n\n` + cardLines.join('\n')
           : `Here are all your current card & wallet balances:\n\n` + cardLines.join('\n');
       }
-    } else if (lowerUserText.includes('gcash')) {
-      const res = await db.execute('SELECT balance FROM cards WHERE LOWER(bankName) = "gcash"');
-      const bal = Number(res.rows?._array[0]?.balance || 0);
-      fullResponse = isTagalog
-        ? `Ang natitirang pera mo sa GCash ay ${symbol}${bal.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`
-        : `Your current GCash balance is ${symbol}${bal.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`;
-    } else if (lowerUserText.includes('visa') || lowerUserText.includes('utang') || lowerUserText.includes('debt') || lowerUserText.includes('credit')) {
-      const res = await db.execute('SELECT outstandingBalance, availableCredit, creditLimit FROM cards WHERE LOWER(bankName) = "visa"');
-      const debt = Number(res.rows?._array[0]?.outstandingBalance || 0);
-      const avail = Number(res.rows?._array[0]?.availableCredit || 0);
-      fullResponse = isTagalog
-        ? `Ang kasalukuyang utang mo sa Visa Credit Card ay ${symbol}${debt.toLocaleString('en-US', { minimumFractionDigits: 2 })}. May available credit ka pa na ${symbol}${avail.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`
-        : `Your current Visa credit card debt is ${symbol}${debt.toLocaleString('en-US', { minimumFractionDigits: 2 })} with ${symbol}${avail.toLocaleString('en-US', { minimumFractionDigits: 2 })} available credit remaining.`;
-    } else if (lowerUserText.includes('lahat') || lowerUserText.includes('total') || lowerUserText.includes('net worth')) {
-      const cardsRes = await db.execute('SELECT balance, type, outstandingBalance FROM cards');
-      const cards = cardsRes.rows?._array || [];
-      const totalAssets = cards.filter((c: any) => c.type !== 'CREDIT_CARD').reduce((acc: number, c: any) => acc + Number(c.balance || 0), 0);
-      const creditDebt = cards.filter((c: any) => c.type === 'CREDIT_CARD').reduce((acc: number, c: any) => acc + Number(c.outstandingBalance || 0), 0);
-      const netWorth = totalAssets - creditDebt;
-
-      fullResponse = isTagalog
-        ? `May kabuuang ${symbol}${totalAssets.toLocaleString('en-US', { minimumFractionDigits: 2 })} sa iyong mga bank accounts & e-wallets. May utang sa credit card na ${symbol}${creditDebt.toLocaleString('en-US', { minimumFractionDigits: 2 })}. Ang iyong Net Worth ay ${symbol}${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`
-        : `Total Assets: ${symbol}${totalAssets.toLocaleString('en-US', { minimumFractionDigits: 2 })}\nCredit Debt: ${symbol}${creditDebt.toLocaleString('en-US', { minimumFractionDigits: 2 })}\nNet Worth: ${symbol}${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
     } else {
-      const aggRes = await db.execute('SELECT categoryId, SUM(amount) as total FROM transactions WHERE type = "expense" GROUP BY categoryId ORDER BY total DESC LIMIT 1');
-      const topCat = aggRes.rows?._array[0];
-      if (topCat) {
+      // ── Dynamic Specific Card/Bank Balance Lookup ──
+      const cardsRes = await db.execute('SELECT bankName, balance, type, outstandingBalance, availableCredit FROM cards');
+      const allCards = (cardsRes.rows?._array || []) as any[];
+      const matchedCard = allCards.find((c: any) => lowerUserText.includes(c.bankName.toLowerCase()));
+
+      if (matchedCard) {
+        if (matchedCard.type === 'CREDIT_CARD') {
+          const debt = Number(matchedCard.outstandingBalance || 0);
+          const avail = Number(matchedCard.availableCredit || 0);
+          fullResponse = isTagalog
+            ? `Ang kasalukuyang utang mo sa ${matchedCard.bankName} ay ${symbol}${debt.toLocaleString('en-US', { minimumFractionDigits: 2 })}. May available credit ka pa na ${symbol}${avail.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`
+            : `Your current ${matchedCard.bankName} credit card debt is ${symbol}${debt.toLocaleString('en-US', { minimumFractionDigits: 2 })} with ${symbol}${avail.toLocaleString('en-US', { minimumFractionDigits: 2 })} available credit remaining.`;
+        } else {
+          const bal = Number(matchedCard.balance || 0);
+          fullResponse = isTagalog
+            ? `Ang natitirang pera / balance mo sa ${matchedCard.bankName} ay ${symbol}${bal.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`
+            : `Your current ${matchedCard.bankName} balance is ${symbol}${bal.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`;
+        }
+      } else if (lowerUserText.includes('lahat') || lowerUserText.includes('total') || lowerUserText.includes('net worth')) {
+        const totalAssets = allCards.filter((c: any) => c.type !== 'CREDIT_CARD').reduce((acc: number, c: any) => acc + Number(c.balance || 0), 0);
+        const creditDebt = allCards.filter((c: any) => c.type === 'CREDIT_CARD').reduce((acc: number, c: any) => acc + Number(c.outstandingBalance || 0), 0);
+        const netWorth = totalAssets - creditDebt;
+
         fullResponse = isTagalog
-          ? `Ang pinakamalaki mong pinag-gastusan ay sa ${topCat.categoryId} na may kabuuang ${symbol}${Number(topCat.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}.`
-          : `Your highest expense category is ${topCat.categoryId} with a total of ${symbol}${Number(topCat.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}.`;
+          ? `May kabuuang ${symbol}${totalAssets.toLocaleString('en-US', { minimumFractionDigits: 2 })} sa iyong mga bank accounts & e-wallets. May utang sa credit card na ${symbol}${creditDebt.toLocaleString('en-US', { minimumFractionDigits: 2 })}. Ang iyong Net Worth ay ${symbol}${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`
+          : `Total Assets: ${symbol}${totalAssets.toLocaleString('en-US', { minimumFractionDigits: 2 })}\nCredit Debt: ${symbol}${creditDebt.toLocaleString('en-US', { minimumFractionDigits: 2 })}\nNet Worth: ${symbol}${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
       } else {
-        fullResponse = isTagalog ? `Wala pang recorded na gastos.` : `No expenses logged yet.`;
+        const aggRes = await db.execute('SELECT categoryId, SUM(amount) as total FROM transactions WHERE type = "expense" GROUP BY categoryId ORDER BY total DESC LIMIT 1');
+        const topCat = aggRes.rows?._array[0];
+        if (topCat) {
+          fullResponse = isTagalog
+            ? `Ang pinakamalaki mong pinag-gastusan ay sa ${topCat.categoryId} na may kabuuang ${symbol}${Number(topCat.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}.`
+            : `Your highest expense category is ${topCat.categoryId} with a total of ${symbol}${Number(topCat.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}.`;
+        } else {
+          fullResponse = isTagalog ? `Wala pang recorded na gastos.` : `No expenses logged yet.`;
+        }
       }
     }
   } 
