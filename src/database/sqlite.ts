@@ -112,6 +112,7 @@ export const initDb = async () => {
 
     // Seed / Ensure Popular Philippine Bank Cards Exist
     const popularBanks = [
+      { bankName: 'Cash', balance: 0.00, color1: '#059669', color2: '#10B981', cardNumber: 'PHYSICAL CASH', budget: 10000, type: 'CASH', paymentNetwork: 'OTHER' },
       { bankName: 'GCash', balance: 12500.50, color1: '#0026B3', color2: '#0055FF', cardNumber: '•••• 4029', budget: 15000, type: 'EWALLET', paymentNetwork: 'OTHER' },
       { bankName: 'GoTyme', balance: 5200.75, color1: '#0F172A', color2: '#00D2C8', cardNumber: '•••• 8832', budget: 10000, type: 'BANK', paymentNetwork: 'VISA' },
       { bankName: 'BPI', balance: 45000.00, color1: '#8B0000', color2: '#C8102E', cardNumber: '•••• 1123', budget: 30000, type: 'BANK', paymentNetwork: 'MASTERCARD' },
@@ -210,35 +211,10 @@ export const initDb = async () => {
       });
     }
 
-    // Seed Installments
+    // Ensure Installments Table Exists
     const resInst = await db.execute('SELECT count(*) as count FROM installments');
-    const countInst = (resInst.rows?._array[0] as any).count;
-    if (countInst === 0) {
-      const defaultInstallment = {
-        id: uuidv4(),
-        title: 'MacBook Air M2 (3-Mo Installment)',
-        totalAmount: 900.0,
-        monthlyAmount: 300.0,
-        totalMonths: 3,
-        paidMonths: 0,
-        startDate: Date.now(),
-        nextCutoff: Date.now() + 30 * 86400000,
-        status: 'active'
-      };
-      await db.execute(
-        'INSERT INTO installments (id, title, totalAmount, monthlyAmount, totalMonths, paidMonths, startDate, nextCutoff, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          defaultInstallment.id,
-          defaultInstallment.title,
-          defaultInstallment.totalAmount,
-          defaultInstallment.monthlyAmount,
-          defaultInstallment.totalMonths,
-          defaultInstallment.paidMonths,
-          defaultInstallment.startDate,
-          defaultInstallment.nextCutoff,
-          defaultInstallment.status
-        ]
-      );
+    if (!resInst.rows) {
+      // Table will be created on demand by useInstallments
     }
     
     console.log('Database initialized successfully');

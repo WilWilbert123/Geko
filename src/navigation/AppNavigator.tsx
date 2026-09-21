@@ -21,6 +21,8 @@ const MainTabs = () => {
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        lazy: false,
+        unmountOnBlur: false,
       }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />

@@ -27,7 +27,7 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
   spentToday = 0,
 }) => {
   const { colors } = useTheme();
-  const { cards, updateCardBudget, updateCardDetails, resetAllCardBalances } = useCards();
+  const { cards, totalAssets, updateCardBudget, updateCardDetails, resetAllCardBalances } = useCards();
 
   const [selectedBankId, setSelectedBankId] = useState<string>('ALL');
 
@@ -44,11 +44,13 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
       : cards.find((c) => c.id === selectedBankId) || null;
 
   // Active Card 3D Props
-  const cardBalance = activeCard ? activeCard.balance : balance;
+  const cardBalance = activeCard
+    ? (activeCard.type === 'CREDIT_CARD' ? (activeCard.outstandingBalance || 0) : activeCard.balance)
+    : (totalAssets || balance);
   const cardColor1 = activeCard ? activeCard.color1 : '#0F172A';
   const cardColor2 = activeCard ? activeCard.color2 : '#1E293B';
   const accountType = activeCard
-    ? `DEBIT • ${activeCard.bankName.toUpperCase()}`
+    ? (activeCard.type === 'CREDIT_CARD' ? `CREDIT • ${activeCard.bankName.toUpperCase()}` : `DEBIT • ${activeCard.bankName.toUpperCase()}`)
     : 'ALL ACCOUNTS • GEKO PLATINUM';
   const cardNumber = activeCard ? activeCard.cardNumber : '4289 •••• •••• 9012';
 
@@ -84,11 +86,6 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
     setIsEditModalOpen(false);
   };
 
-  const handleResetAllToZero = async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    await resetAllCardBalances(0);
-    setIsEditModalOpen(false);
-  };
 
   return (
     <View style={styles.container}>
@@ -180,44 +177,40 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
         height={340}
       />
 
-      {/* ── Bank Balance & Budget Manager Action Bar ── */}
-      <View style={[styles.budgetBarCard, { backgroundColor: colors.surfaceHighlight, borderColor: colors.border }]}>
-        <View style={styles.budgetHeader}>
-          <View style={styles.budgetHeaderLeft}>
+      {/* ── 1-Line Squared Side-By-Side Action & Stat Row ── */}
+      <View style={styles.actionRowGrid}>
+        {/* Left Card: Active Account & Edit Action */}
+        <TouchableOpacity
+          style={[
+            styles.gridCard,
+            { backgroundColor: colors.surfaceHighlight, borderColor: colors.border },
+          ]}
+          onPress={() => openCardEditor(activeCard)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.gridCardContent}>
             <View style={[styles.bankLogoBadge, { backgroundColor: activeCard ? activeCard.color1 : '#10B981' }]}>
               <Text style={styles.bankLogoBadgeText}>{activeCard ? activeCard.bankName.charAt(0) : 'G'}</Text>
             </View>
-            <View>
-              <Text style={[styles.budgetTitle, { color: colors.text }]}>
-                {activeCard ? `${activeCard.bankName} Account` : 'All Accounts (Geko Total)'}
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.gridTitle, { color: colors.text }]} numberOfLines={1}>
+                {activeCard ? `${activeCard.bankName}` : 'Geko Total'}
               </Text>
-              <Text style={[styles.budgetSubtitle, { color: colors.textMuted }]}>
+              <Text style={[styles.gridSubtitle, { color: colors.textMuted }]} numberOfLines={1}>
                 {activeCard
                   ? cardBudget > 0
-                    ? `${formatCurrency(budgetSpent)} spent of ${formatCurrency(cardBudget)}`
-                    : 'No monthly budget limit'
-                  : 'Total balance across all bank cards'}
+                    ? `${formatCurrency(budgetSpent)} / ${formatCurrency(cardBudget)}`
+                    : 'Edit Budget'
+                  : 'All Accounts'}
               </Text>
             </View>
+            <Edit3 size={13} color={colors.primary} />
           </View>
-
-          <TouchableOpacity
-            style={[styles.editBudgetBtn, { backgroundColor: 'rgba(255,255,255,0.08)' }]}
-            onPress={() => openCardEditor(activeCard)}
-          >
-            <Edit3 size={14} color={colors.primary} />
-            <Text style={[styles.editBudgetBtnText, { color: colors.primary }]}>
-              Edit Money / Budget
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {activeCard && cardBudget > 0 && (
-          <View style={styles.progressContainer}>
-            <View style={[styles.trackBar, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+          {activeCard && cardBudget > 0 && (
+            <View style={styles.bottomAccentTrack}>
               <View
                 style={[
-                  styles.fillBar,
+                  styles.bottomAccentFill,
                   {
                     width: `${budgetPercent}%`,
                     backgroundColor: budgetPercent > 90 ? '#F43F5E' : activeCard.color1,
@@ -225,46 +218,30 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
                 ]}
               />
             </View>
-            <Text style={[styles.percentText, { color: budgetPercent > 90 ? '#F43F5E' : colors.textMuted }]}>
-              {budgetPercent}%
-            </Text>
-          </View>
-        )}
-      </View>
+          )}
+        </TouchableOpacity>
 
-      {/* ── Spent Today Hero Widget ── */}
-      <View
-        style={[
-          styles.spentCard,
-          {
-            backgroundColor: colors.surfaceHighlight || 'rgba(255,255,255,0.05)',
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        <View style={styles.leftContent}>
-          <View style={[styles.iconContainer, { backgroundColor: 'rgba(244, 63, 94, 0.12)' }]}>
-            <TrendingDown size={18} color={colors.expense || '#F43F5E'} strokeWidth={2.2} />
-          </View>
-          <View style={styles.textGroup}>
-            <Text style={[styles.statLabel, { color: colors.textMuted }]}>SPENT TODAY</Text>
-            <Text style={[styles.statValue, { color: colors.text }]}>
-              {formatCurrency(spentToday)}
-            </Text>
-          </View>
-        </View>
-
+        {/* Right Card: Spent Today */}
         <View
           style={[
-            styles.badge,
+            styles.gridCard,
             {
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              backgroundColor: colors.surfaceHighlight || 'rgba(255,255,255,0.05)',
               borderColor: colors.border,
             },
           ]}
         >
-          <View style={[styles.liveDot, { backgroundColor: colors.primary || '#10B981' }]} />
-          <Text style={[styles.badgeText, { color: colors.textMuted }]}>Today's Outflow</Text>
+          <View style={styles.gridCardContent}>
+            <View style={[styles.iconContainer, { backgroundColor: 'rgba(244, 63, 94, 0.12)' }]}>
+              <TrendingDown size={15} color={colors.expense || '#F43F5E'} strokeWidth={2.2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.statLabel, { color: colors.textMuted }]}>SPENT TODAY</Text>
+              <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>
+                {formatCurrency(spentToday)}
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -337,25 +314,6 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
               </>
             )}
 
-            {/* Quick Action: Reset All Cards to 0 */}
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: 'rgba(244, 63, 94, 0.12)',
-                paddingVertical: 10,
-                borderRadius: 14,
-                marginBottom: 16,
-                gap: 6,
-              }}
-              onPress={handleResetAllToZero}
-            >
-              <X size={14} color="#F43F5E" />
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#F43F5E' }}>
-                Reset All Cards Balance to ₱0.00
-              </Text>
-            </TouchableOpacity>
 
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -431,122 +389,84 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+
+  actionRowGrid: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 8,
+    gap: 10,
+  },
+  gridCard: {
+    flex: 1,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    position: 'relative',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  gridCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   bankLogoBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
   bankLogoBadgeText: {
     color: '#FFF',
     fontWeight: '800',
-    fontSize: 14,
-  },
-  budgetTitle: {
     fontSize: 13,
+  },
+  gridTitle: {
+    fontSize: 12,
     fontWeight: '700',
   },
-  budgetSubtitle: {
-    fontSize: 11,
+  gridSubtitle: {
+    fontSize: 10,
     fontWeight: '500',
     marginTop: 1,
   },
-  editBudgetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    gap: 4,
+  bottomAccentTrack: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  editBudgetBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 10,
-  },
-  trackBar: {
-    flex: 1,
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  fillBar: {
+  bottomAccentFill: {
     height: '100%',
-    borderRadius: 3,
-  },
-  percentText: {
-    fontSize: 11,
-    fontWeight: '700',
-    width: 34,
-    textAlign: 'right',
-  },
-  /* Spent Today */
-  spentCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-    marginHorizontal: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  leftContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  textGroup: {
     justifyContent: 'center',
   },
   statLabel: {
-    fontSize: 10.5,
+    fontSize: 9.5,
     fontWeight: '600',
-    letterSpacing: 0.8,
-    marginBottom: 2,
+    letterSpacing: 0.6,
+    marginBottom: 1,
     textTransform: 'uppercase',
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: -0.4,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    gap: 6,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '500',
+    letterSpacing: -0.3,
   },
   /* Modal */
   modalOverlay: {

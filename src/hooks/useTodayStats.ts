@@ -8,18 +8,20 @@ export const useTodayStats = () => {
   const load = useCallback(async () => {
     const db = getDb();
     try {
-      // Get today's date in YYYY-MM-DD format based on local time
-      const today = new Date().toISOString().split('T')[0];
-      
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+      const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+
       const res = await db.execute(
         `SELECT SUM(amount) as total 
          FROM transactions 
-         WHERE type = 'expense' 
-         AND date LIKE ?`,
-        [`${today}%`]
+         WHERE (type = 'expense' OR type = 'credit_purchase') 
+           AND CAST(date AS INTEGER) >= ? 
+           AND CAST(date AS INTEGER) <= ?`,
+        [startOfToday, endOfToday]
       );
-      
-      const total = res.rows?._array[0]?.total || 0;
+
+      const total = Number(res.rows?._array[0]?.total || 0);
       setSpentToday(total);
     } catch (error) {
       console.error('Failed to load today stats:', error);

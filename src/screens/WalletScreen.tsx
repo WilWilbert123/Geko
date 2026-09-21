@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,84 +10,84 @@ import {
   Modal,
   TextInput,
   Alert,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
 import { useCards, Card } from '../hooks/useCards';
-import { useTransactions } from '../hooks/useTransactions';
 import { formatCurrency } from '../utils/formatters';
-import { Plus, Wallet, TrendingUp, X, Check, MoreHorizontal, Sparkles } from 'lucide-react-native';
+import {
+  Plus,
+  X,
+  Check,
+  Filter,
+  LayoutGrid,
+  List,
+  Layers,
+  Edit3,
+  Trash2,
+} from 'lucide-react-native';
 import { GekoCard3D } from '../components/wallet/GekoCard3D';
 import * as Haptics from 'expo-haptics';
 
-const { width } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = (SCREEN_WIDTH - 24 - 8) / 2;
+const GRID_CARD_HEIGHT = 126;
 
-const PRESET_COLORS: Record<string, { c1: string; c2: string }> = {
-  GCash: { c1: '#0026B3', c2: '#0055FF' },
-  GoTyme: { c1: '#0099B8', c2: '#00D1FF' },
-  BPI: { c1: '#8B0000', c2: '#C8102E' },
-  PNB: { c1: '#D4AF37', c2: '#E6CA65' },
-  BDO: { c1: '#002B66', c2: '#004080' },
-  MariBank: { c1: '#E64A19', c2: '#FF7043' },
-  Metrobank: { c1: '#002277', c2: '#0044CC' },
-  Maya: { c1: '#0B0E14', c2: '#00E676' },
-  Landbank: { c1: '#004D25', c2: '#0A8A43' },
-  UnionBank: { c1: '#E65100', c2: '#FF8800' },
-  Visa: { c1: '#1A1F71', c2: '#0055FF' },
+// Realistic Bank Branding Palette & Networks matching reference layout
+const BANK_THEMES: Record<string, { bg1: string; bg2: string; textColor: string; isDark: boolean; network: 'VISA' | 'MASTERCARD' | 'OTHER'; logoText: string }> = {
+  gcash: { bg1: '#0026B3', bg2: '#0055FF', textColor: '#FFFFFF', isDark: true, network: 'MASTERCARD', logoText: '(G)) GCash' },
+  gotyme: { bg1: '#0F172A', bg2: '#00D2C8', textColor: '#FFFFFF', isDark: true, network: 'VISA', logoText: 'GoTyme Bank' },
+  bpi: { bg1: '#8B0000', bg2: '#C8102E', textColor: '#FFFFFF', isDark: true, network: 'MASTERCARD', logoText: 'BPI' },
+  maya: { bg1: '#6A0036', bg2: '#9C0052', textColor: '#FFFFFF', isDark: true, network: 'VISA', logoText: 'maya' },
+  unionbank: { bg1: '#D0ECE7', bg2: '#A3D9CF', textColor: '#1E293B', isDark: false, network: 'MASTERCARD', logoText: 'UnionBank' },
+  ub: { bg1: '#D0ECE7', bg2: '#A3D9CF', textColor: '#1E293B', isDark: false, network: 'MASTERCARD', logoText: 'UnionBank' },
+  rcbc: { bg1: '#7A5B0B', bg2: '#C8981A', textColor: '#FFFFFF', isDark: true, network: 'MASTERCARD', logoText: 'RCBC' },
+  gold: { bg1: '#7A5B0B', bg2: '#C8981A', textColor: '#FFFFFF', isDark: true, network: 'MASTERCARD', logoText: 'RCBC' },
+  wise: { bg1: '#76FF03', bg2: '#64DD17', textColor: '#0F172A', isDark: false, network: 'MASTERCARD', logoText: 'Wise' },
+  pnb: { bg1: '#B8860B', bg2: '#D4AF37', textColor: '#FFFFFF', isDark: true, network: 'VISA', logoText: 'PNB' },
+  bdo: { bg1: '#002B66', bg2: '#004080', textColor: '#FFFFFF', isDark: true, network: 'VISA', logoText: 'BDO' },
+  maribank: { bg1: '#E64A19', bg2: '#FF7043', textColor: '#FFFFFF', isDark: true, network: 'MASTERCARD', logoText: 'MariBank' },
+  seabank: { bg1: '#E64A19', bg2: '#FF7043', textColor: '#FFFFFF', isDark: true, network: 'MASTERCARD', logoText: 'MariBank' },
+  metrobank: { bg1: '#002277', bg2: '#0044CC', textColor: '#FFFFFF', isDark: true, network: 'VISA', logoText: 'Metrobank' },
+  landbank: { bg1: '#004D25', bg2: '#0A8A43', textColor: '#FFFFFF', isDark: true, network: 'MASTERCARD', logoText: 'Landbank' },
+  cash: { bg1: '#059669', bg2: '#10B981', textColor: '#FFFFFF', isDark: true, network: 'OTHER', logoText: 'Geko Cash' },
+  visa: { bg1: '#1A1F71', bg2: '#0055FF', textColor: '#FFFFFF', isDark: true, network: 'VISA', logoText: 'Visa' },
 };
 
 export const WalletScreen = () => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { cards, totalAssets, creditDebt, netWorth, addCard, refresh: refreshCards } = useCards();
+  const { cards, addCard, updateCardDetails, deleteCard, refresh: refreshCards } = useCards();
 
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<'All' | 'Debit' | 'Credit'>('All');
-  
-  // Selected Card state for 60fps buttery smooth 3D viewer
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [filterMode, setFilterMode] = useState<'All' | 'Debit' | 'Credit'>('All');
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'stack'>('grid');
 
-  // Add Account Modal State
+  // Animation for pre-loaded 2nd tab cards
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    fadeAnim.setValue(0.9);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [viewMode, filterMode]);
+
+  // Add Account Modal
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [newBankName, setNewBankName] = useState('');
   const [newBalance, setNewBalance] = useState('');
   const [newAccountType, setNewAccountType] = useState<'EWALLET' | 'BANK' | 'CREDIT_CARD' | 'DEBIT' | 'CASH'>('BANK');
   const [newCreditLimit, setNewCreditLimit] = useState('50000');
 
-  const { transactions } = useTransactions();
-  const [selectedDayIdx, setSelectedDayIdx] = useState<number>(6); // Default to today (index 6)
-
-  // Compute accurate real-time daily spending for the past 7 days from SQLite transactions
-  const dailyStats = useMemo(() => {
-    const today = new Date();
-    const dayInitials = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-    const result = [];
-
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-
-      const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0).getTime();
-      const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
-
-      const dayTx = transactions.filter(t => t.date >= startOfDay && t.date <= endOfDay);
-      const expense = dayTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-
-      result.push({
-        date: d,
-        dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
-        label: dayInitials[d.getDay()],
-        expense,
-        isToday: i === 0,
-      });
-    }
-
-    const maxExpense = Math.max(...result.map(r => r.expense), 500);
-    return result.map(r => ({
-      ...r,
-      ratio: Math.max(0.18, Math.min(1.0, r.expense / maxExpense)),
-    }));
-  }, [transactions]);
+  // Edit / Action Modal for individual card
+  const [editModalCard, setEditModalCard] = useState<Card | null>(null);
+  const [editBalance, setEditBalance] = useState('');
+  const [editBudget, setEditBudget] = useState('');
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -96,36 +96,67 @@ export const WalletScreen = () => {
     setRefreshing(false);
   }, [refreshCards]);
 
-  const filteredCards = cards.filter(c => {
-    if (filter === 'Debit') return c.type !== 'CREDIT_CARD';
-    if (filter === 'Credit') return c.type === 'CREDIT_CARD';
+  const filteredCards = cards.filter((c) => {
+    if (filterMode === 'Debit') return c.type !== 'CREDIT_CARD';
+    if (filterMode === 'Credit') return c.type === 'CREDIT_CARD';
     return true;
   });
 
-  // Find currently active card or default to Net Worth card
-  const activeCard = selectedCardId ? cards.find(c => c.id === selectedCardId) : null;
+  // Grouped sections for Stack / Grouped mode matching reference UI
+  const groupedSections = React.useMemo(() => {
+    const bankCards: Card[] = [];
+    const ewalletCards: Card[] = [];
+    const creditCards: Card[] = [];
+    const cashCards: Card[] = [];
 
-  const activeBankName = activeCard ? activeCard.bankName : undefined;
-  const activeBalance = activeCard 
-    ? (activeCard.type === 'CREDIT_CARD' ? (activeCard.outstandingBalance || 0) : activeCard.balance)
-    : netWorth;
-  const activeColor1 = activeCard ? activeCard.color1 : '#0F172A';
-  const activeColor2 = activeCard ? activeCard.color2 : '#1E293B';
-  const activeAccountType = activeCard 
-    ? (activeCard.type === 'CREDIT_CARD' ? `${activeCard.bankName} CREDIT` : `${activeCard.bankName} DEBIT`)
-    : 'TOTAL BALANCE';
-  const activeCardNumber = activeCard ? (activeCard.cardNumber || '•••• 4289') : '4289 •••• •••• 9012';
+    filteredCards.forEach((c) => {
+      const name = (c.bankName || '').toLowerCase();
+      if (c.type === 'CREDIT_CARD') {
+        creditCards.push(c);
+      } else if (c.type === 'EWALLET' || name.includes('gcash') || name.includes('maya') || name.includes('gotyme') || name.includes('maribank') || name.includes('seabank') || name.includes('wise')) {
+        ewalletCards.push(c);
+      } else if (c.type === 'CASH' || name.includes('cash')) {
+        cashCards.push(c);
+      } else {
+        bankCards.push(c);
+      }
+    });
+
+    const sumBal = (arr: Card[]) => arr.reduce((acc, c) => acc + (c.type === 'CREDIT_CARD' ? (c.outstandingBalance || 0) : c.balance), 0);
+
+    return [
+      { title: 'Bank Accounts', cards: bankCards, totalBalance: sumBal(bankCards) },
+      { title: 'E-Wallets', cards: ewalletCards, totalBalance: sumBal(ewalletCards) },
+      { title: 'Credit Cards', cards: creditCards, totalBalance: sumBal(creditCards) },
+      { title: 'Cash Assets', cards: cashCards, totalBalance: sumBal(cashCards) },
+    ];
+  }, [filteredCards]);
+
+  const getBankTheme = (bankName: string, fallbackC1?: string, fallbackC2?: string) => {
+    const key = (bankName || '').toLowerCase().trim();
+    for (const [k, theme] of Object.entries(BANK_THEMES)) {
+      if (key.includes(k)) return theme;
+    }
+    return {
+      bg1: fallbackC1 || '#1E293B',
+      bg2: fallbackC2 || '#334155',
+      textColor: '#FFFFFF',
+      isDark: true,
+      network: (bankName.toLowerCase().includes('visa') ? 'VISA' : 'MASTERCARD') as 'VISA' | 'MASTERCARD' | 'OTHER',
+      logoText: bankName,
+    };
+  };
 
   const handleCreateAccount = async () => {
     const name = newBankName.trim();
     if (!name) {
-      Alert.alert('Missing Name', 'Please enter an account or bank name (e.g. Security Bank, GCash, BDO).');
+      Alert.alert('Missing Name', 'Please enter an account or bank name (e.g. GCash, BPI, Maya).');
       return;
     }
 
     const bal = parseFloat(newBalance.replace(/,/g, '')) || 0;
     const limit = parseFloat(newCreditLimit.replace(/,/g, '')) || 0;
-    const preset = PRESET_COLORS[name] || { c1: '#1E293B', c2: '#334155' };
+    const theme = getBankTheme(name);
 
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -134,211 +165,284 @@ export const WalletScreen = () => {
         balance: bal,
         type: newAccountType,
         creditLimit: limit,
-        color1: preset.c1,
-        color2: preset.c2,
+        color1: theme.bg1,
+        color2: theme.bg2,
+        paymentNetwork: theme.network,
       });
 
+      require('react-native').DeviceEventEmitter.emit('transactions_updated');
       setNewBankName('');
       setNewBalance('');
       setAddModalVisible(false);
     } catch (e) {
-      Alert.alert('Error', 'Failed to create account in SQLite.');
+      Alert.alert('Error', 'Failed to create account.');
     }
   };
 
-  const renderAccountCard = (card: Card) => {
-    const isSelected = card.id === selectedCardId;
-    const isCredit = card.type === 'CREDIT_CARD';
-    const displayBalance = isCredit ? (card.outstandingBalance || 0) : card.balance;
-
-    return (
-      <TouchableOpacity
-        key={card.id}
-        style={[
-          styles.accountCard,
-          { backgroundColor: card.color1 },
-          isSelected && styles.accountCardSelected,
-        ]}
-        activeOpacity={0.85}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          setSelectedCardId(card.id);
-        }}
-      >
-        <View style={styles.accountCardHeader}>
-          <View style={styles.accountLogoContainer}>
-            <Text style={styles.accountLogoText}>{card.bankName.charAt(0)}</Text>
-          </View>
-          <Text style={styles.accountName} numberOfLines={1}>{card.bankName}</Text>
-          <View style={{ flex: 1 }} />
-          <TouchableOpacity onPress={() => setSelectedCardId(card.id)}>
-            <Sparkles size={16} color={isSelected ? '#FFD700' : '#ffffff88'} />
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.accountType}>{isCredit ? 'Credit Card • PHP' : 'Debit • PHP'}</Text>
-
-        <View style={styles.accountCardFooter}>
-          <Text style={styles.accountBalanceLabel}>{isCredit ? 'OUTSTANDING' : 'BALANCE'}</Text>
-          <Text style={styles.accountBalanceText}>{formatCurrency(displayBalance)}</Text>
-        </View>
-      </TouchableOpacity>
-    );
+  const handleOpenEditModal = (card: Card) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setEditModalCard(card);
+    setEditBalance(String(card.type === 'CREDIT_CARD' ? (card.outstandingBalance || 0) : card.balance));
+    setEditBudget(card.budget ? String(card.budget) : '');
   };
+
+  const handleSaveEdit = async () => {
+    if (!editModalCard) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const newBal = parseFloat(editBalance.replace(/,/g, '')) || 0;
+    const newBud = parseFloat(editBudget.replace(/,/g, '')) || 0;
+    await updateCardDetails(editModalCard.id, newBal, newBud);
+    require('react-native').DeviceEventEmitter.emit('transactions_updated');
+    setEditModalCard(null);
+  };
+
+  const handleDeleteCard = async (card: Card) => {
+    Alert.alert('Delete Account', `Are you sure you want to remove ${card.bankName}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          await deleteCard(card.id);
+          setEditModalCard(null);
+        },
+      },
+    ]);
+  };
+
+  // EMV Chip Component
+  const EMVChip = () => (
+    <View style={styles.chipOuter}>
+      <View style={styles.chipInnerHoriz} />
+      <View style={styles.chipInnerVert} />
+    </View>
+  );
+
+  // Mastercard Interlocking Circles Logo
+  const MastercardLogo = () => (
+    <View style={styles.mcContainer}>
+      <View style={[styles.mcCircle, { backgroundColor: '#EB001B' }]} />
+      <View style={[styles.mcCircle, { backgroundColor: '#F79E1B', marginLeft: -6, opacity: 0.95 }]} />
+    </View>
+  );
+
+  // Visa Logo
+  const VisaLogo = ({ color = '#FFFFFF' }: { color?: string }) => (
+    <Text style={[styles.visaText, { color }]}>VISA</Text>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-      >
-        {/* Header Area */}
-        <View style={styles.headerArea}>
-          <View style={styles.headerRow}>
-            <Text style={[styles.title, { color: colors.text }]}>Accounts</Text>
-            <TouchableOpacity 
-              style={styles.addAccountBtn}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setAddModalVisible(true);
-              }}
-              activeOpacity={0.8}
-            >
-              <Plus size={16} color="#4A7C59" />
-              <Text style={styles.addAccountText}>Add Account</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.subtitle}>
-            {activeCard ? `3D View: ${activeCard.bankName}` : 'Tap any card below to view in 3D'}
-          </Text>
+      {/* ── Fixed Header Row ── */}
+      <View style={styles.topHeaderBar}>
+        <Text style={[styles.screenTitle, { color: colors.text }]}>Accounts</Text>
+        <TouchableOpacity
+          style={[styles.addAccountBtn, { backgroundColor: `${colors.primary}18` }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setAddModalVisible(true);
+          }}
+          activeOpacity={0.8}
+        >
+          <Plus size={15} color={colors.primary} />
+          <Text style={[styles.addAccountText, { color: colors.primary }]}>Add Account</Text>
+        </TouchableOpacity>
+      </View>
 
-          {/* Single Focused 3D Card (60 FPS Buttery Smooth WebGL Execution) */}
-          <View style={styles.featuredCardContainer}>
-            <GekoCard3D
-              bankName={activeBankName}
-              balance={activeBalance}
-              spentToday={760}
-              dailyLimit={150}
-              cardNumber={activeCardNumber}
-              cardholderName="GEKO MEMBER"
-              accountType={activeAccountType}
-              color1={activeColor1}
-              color2={activeColor2}
-              expiryDate="10/29"
-              height={220}
-            />
-          </View>
+      {/* ── Subtitle & View Controls Bar ── */}
+      <View style={styles.controlsBar}>
+        <Text style={[styles.subtitleText, { color: colors.textMuted }]}>
+          {viewMode === 'stack' ? 'Grouped by wallet type.' : viewMode === 'list' ? 'List view of all wallets.' : 'Hold wallet to rearrange.'}
+        </Text>
+
+        {/* View Switcher Capsule Toolbar (Matching Reference Images 1 & 2) */}
+        <View style={[styles.viewToolbarCapsule, { backgroundColor: colors.surfaceHighlight || '#F1F5F9' }]}>
+          <TouchableOpacity
+            style={[styles.viewToolBtn, filterMode !== 'All' && styles.viewToolBtnActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setFilterMode(filterMode === 'All' ? 'Debit' : filterMode === 'Debit' ? 'Credit' : 'All');
+            }}
+          >
+            <Filter size={15} color={filterMode !== 'All' ? '#FFFFFF' : colors.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.viewToolBtn, viewMode === 'grid' && styles.viewToolBtnActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setViewMode('grid');
+            }}
+          >
+            <LayoutGrid size={15} color={viewMode === 'grid' ? '#FFFFFF' : colors.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.viewToolBtn, viewMode === 'list' && styles.viewToolBtnActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setViewMode('list');
+            }}
+          >
+            <List size={15} color={viewMode === 'list' ? '#FFFFFF' : colors.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.viewToolBtn, viewMode === 'stack' && styles.viewToolBtnActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setViewMode('stack');
+            }}
+          >
+            <Layers size={15} color={viewMode === 'stack' ? '#FFFFFF' : colors.textMuted} />
+          </TouchableOpacity>
         </View>
+      </View>
 
-        {/* Accurate Real-Time SQLite Daily Balance Chart */}
-        <View style={styles.fullChartContainer}>
-          <View style={[styles.fullChartCard, { backgroundColor: colors.surfaceHighlight, borderColor: colors.border }]}>
-            <View style={styles.chartCardHeader}>
-              <View>
-                <Text style={[styles.chartTitle, { color: colors.text }]}>DAILY BALANCE</Text>
-                <Text style={[styles.chartSub, { color: colors.textMuted }]}>
-                  {dailyStats[selectedDayIdx]?.isToday
-                    ? `Today's Outflow: ${formatCurrency(dailyStats[selectedDayIdx]?.expense || 0)}`
-                    : `${dailyStats[selectedDayIdx]?.dayName}: ${formatCurrency(dailyStats[selectedDayIdx]?.expense || 0)} spent`}
-                </Text>
-              </View>
+      {/* ── Main Content Scroll Area with Slide-Down Spring Bounce ── */}
+      <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY: translateYAnim }] }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        >
+        {/* 1. Grid Mode View */}
+        {viewMode === 'grid' && (
+          <View style={styles.cardsGrid}>
+            {filteredCards.map((card) => {
+              const theme = getBankTheme(card.bankName, card.color1, card.color2);
+              const isCredit = card.type === 'CREDIT_CARD';
+              const displayBal = isCredit ? (card.outstandingBalance || 0) : card.balance;
 
-              <View style={[styles.liveBadge, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
-                <View style={[styles.liveDot, { backgroundColor: colors.primary }]} />
-                <Text style={[styles.liveText, { color: colors.primary }]}>Real-Time SQLite</Text>
-              </View>
-            </View>
-
-            {/* 7-Day Interactive Real-Time Bar Chart */}
-            <View style={styles.fullChartBarsRow}>
-              {dailyStats.map((item, index) => {
-                const isSelected = selectedDayIdx === index;
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.fullBarColumn}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setSelectedDayIdx(index);
-                    }}
-                  >
-                    <View style={styles.barTrack}>
-                      <View
-                        style={[
-                          styles.fullBarFill,
-                          {
-                            height: `${Math.round(item.ratio * 100)}%`,
-                            backgroundColor: item.isToday 
-                              ? colors.primary 
-                              : isSelected 
-                                ? '#38BDF8' 
-                                : 'rgba(255, 255, 255, 0.18)',
-                          },
-                        ]}
-                      />
-                    </View>
-                    <Text
-                      style={[
-                        styles.fullBarDayText,
-                        {
-                          color: item.isToday 
-                            ? colors.primary 
-                            : isSelected 
-                              ? colors.text 
-                              : colors.textMuted,
-                          fontWeight: item.isToday || isSelected ? '800' : '600',
-                        },
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-
-        {/* Accounts Grid (Tap any account to view 3D Card above!) */}
-        <View style={styles.gridContainer}>
-          <View style={styles.gridHeaderRow}>
-            <Text style={[styles.gridInstruction, { color: colors.textMuted }]}>Accounts ({filteredCards.length}):</Text>
-
-            {/* Filter Pills */}
-            <View style={styles.inlineFiltersRow}>
-              {(['All', 'Debit', 'Credit'] as const).map(f => (
+              return (
                 <TouchableOpacity
-                  key={f}
-                  style={[
-                    styles.inlineFilterBtn,
-                    filter === f 
-                      ? { backgroundColor: colors.primary, borderColor: colors.primary } 
-                      : { backgroundColor: colors.surfaceHighlight, borderColor: colors.border }
-                  ]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setFilter(f);
-                  }}
+                  key={card.id}
+                  style={[styles.cardItem3D, { backgroundColor: card.color1 || theme.bg1 }]}
+                  activeOpacity={0.92}
+                  onPress={() => handleOpenEditModal(card)}
                 >
-                  <Text style={[
-                    styles.inlineFilterText,
-                    { color: filter === f ? '#FFFFFF' : colors.textMuted }
-                  ]}>{f}</Text>
+                  <GekoCard3D
+                    balance={displayBal}
+                    cardholderName="GEKO MEMBER"
+                    expiryDate="10/29"
+                    accountType={card.type}
+                    bankName={card.bankName}
+                    color1={card.color1 || theme.bg1}
+                    color2={card.color2 || theme.bg2}
+                    height={GRID_CARD_HEIGHT}
+                    interactive={false}
+                  />
                 </TouchableOpacity>
-              ))}
-            </View>
+              );
+            })}
           </View>
+        )}
 
-          <View style={styles.grid}>
-            {filteredCards.map((c) => renderAccountCard(c))}
+        {/* 2. Stacked / Grouped Mode View (Matching 2nd Reference Image) */}
+        {viewMode === 'stack' && (
+          <View style={styles.stackedContainer}>
+            {groupedSections.map((section) => {
+              if (section.cards.length === 0) return null;
+              return (
+                <View key={section.title} style={styles.sectionGroupBlock}>
+                  {/* Group Section Header */}
+                  <View style={styles.sectionHeaderRow}>
+                    <View>
+                      <Text style={[styles.sectionTitleText, { color: colors.text }]}>{section.title}</Text>
+                      <Text style={[styles.sectionCountText, { color: colors.textMuted }]}>
+                        {section.cards.length} {section.cards.length === 1 ? 'wallet' : 'wallets'}
+                      </Text>
+                    </View>
+                    <Text style={[styles.sectionTotalVal, { color: colors.text }]}>
+                      {formatCurrency(section.totalBalance)}
+                    </Text>
+                  </View>
+
+                  {/* Horizontal Card Deck Carousel */}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.horizontalCardCarousel}
+                  >
+                    {section.cards.map((card) => {
+                      const theme = getBankTheme(card.bankName, card.color1, card.color2);
+                      const isCredit = card.type === 'CREDIT_CARD';
+                      const displayBal = isCredit ? (card.outstandingBalance || 0) : card.balance;
+
+                      return (
+                        <TouchableOpacity
+                          key={card.id}
+                          style={[styles.stackedCardItem3D, { backgroundColor: card.color1 || theme.bg1 }]}
+                          activeOpacity={0.92}
+                          onPress={() => handleOpenEditModal(card)}
+                        >
+                          <GekoCard3D
+                            balance={displayBal}
+                            cardholderName="GEKO MEMBER"
+                            expiryDate="10/29"
+                            accountType={card.type}
+                            bankName={card.bankName}
+                            color1={card.color1 || theme.bg1}
+                            color2={card.color2 || theme.bg2}
+                            height={142}
+                            interactive={false}
+                          />
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              );
+            })}
           </View>
-        </View>
+        )}
 
-        <View style={{ height: 120 }} />
-      </ScrollView>
+        {/* 3. List Mode View */}
+        {viewMode === 'list' && (
+          <View style={styles.listViewContainer}>
+            {filteredCards.map((card) => {
+              const theme = getBankTheme(card.bankName, card.color1, card.color2);
+              const isCredit = card.type === 'CREDIT_CARD';
+              const displayBal = isCredit ? (card.outstandingBalance || 0) : card.balance;
 
-      {/* Real-Time Add Account Modal */}
+              return (
+                <TouchableOpacity
+                  key={card.id}
+                  style={[styles.listItemRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  activeOpacity={0.8}
+                  onPress={() => handleOpenEditModal(card)}
+                >
+                  <View style={[styles.listIconBadge, { backgroundColor: theme.bg1 }]}>
+                    <Text style={styles.listIconText}>{card.bankName.charAt(0).toUpperCase()}</Text>
+                  </View>
+
+                  <View style={styles.listMidInfo}>
+                    <Text style={[styles.listBankTitle, { color: colors.text }]}>{card.bankName}</Text>
+                    <Text style={[styles.listAccountType, { color: colors.textMuted }]}>
+                      {isCredit ? 'Credit Card' : card.type === 'EWALLET' ? 'E-Wallet' : card.type === 'CASH' ? 'Cash Wallet' : 'Bank Account'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.listRightBal}>
+                    <Text style={[styles.listBalText, { color: colors.text }]}>
+                      {formatCurrency(displayBal)}
+                    </Text>
+                    {isCredit && (
+                      <Text style={[styles.listSubBal, { color: colors.textMuted }]}>Outstanding Debt</Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+          <View style={{ height: 120 }} />
+        </ScrollView>
+      </Animated.View>
+
+      {/* ── Add Account Modal ── */}
       <Modal
         visible={addModalVisible}
         transparent
@@ -357,7 +461,7 @@ export const WalletScreen = () => {
             <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Account / Bank Name</Text>
             <TextInput
               style={[styles.modalInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
-              placeholder="e.g. Security Bank, GCash, Maya, BDO"
+              placeholder="e.g. GCash, GoTyme, BPI, Maya, BDO"
               placeholderTextColor={colors.textMuted}
               value={newBankName}
               onChangeText={setNewBankName}
@@ -420,63 +524,443 @@ export const WalletScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* ── Edit Card Options Modal ── */}
+      {editModalCard && (
+        <Modal
+          visible={!!editModalCard}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setEditModalCard(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>
+                  {editModalCard.bankName} Account
+                </Text>
+                <TouchableOpacity onPress={() => setEditModalCard(null)}>
+                  <X size={20} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
+                {editModalCard.type === 'CREDIT_CARD' ? 'Outstanding Credit Debt (₱)' : 'Current Balance (₱)'}
+              </Text>
+              <TextInput
+                style={[styles.modalInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                keyboardType="numeric"
+                value={editBalance}
+                onChangeText={setEditBalance}
+              />
+
+              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Monthly Budget Limit (₱)</Text>
+              <TextInput
+                style={[styles.modalInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                placeholder="Optional"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                value={editBudget}
+                onChangeText={setEditBudget}
+              />
+
+              <View style={styles.editModalBtnRow}>
+                <TouchableOpacity
+                  style={[styles.saveEditBtn, { backgroundColor: colors.primary }]}
+                  onPress={handleSaveEdit}
+                >
+                  <Edit3 size={16} color="#fff" />
+                  <Text style={styles.createBtnText}>Save Changes</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.deleteCardBtn}
+                  onPress={() => handleDeleteCard(editModalCard)}
+                >
+                  <Trash2 size={16} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerArea: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  title: { fontSize: 34, fontWeight: '800', letterSpacing: -1 },
-  addAccountBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F3EB', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, gap: 6 },
-  addAccountText: { color: '#4A7C59', fontWeight: '700', fontSize: 14 },
-  subtitle: { color: '#666', fontSize: 15 },
-  featuredCardContainer: { marginTop: 14 },
-
-  fullChartContainer: { paddingHorizontal: 24, marginTop: 20 },
-  fullChartCard: { borderRadius: 24, padding: 20, borderWidth: 1 },
-  chartCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
-  chartTitle: { fontSize: 13, fontWeight: '800', letterSpacing: 0.8 },
-  chartSub: { fontSize: 12, fontWeight: '600', marginTop: 2 },
-  liveBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, gap: 6 },
-  liveDot: { width: 6, height: 6, borderRadius: 3 },
-  liveText: { fontSize: 11, fontWeight: '700' },
-  fullChartBarsRow: { flexDirection: 'row', justifyContent: 'space-between', height: 90, alignItems: 'flex-end', paddingTop: 10 },
-  fullBarColumn: { flex: 1, alignItems: 'center', height: '100%', justifyContent: 'flex-end', gap: 8 },
-  barTrack: { width: 14, height: 60, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 7, justifyContent: 'flex-end', overflow: 'hidden' },
-  fullBarFill: { width: '100%', borderRadius: 7 },
-  fullBarDayText: { fontSize: 11 },
-
-  gridContainer: { paddingHorizontal: 24, marginTop: 24 },
-  gridHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  gridInstruction: { fontSize: 14, fontWeight: '700' },
-  inlineFiltersRow: { flexDirection: 'row', gap: 6 },
-  inlineFilterBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, borderWidth: 1 },
-  inlineFilterText: { fontSize: 11, fontWeight: '700' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 16 },
-
-  accountCard: { width: (width - 64) / 2, borderRadius: 24, padding: 20, minHeight: 180, justifyContent: 'space-between', borderWidth: 2, borderColor: 'transparent' },
-  accountCardSelected: { borderColor: '#FFD700', transform: [{ scale: 1.02 }] },
-  accountCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  accountLogoContainer: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  accountLogoText: { color: '#fff', fontWeight: '800', fontSize: 12 },
-  accountName: { color: '#fff', fontWeight: '700', fontSize: 15, flexShrink: 1 },
-  accountType: { color: '#fff', opacity: 0.8, fontSize: 12, marginTop: -20 },
-  accountCardFooter: { marginTop: 16 },
-  accountBalanceLabel: { color: '#fff', opacity: 0.8, fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
-  accountBalanceText: { color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+  topHeaderBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  screenTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  addAccountBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    gap: 6,
+  },
+  addAccountText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  controlsBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  subtitleText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  viewToolbarCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    padding: 3,
+    gap: 3,
+  },
+  viewToolBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewToolBtnActive: {
+    backgroundColor: '#1E293B',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.16,
+    shadowRadius: 3,
+  },
+  scrollContent: {
+    paddingHorizontal: 12,
+    paddingBottom: 24,
+  },
+  cardsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  cardItem3D: {
+    width: CARD_WIDTH,
+    height: GRID_CARD_HEIGHT,
+    borderRadius: 16,
+    position: 'relative',
+    backgroundColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  // Stacked Grouped Mode Styles
+  stackedContainer: {
+    gap: 20,
+  },
+  sectionGroupBlock: {
+    marginBottom: 8,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  sectionTitleText: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  sectionCountText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  sectionTotalVal: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  horizontalCardCarousel: {
+    gap: 12,
+    paddingRight: 16,
+  },
+  stackedCardItem3D: {
+    width: 226,
+    height: 142,
+    borderRadius: 16,
+    position: 'relative',
+    backgroundColor: 'transparent',
+  },
+  // List Mode View Styles
+  listViewContainer: {
+    gap: 10,
+  },
+  listItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  listIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  listIconText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  listMidInfo: {
+    flex: 1,
+  },
+  listBankTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  listAccountType: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  listRightBal: {
+    alignItems: 'flex-end',
+  },
+  listBalText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  listSubBal: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#EF4444',
+    marginTop: 2,
+  },
+  optionsDotBtnOverlay: {
+    position: 'absolute',
+    top: 8,
+    right: 12,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  cardItem: {
+    width: CARD_WIDTH,
+    height: 125,
+    borderRadius: 18,
+    padding: 14,
+    justifyContent: 'space-between',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cardBrandLogo: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  optionsDotBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardMidRow: {
+    marginVertical: 4,
+  },
+  chipOuter: {
+    width: 24,
+    height: 18,
+    borderRadius: 4,
+    backgroundColor: '#E5C158',
+    borderWidth: 1,
+    borderColor: '#B8972E',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  chipInnerHoriz: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    marginVertical: 2,
+  },
+  chipInnerVert: {
+    width: 1,
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    position: 'absolute',
+    left: 11,
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  cardBalanceLabel: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    opacity: 0.85,
+  },
+  cardBalanceVal: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    marginTop: 1,
+  },
+  creditProgressTrack: {
+    height: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 2,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  creditProgressFill: {
+    height: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 2,
+  },
+  mcContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  mcCircle: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  visaText: {
+    fontSize: 14,
+    fontWeight: '900',
+    fontStyle: 'italic',
+    letterSpacing: 0.5,
+  },
+  otherNetworkDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
 
   /* Modal Styles */
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', paddingHorizontal: 20 },
-  modalCard: { borderRadius: 24, borderWidth: 1, padding: 24 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  modalTitle: { fontSize: 20, fontWeight: '700' },
-  fieldLabel: { fontSize: 12, fontWeight: '600', marginTop: 12, marginBottom: 6 },
-  modalInput: { height: 48, borderRadius: 16, borderWidth: 1, paddingHorizontal: 16, fontSize: 15 },
-  typeSelectorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  typeChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1 },
-  typeChipText: { fontSize: 12, fontWeight: '700' },
-  createBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: 16, marginTop: 24, gap: 8 },
-  createBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  modalInput: {
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    fontSize: 15,
+  },
+  typeSelectorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  typeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  typeChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  createBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 50,
+    borderRadius: 16,
+    marginTop: 24,
+    gap: 8,
+  },
+  createBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  editModalBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 20,
+  },
+  saveEditBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 48,
+    borderRadius: 16,
+    gap: 8,
+  },
+  deleteCardBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
