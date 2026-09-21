@@ -70,7 +70,7 @@ export const useInstallments = () => {
     DeviceEventEmitter.emit('installments_updated');
   };
 
-  const payCutoff = async (installmentId: string) => {
+  const payCutoff = async (installmentId: string, bankName: string = 'GCash') => {
     const db = getDb();
     const inst = installments.find(i => i.id === installmentId);
     if (!inst) throw new Error('Installment not found');
@@ -90,17 +90,23 @@ export const useInstallments = () => {
       [newPaidMonths, newStatus, nextCutoff, installmentId]
     );
 
-    // 2. Insert real deduction transaction into transactions table
+    // 2. Insert real deduction transaction into transactions table & update card balance
     const transactionId = uuidv4();
     const now = Date.now();
     const note = `Installment (${newPaidMonths}/${inst.totalMonths}) - ${inst.title}`;
+    const targetBank = bankName || 'GCash';
 
     await db.execute(
-      'INSERT INTO transactions (id, amount, type, categoryId, date, note) VALUES (?, ?, ?, ?, ?, ?)',
-      [transactionId, inst.monthlyAmount, 'expense', 'Shopping', now, note]
+      'INSERT INTO transactions (id, amount, type, categoryId, date, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [transactionId, inst.monthlyAmount, 'expense', 'Shopping', now, note, targetBank]
     );
 
-    // 3. Emit events to refresh balance, recent activity, and installments UI
+    await db.execute(
+      'UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)',
+      [inst.monthlyAmount, targetBank]
+    );
+
+    // 3. Emit events to refresh balance, recent activity, stats, and installments UI
     DeviceEventEmitter.emit('transactions_updated');
     DeviceEventEmitter.emit('installments_updated');
     await load();
@@ -113,11 +119,19 @@ export const useInstallments = () => {
     };
   };
 
+  const deleteInstallment = async (installmentId: string) => {
+    const db = getDb();
+    await db.execute('DELETE FROM installments WHERE id = ?', [installmentId]);
+    DeviceEventEmitter.emit('installments_updated');
+    await load();
+  };
+
   return {
     installments,
     loading,
     refresh: load,
     addInstallment,
     payCutoff,
+    deleteInstallment,
   };
 };

@@ -212,17 +212,28 @@ export const useCards = () => {
     }
   };
 
-  return { 
-    cards, 
+  const deleteCard = async (cardId: string) => {
+    const db = getDb();
+    try {
+      await db.execute('DELETE FROM cards WHERE id = ?', [cardId]);
+      await load();
+      require('react-native').DeviceEventEmitter.emit('transactions_updated');
+    } catch (e) {
+      console.error('Failed to delete card', e);
+    }
+  };
+
+  return {
+    cards,
     totalAssets,
     creditDebt,
-    netWorth, 
+    netWorth,
+    refresh: load,
+    updateCardBudget,
+    updateCardBalance,
+    updateCardDetails,
+    resetAllCardBalances,
     addCard,
-    updateCardBudget, 
-    updateCardBalance, 
-    updateCardDetails, 
-    resetAllCardBalances, 
-    refresh: load 
+    deleteCard,
   };
 };
-

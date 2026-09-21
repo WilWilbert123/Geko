@@ -73,7 +73,33 @@ export const generateStream = async (
     return fullResponse;
   }
 
-  // 1. Check if user is asking a Financial Question (Local RAG / SQL query)
+  // 1. Check if input is a Transaction (e.g. "Kumain ako sa labas 180 gamit gotyme") vs a Question
+  const isExplicitQuestion =
+    lowerUserText.includes('?') ||
+    lowerUserText.includes('magkano') ||
+    lowerUserText.includes('how much') ||
+    lowerUserText.includes('what is') ||
+    lowerUserText.includes('what are') ||
+    lowerUserText.includes('aabot') ||
+    lowerUserText.includes('kaya ba') ||
+    lowerUserText.includes('pila') ||
+    lowerUserText.includes('ilan') ||
+    lowerUserText.includes('ano') ||
+    lowerUserText.includes('laman') ||
+    lowerUserText.includes('cards balance') ||
+    lowerUserText.includes('card balance') ||
+    lowerUserText.includes('wallet balance') ||
+    lowerUserText.includes('list my card') ||
+    lowerUserText.includes('list card') ||
+    lowerUserText.includes('list wallet') ||
+    lowerUserText.includes('show my cards');
+
+  const candidateTransactions = parseTransactionsFromText(userText);
+  const hasValidTransactionIntent =
+    candidateTransactions.length > 0 &&
+    candidateTransactions.some(t => t.amount > 0) &&
+    !isExplicitQuestion;
+
   const isGoalQuery =
     lowerUserText.includes('goal') ||
     lowerUserText.includes('goals') ||
@@ -98,9 +124,14 @@ export const generateStream = async (
     lowerUserText.includes('all wallet') ||
     lowerUserText.includes('cards list') ||
     lowerUserText.includes('show my cards') ||
+    lowerUserText.includes('may laman') ||
+    lowerUserText.includes('laman na pera') ||
+    lowerUserText.includes('may pera') ||
+    lowerUserText.includes('cards with money') ||
+    lowerUserText.includes('with money') ||
     (
       (lowerUserText.includes('card') || lowerUserText.includes('cards') || lowerUserText.includes('wallet') || lowerUserText.includes('wallets') || lowerUserText.includes('bank')) &&
-      (lowerUserText.includes('all') || lowerUserText.includes('list') || lowerUserText.includes('show') || lowerUserText.includes('my') || lowerUserText.includes('balance') || lowerUserText.includes('can you') || lowerUserText.includes('lahat'))
+      (lowerUserText.includes('all') || lowerUserText.includes('list') || lowerUserText.includes('show') || lowerUserText.includes('my') || lowerUserText.includes('balance') || lowerUserText.includes('can you') || lowerUserText.includes('lahat') || lowerUserText.includes('laman'))
     );
 
   const isTodaySpendQuery =
@@ -125,41 +156,269 @@ export const generateStream = async (
     lowerUserText.includes('7 days') ||
     lowerUserText.includes('whole week');
 
-  const isFinancialQuery =
-    isGoalQuery ||
-    isCardListQuery ||
-    isTodaySpendQuery ||
-    isWeekSpendQuery ||
-    lowerUserText.includes('magkano') ||
-    lowerUserText.includes('how much') ||
-    lowerUserText.includes('what is') ||
-    lowerUserText.includes('what are') ||
-    lowerUserText.includes('balance') ||
-    lowerUserText.includes('balances') ||
-    lowerUserText.includes('spend') ||
-    lowerUserText.includes('spent') ||
-    lowerUserText.includes('speend') ||
-    lowerUserText.includes('gastos') ||
-    lowerUserText.includes('saan ako') ||
-    lowerUserText.includes('ano ang') ||
-    lowerUserText.includes('ilan') ||
-    lowerUserText.includes('laman') ||
-    lowerUserText.includes('pila') ||
-    lowerUserText.includes('pera') ||
-    lowerUserText.includes('utang') ||
-    lowerUserText.includes('bpi') ||
-    lowerUserText.includes('gcash') ||
-    lowerUserText.includes('gotyme') ||
-    lowerUserText.includes('maya') ||
-    lowerUserText.includes('maribank') ||
-    lowerUserText.includes('bdo') ||
-    lowerUserText.includes('metrobank') ||
-    lowerUserText.includes('unionbank') ||
-    lowerUserText.includes('seabank');
+  const isInstallmentQuery =
+    lowerUserText.includes('installment') ||
+    lowerUserText.includes('installments') ||
+    lowerUserText.includes('hulugan') ||
+    lowerUserText.includes('cut-off') ||
+    lowerUserText.includes('cutoff') ||
+    lowerUserText.includes('bnpl') ||
+    lowerUserText.includes('babayaran');
 
-  // 1. Check if user is asking a Financial Question (Local RAG / SQL query)
-  if (isFinancialQuery) {
-    if (isGoalQuery) {
+  const isInstallmentDeductAction =
+    isInstallmentQuery &&
+    (lowerUserText.includes('deduct') ||
+      lowerUserText.includes('pay') ||
+      lowerUserText.includes('bayaran') ||
+      lowerUserText.includes('bawasan') ||
+      lowerUserText.includes('bawas') ||
+      lowerUserText.includes('bayad'));
+
+  const isFinancialQuery =
+    !hasValidTransactionIntent &&
+    (isGoalQuery ||
+      isCardListQuery ||
+      isTodaySpendQuery ||
+      isWeekSpendQuery ||
+      isInstallmentQuery ||
+      lowerUserText.includes('magkano') ||
+      lowerUserText.includes('how much') ||
+      lowerUserText.includes('what is') ||
+      lowerUserText.includes('what are') ||
+      lowerUserText.includes('balance') ||
+      lowerUserText.includes('balances') ||
+      lowerUserText.includes('saan ako') ||
+      lowerUserText.includes('ano ang') ||
+      lowerUserText.includes('ilan') ||
+      lowerUserText.includes('laman') ||
+      lowerUserText.includes('pila') ||
+      lowerUserText.includes('aabot') ||
+      lowerUserText.includes('net worth'));
+
+  // A. Process Transaction Intent FIRST if user is stating a transaction (e.g. "Kumain ako sa labas 180 gamit gotyme")
+  if (hasValidTransactionIntent) {
+    try {
+      const savedItems: ParsedTransaction[] = [];
+
+      for (const item of candidateTransactions) {
+        const newId = uuidv4();
+        const date = Date.now();
+        const bankName = item.bankName || 'GCash';
+
+        await db.execute(
+          'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [newId, item.amount, date, item.categoryId, item.type, item.note, bankName]
+        );
+
+        if (item.type === 'transfer') {
+          const src = item.sourceBank || 'Maya';
+          const dst = item.destinationBank || 'MariBank';
+          await db.execute('UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, src]);
+          await db.execute('UPDATE cards SET balance = balance + ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, dst]);
+        } else if (item.type === 'credit_payment') {
+          const src = item.sourceBank || 'GCash';
+          await db.execute('UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, src]);
+          await db.execute(
+            'UPDATE cards SET outstandingBalance = MAX(0, outstandingBalance - ?), availableCredit = availableCredit + ? WHERE LOWER(bankName) = "visa"',
+            [item.amount, item.amount]
+          );
+        } else if (item.type === 'credit_purchase') {
+          await db.execute(
+            'UPDATE cards SET outstandingBalance = outstandingBalance + ?, availableCredit = availableCredit - ? WHERE LOWER(bankName) = "visa"',
+            [item.amount, item.amount]
+          );
+        } else if (item.type === 'expense') {
+          await db.execute('UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, bankName]);
+        } else if (item.type === 'income') {
+          await db.execute('UPDATE cards SET balance = balance + ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, bankName]);
+        }
+
+        savedItems.push(item);
+      }
+
+      DeviceEventEmitter.emit('transactions_updated');
+
+      if (savedItems.length === 1) {
+        const single = savedItems[0];
+        const targetBank = single.bankName || 'GCash';
+        const cardRes = await db.execute('SELECT balance, outstandingBalance, type FROM cards WHERE LOWER(bankName) = LOWER(?)', [targetBank]);
+        const cardRow = cardRes.rows?._array[0];
+        const newBalStr = cardRow
+          ? (cardRow.type === 'CREDIT_CARD'
+              ? ` (Kasalukuyang utang: ${symbol}${Number(cardRow.outstandingBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })})`
+              : ` (Natitirang balance sa ${targetBank}: ${symbol}${Number(cardRow.balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })})`)
+          : '';
+
+        if (single.type === 'transfer') {
+          fullResponse = isTagalog
+            ? `✓ Na-transfer na ang ${symbol}${single.amount.toFixed(2)} mula ${single.sourceBank} papunta sa ${single.destinationBank}. Hindi nabawasan ang kabuuang assets mo!`
+            : `✓ Transferred ${symbol}${single.amount.toFixed(2)} from ${single.sourceBank} to ${single.destinationBank}.`;
+        } else if (single.type === 'credit_payment') {
+          fullResponse = isTagalog
+            ? `✓ Na-record ang ${symbol}${single.amount.toFixed(2)} pagbayad ng credit card sa Visa gamit ang ${single.sourceBank}. Nabawasan ang utang mo sa Visa!`
+            : `✓ Paid ${symbol}${single.amount.toFixed(2)} towards Visa credit card from ${single.sourceBank}. Credit debt reduced!`;
+        } else if (single.type === 'credit_purchase') {
+          fullResponse = isTagalog
+            ? `✓ Na-record ang ${symbol}${single.amount.toFixed(2)} (${single.note}) gamit ang Visa credit card. Nadagdagan ang utang sa Visa, walang nabawas sa cash balances mo.`
+            : `✓ Charged ${symbol}${single.amount.toFixed(2)} (${single.note}) to Visa credit card. Added to credit debt.`;
+        } else if (single.type === 'expense') {
+          const isLost = single.categoryId === 'Adjustment' || single.note.toLowerCase().includes('lost') || single.note.toLowerCase().includes('nawala');
+          if (isLost) {
+            fullResponse = isTagalog
+              ? `✓ Na-record na ang nawalang ${symbol}${single.amount.toFixed(2)} (${single.note}). Nabawas na ito sa ${single.bankName} balance mo!${newBalStr}`
+              : `✓ Recorded ${symbol}${single.amount.toFixed(2)} lost money (${single.note}). Deducted from your ${single.bankName} balance!${newBalStr}`;
+          } else {
+            fullResponse = isTagalog
+              ? `✓ Na-record na ang ${single.note} worth ${symbol}${single.amount.toFixed(2)} (${single.categoryId}). Nabawas na ito sa ${single.bankName} card mo!${newBalStr}`
+              : `✓ Logged ${symbol}${single.amount.toFixed(2)} expense for "${single.note}" under ${single.categoryId} on ${single.bankName}.${newBalStr}`;
+          }
+        } else {
+          fullResponse = isTagalog
+            ? `✓ Na-record na ang natanggap mong ${single.note} worth +${symbol}${single.amount.toFixed(2)}. Nadagdag na ito sa ${single.bankName} card mo!${newBalStr}`
+            : `✓ Logged +${symbol}${single.amount.toFixed(2)} income to ${single.bankName}.${newBalStr}`;
+        }
+      } else {
+        const listStr = savedItems
+          .map(i => `• ${i.note}: ${symbol}${i.amount.toFixed(2)} [${i.bankName || 'GCash'}]`)
+          .join('\n');
+        fullResponse = isTagalog
+          ? `✓ Na-record ko na ang ${savedItems.length} transactions:\n${listStr}`
+          : `✓ Logged ${savedItems.length} transactions:\n${listStr}`;
+      }
+    } catch (err) {
+      console.error('Failed to execute AI transaction:', err);
+      fullResponse = "I understood the transaction, but I couldn't save it locally. Nothing was changed.";
+    }
+  }
+  // B. Check if user is asking a Financial Question (Local RAG / SQL query)
+  else if (isFinancialQuery) {
+    if (isInstallmentDeductAction) {
+      // ── Execute Real-Time Installment Cut-Off Deduction ──
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS installments (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          totalAmount REAL NOT NULL,
+          monthlyAmount REAL NOT NULL,
+          totalMonths INTEGER NOT NULL,
+          paidMonths INTEGER NOT NULL,
+          startDate INTEGER NOT NULL,
+          nextCutoff INTEGER NOT NULL,
+          status TEXT NOT NULL
+        );
+      `);
+
+      const res = await db.execute('SELECT * FROM installments WHERE status = "active" ORDER BY nextCutoff ASC');
+      const activeInstallments = (res.rows?._array || []) as any[];
+
+      if (activeInstallments.length === 0) {
+        fullResponse = isTagalog
+          ? `Wala kang active na installment plan sa ngayon!`
+          : `You don't have any active installment plans to deduct!`;
+      } else {
+        let matched = activeInstallments.find((inst: any) =>
+          lowerUserText.includes(inst.title.toLowerCase())
+        );
+        if (!matched) {
+          matched = activeInstallments[0];
+        }
+
+        if (matched.paidMonths >= matched.totalMonths) {
+          fullResponse = isTagalog
+            ? `Bayad na nang buo ang installment plan na **${matched.title}**!`
+            : `The installment plan **${matched.title}** is already fully paid!`;
+        } else {
+          const knownBanks = ['cash', 'gotyme', 'gcash', 'maya', 'maribank', 'bpi', 'bdo', 'metrobank', 'unionbank', 'seabank', 'visa'];
+          let targetBank = 'GCash';
+          for (const b of knownBanks) {
+            if (lowerUserText.includes(b)) {
+              if (b === 'cash') targetBank = 'Cash';
+              else if (b === 'gotyme') targetBank = 'GoTyme';
+              else if (b === 'gcash') targetBank = 'GCash';
+              else if (b === 'maya') targetBank = 'Maya';
+              else if (b === 'maribank') targetBank = 'MariBank';
+              else if (b === 'bpi') targetBank = 'BPI';
+              else if (b === 'bdo') targetBank = 'BDO';
+              else if (b === 'metrobank') targetBank = 'Metrobank';
+              else if (b === 'unionbank') targetBank = 'UnionBank';
+              else if (b === 'seabank') targetBank = 'SeaBank';
+              else if (b === 'visa') targetBank = 'Visa';
+              break;
+            }
+          }
+
+          const newPaidMonths = matched.paidMonths + 1;
+          const isCompleted = newPaidMonths >= matched.totalMonths;
+          const newStatus = isCompleted ? 'completed' : 'active';
+          const nextCutoff = matched.nextCutoff + 30 * 86400000;
+
+          await db.execute(
+            'UPDATE installments SET paidMonths = ?, status = ?, nextCutoff = ? WHERE id = ?',
+            [newPaidMonths, newStatus, nextCutoff, matched.id]
+          );
+
+          const txId = uuidv4();
+          const now = Date.now();
+          const note = `Installment (${newPaidMonths}/${matched.totalMonths}) - ${matched.title}`;
+          await db.execute(
+            'INSERT INTO transactions (id, amount, type, categoryId, date, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [txId, matched.monthlyAmount, 'expense', 'Bills & Utilities', now, note, targetBank]
+          );
+
+          await db.execute(
+            'UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)',
+            [matched.monthlyAmount, targetBank]
+          );
+
+          const cardRes = await db.execute('SELECT balance FROM cards WHERE LOWER(bankName) = LOWER(?)', [targetBank]);
+          const newBal = cardRes.rows?._array[0]?.balance;
+          const balStr = newBal !== undefined ? ` (Natitirang balance sa ${targetBank}: ${symbol}${Number(newBal).toLocaleString('en-US', { minimumFractionDigits: 2 })})` : '';
+
+          DeviceEventEmitter.emit('transactions_updated');
+          DeviceEventEmitter.emit('installments_updated');
+
+          fullResponse = isTagalog
+            ? `✓ Na-deduct na ang cut-off ${newPaidMonths}/${matched.totalMonths} (${symbol}${matched.monthlyAmount.toFixed(2)}) para sa **${matched.title}** mula sa iyong ${targetBank}!${balStr}`
+            : `✓ Deducted cut-off ${newPaidMonths}/${matched.totalMonths} (${symbol}${matched.monthlyAmount.toFixed(2)}) for **${matched.title}** from your ${targetBank}!${balStr}`;
+        }
+      }
+    } else if (isInstallmentQuery) {
+      // ── Retrieve Real-Time Active Installment Plans ──
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS installments (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          totalAmount REAL NOT NULL,
+          monthlyAmount REAL NOT NULL,
+          totalMonths INTEGER NOT NULL,
+          paidMonths INTEGER NOT NULL,
+          startDate INTEGER NOT NULL,
+          nextCutoff INTEGER NOT NULL,
+          status TEXT NOT NULL
+        );
+      `);
+
+      const res = await db.execute('SELECT * FROM installments ORDER BY status ASC, nextCutoff ASC');
+      const installmentsList = (res.rows?._array || []) as any[];
+
+      if (installmentsList.length === 0) {
+        fullResponse = isTagalog
+          ? `Wala ka pang recorded na installment plan sa SQLite. Pwede kang magdagdag sa Installment Plans widget!`
+          : `You don't have any recorded installment plans. You can add one under Installment Plans!`;
+      } else {
+        const lines = installmentsList.map((inst: any) => {
+          const paidStr = `${inst.paidMonths} of ${inst.totalMonths} paid`;
+          const cutoffDate = new Date(inst.nextCutoff).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const isDone = inst.status === 'completed';
+          const statusBadge = isDone ? ' (Completed 🎉)' : ` (Next cut-off: ${cutoffDate})`;
+          return `• **${inst.title}**: ${symbol}${Number(inst.monthlyAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}/cut-off [${paidStr}, Total: ${symbol}${Number(inst.totalAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}]${statusBadge}`;
+        });
+
+        fullResponse = isTagalog
+          ? `Narito ang kasalukuyang status ng iyong Installment Plans:\n\n` + lines.join('\n')
+          : `Here is the current real-time status of your Installment Plans:\n\n` + lines.join('\n');
+      }
+    } else if (isGoalQuery) {
       // ── Real-Time Savings Goals Retrieval from SQLite ──
       const goalsRes = await db.execute('SELECT * FROM goals');
       const goals = (goalsRes.rows?._array || []) as any[];
@@ -169,22 +428,7 @@ export const generateStream = async (
           ? `Wala ka pang active na savings goals sa SQLite. Pwede kang magdagdag sa Savings Goals tab!`
           : `You don't have any active savings goals currently set up. You can add one in the Savings Goals tab!`;
       } else {
-        const isFeasibilityQuery = 
-          lowerUserText.includes('can i') ||
-          lowerUserText.includes('can make') ||
-          lowerUserText.includes('make my goal') ||
-          lowerUserText.includes('reach') ||
-          lowerUserText.includes('aabot') ||
-          lowerUserText.includes('kaya ba') ||
-          lowerUserText.includes('cutoff') ||
-          lowerUserText.includes('cut off') ||
-          lowerUserText.includes('per cutoff') ||
-          lowerUserText.includes('december') ||
-          lowerUserText.includes('dec 2026') ||
-          lowerUserText.includes('how much needed') ||
-          lowerUserText.includes('how much per');
-
-        // ── Intelligent Fuzzy Goal Matching (handles typos like 'onexplaye' -> 'OneXplayer') ──
+        // ── Intelligent Fuzzy Goal Matching (handles typos like 'onexplaye' -> 'OneXplayer' or 'drone') ──
         const cleanUserWords = lowerUserText.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length >= 3);
 
         let bestGoal: any = null;
@@ -199,7 +443,7 @@ export const generateStream = async (
             score += 10;
           }
 
-          // 2. Token overlap & prefix fuzzy matching (e.g. 'onexplaye' vs 'onexplayer')
+          // 2. Token overlap & prefix fuzzy matching
           for (const word of cleanUserWords) {
             const cleanW = word.replace(/[^a-z0-9]/g, '');
             if (cleanW.length >= 3) {
@@ -220,6 +464,26 @@ export const generateStream = async (
           }
         }
 
+        const isFeasibilityQuery = 
+          highestScore > 0 ||
+          lowerUserText.includes('can i') ||
+          lowerUserText.includes('can make') ||
+          lowerUserText.includes('make my goal') ||
+          lowerUserText.includes('reach') ||
+          lowerUserText.includes('aabot') ||
+          lowerUserText.includes('maabot') ||
+          lowerUserText.includes('kaya ba') ||
+          lowerUserText.includes('kaya ko') ||
+          lowerUserText.includes('kaya pa') ||
+          lowerUserText.includes('kakayanin') ||
+          lowerUserText.includes('mabibili') ||
+          lowerUserText.includes('cutoff') ||
+          lowerUserText.includes('cut off') ||
+          lowerUserText.includes('per cutoff') ||
+          lowerUserText.includes('how much needed') ||
+          lowerUserText.includes('how much per') ||
+          ['jan', 'january', 'feb', 'february', 'fubuary', 'mar', 'march', 'apr', 'april', 'may', 'jun', 'june', 'jul', 'july', 'aug', 'august', 'sep', 'sept', 'september', 'oct', 'october', 'nov', 'november', 'dec', 'december'].some(m => lowerUserText.includes(m));
+
         const targetGoal = highestScore > 0 ? bestGoal : goals[0];
 
         if (isFeasibilityQuery && targetGoal) {
@@ -228,9 +492,42 @@ export const generateStream = async (
           const needed = Math.max(0, tgt - cur);
           const pct = tgt > 0 ? Math.round((cur / tgt) * 100) : 0;
 
-          // Compute remaining months & paydays (15th & 30th cutoffs)
-          const monthsRemaining = 3.5;
-          const cutoffsRemaining = 7;
+          // Compute remaining months & paydays (15th & 30th cutoffs) dynamically from targetDate
+          const now = new Date();
+          let targetYear = now.getFullYear();
+          let targetMonthIndex = 11; // default Dec
+
+          if (targetGoal.targetDate) {
+            const dateStr = targetGoal.targetDate.toLowerCase();
+            const yearMatch = dateStr.match(/\d{4}/);
+            if (yearMatch) targetYear = parseInt(yearMatch[0], 10);
+            
+            const monthsMap: Record<string, number> = {
+              jan: 0, january: 0,
+              feb: 1, february: 1, fubuary: 1,
+              mar: 2, march: 2,
+              apr: 3, april: 3,
+              may: 4,
+              jun: 5, june: 5,
+              jul: 6, july: 6,
+              aug: 7, august: 7,
+              sep: 8, sept: 8, september: 8,
+              oct: 9, october: 9,
+              nov: 10, november: 10,
+              dec: 11, december: 11
+            };
+            for (const [mName, mIdx] of Object.entries(monthsMap)) {
+              if (dateStr.includes(mName)) {
+                targetMonthIndex = mIdx;
+                break;
+              }
+            }
+          }
+
+          const targetDateObj = new Date(targetYear, targetMonthIndex, 30);
+          const diffMs = targetDateObj.getTime() - now.getTime();
+          const monthsRemaining = Math.max(0.5, Math.round((diffMs / (30 * 86400000)) * 10) / 10);
+          const cutoffsRemaining = Math.max(1, Math.round(monthsRemaining * 2));
 
           const neededPerMonth = needed / monthsRemaining;
           const neededPerCutoff = needed / cutoffsRemaining;
@@ -371,14 +668,31 @@ export const generateStream = async (
           : `You spent money this whole week:\n**-${grandTotal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}**\n\n` + breakdownLines.join('\n');
       }
     } else if (isCardListQuery || lowerUserText.includes('cards') || lowerUserText.includes('wallets')) {
-      // ── Real-Time All Cards & E-Wallets Balances from SQLite ──
+      // ── Real-Time Cards & E-Wallets Balances from SQLite ──
       const cardsRes = await db.execute('SELECT bankName, balance, type, outstandingBalance, availableCredit FROM cards ORDER BY balance DESC');
-      const cards = cardsRes.rows?._array || [];
+      const cards = (cardsRes.rows?._array || []) as any[];
 
-      if (cards.length === 0) {
-        fullResponse = isTagalog ? `Wala pang cards o e-wallets na naka-store sa SQLite.` : `No cards or e-wallets currently found.`;
+      const hasMoneyOnly = 
+        lowerUserText.includes('may laman') ||
+        lowerUserText.includes('may pera') ||
+        lowerUserText.includes('laman na pera') ||
+        lowerUserText.includes('with money') ||
+        lowerUserText.includes('has money') ||
+        lowerUserText.includes('positive balance') ||
+        lowerUserText.includes('cards with money') ||
+        lowerUserText.includes('nonzero') ||
+        !lowerUserText.includes('all'); // Filter out 0 balance cards by default unless user explicitly asks for "all cards"
+
+      const targetCards = hasMoneyOnly
+        ? cards.filter((c: any) => c.type === 'CREDIT_CARD' ? Number(c.outstandingBalance || 0) > 0 : Number(c.balance || 0) > 0)
+        : cards;
+
+      if (targetCards.length === 0) {
+        fullResponse = isTagalog
+          ? `Wala pang cards o e-wallets na may laman na pera sa ngayon.`
+          : `No cards or e-wallets currently have an active balance.`;
       } else {
-        const cardLines = cards.map((c: any) => {
+        const cardLines = targetCards.map((c: any) => {
           if (c.type === 'CREDIT_CARD') {
             const debt = Number(c.outstandingBalance || 0);
             return `${c.bankName} (Credit Debt) = -${debt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -389,16 +703,27 @@ export const generateStream = async (
         });
 
         fullResponse = isTagalog
-          ? `Narito ang kasalukuyang balance ng iyong mga cards & e-wallets:\n\n` + cardLines.join('\n')
-          : `Here are all your current card & wallet balances:\n\n` + cardLines.join('\n');
+          ? (hasMoneyOnly
+              ? `Narito ang mga cards & e-wallets mo na may laman na pera:\n\n` + cardLines.join('\n')
+              : `Narito ang kasalukuyang balance ng iyong mga cards & e-wallets:\n\n` + cardLines.join('\n'))
+          : (hasMoneyOnly
+              ? `Here are your cards & e-wallets with an active balance:\n\n` + cardLines.join('\n')
+              : `Here are all your current card & wallet balances:\n\n` + cardLines.join('\n'));
       }
     } else {
       // ── Dynamic Specific Card/Bank Balance Lookup ──
       const cardsRes = await db.execute('SELECT bankName, balance, type, outstandingBalance, availableCredit FROM cards');
       const allCards = (cardsRes.rows?._array || []) as any[];
-      const matchedCard = allCards.find((c: any) => lowerUserText.includes(c.bankName.toLowerCase()));
+      const matchedCards = allCards.filter((c: any) => {
+        const name = (c.bankName || '').toLowerCase();
+        if (!name) return false;
+        if (lowerUserText.includes(name)) return true;
+        const words = name.split(/\s+/);
+        return words.some((w: string) => w.length >= 3 && lowerUserText.includes(w));
+      });
 
-      if (matchedCard) {
+      if (matchedCards.length === 1) {
+        const matchedCard = matchedCards[0];
         if (matchedCard.type === 'CREDIT_CARD') {
           const debt = Number(matchedCard.outstandingBalance || 0);
           const avail = Number(matchedCard.availableCredit || 0);
@@ -411,6 +736,20 @@ export const generateStream = async (
             ? `Ang natitirang pera / balance mo sa ${matchedCard.bankName} ay ${symbol}${bal.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`
             : `Your current ${matchedCard.bankName} balance is ${symbol}${bal.toLocaleString('en-US', { minimumFractionDigits: 2 })}.`;
         }
+      } else if (matchedCards.length > 1) {
+        const cardLines = matchedCards.map((c: any) => {
+          if (c.type === 'CREDIT_CARD') {
+            const debt = Number(c.outstandingBalance || 0);
+            return `• ${c.bankName} (Credit Debt): -${symbol}${debt.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+          } else {
+            const bal = Number(c.balance || 0);
+            return `• ${c.bankName}: ${symbol}${bal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+          }
+        });
+
+        fullResponse = isTagalog
+          ? `Narito ang kasalukuyang balance ng iyong mga hinahanap na cards & e-wallets:\n\n` + cardLines.join('\n')
+          : `Here are the current balances for your requested cards & wallets:\n\n` + cardLines.join('\n');
       } else if (lowerUserText.includes('lahat') || lowerUserText.includes('total') || lowerUserText.includes('net worth')) {
         const totalAssets = allCards.filter((c: any) => c.type !== 'CREDIT_CARD').reduce((acc: number, c: any) => acc + Number(c.balance || 0), 0);
         const creditDebt = allCards.filter((c: any) => c.type === 'CREDIT_CARD').reduce((acc: number, c: any) => acc + Number(c.outstandingBalance || 0), 0);
@@ -458,99 +797,10 @@ export const generateStream = async (
       }
     }
   }
-  // 3. Process Transaction Intent (Expenses, Income, Credit Purchase, Credit Payment, Transfer)
   else {
-    const parsed = parseTransactionsFromText(userText);
-
-    if (parsed.length > 0) {
-      try {
-        const savedItems: ParsedTransaction[] = [];
-
-        for (const item of parsed) {
-          const newId = uuidv4();
-          const date = Date.now();
-          const bankName = item.bankName || 'GCash';
-
-          await db.execute(
-            'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [newId, item.amount, date, item.categoryId, item.type, item.note, bankName]
-          );
-
-          if (item.type === 'transfer') {
-            const src = item.sourceBank || 'Maya';
-            const dst = item.destinationBank || 'MariBank';
-            await db.execute('UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, src]);
-            await db.execute('UPDATE cards SET balance = balance + ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, dst]);
-          } else if (item.type === 'credit_payment') {
-            const src = item.sourceBank || 'GCash';
-            await db.execute('UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, src]);
-            await db.execute(
-              'UPDATE cards SET outstandingBalance = MAX(0, outstandingBalance - ?), availableCredit = availableCredit + ? WHERE LOWER(bankName) = "visa"',
-              [item.amount, item.amount]
-            );
-          } else if (item.type === 'credit_purchase') {
-            await db.execute(
-              'UPDATE cards SET outstandingBalance = outstandingBalance + ?, availableCredit = availableCredit - ? WHERE LOWER(bankName) = "visa"',
-              [item.amount, item.amount]
-            );
-          } else if (item.type === 'expense') {
-            await db.execute('UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, bankName]);
-          } else if (item.type === 'income') {
-            await db.execute('UPDATE cards SET balance = balance + ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, bankName]);
-          }
-
-          savedItems.push(item);
-        }
-
-        DeviceEventEmitter.emit('transactions_updated');
-
-        if (savedItems.length === 1) {
-          const single = savedItems[0];
-          if (single.type === 'transfer') {
-            fullResponse = isTagalog
-              ? `✓ Na-transfer na ang ${symbol}${single.amount.toFixed(2)} mula ${single.sourceBank} papunta sa ${single.destinationBank}. Hndi nabawasan ang kabuuang assets mo!`
-              : `✓ Transferred ${symbol}${single.amount.toFixed(2)} from ${single.sourceBank} to ${single.destinationBank}.`;
-          } else if (single.type === 'credit_payment') {
-            fullResponse = isTagalog
-              ? `✓ Na-record ang ${symbol}${single.amount.toFixed(2)} pagbayad ng credit card sa Visa gamit ang ${single.sourceBank}. Nabawasan ang utang mo sa Visa!`
-              : `✓ Paid ${symbol}${single.amount.toFixed(2)} towards Visa credit card from ${single.sourceBank}. Credit debt reduced!`;
-          } else if (single.type === 'credit_purchase') {
-            fullResponse = isTagalog
-              ? `✓ Na-record ang ${symbol}${single.amount.toFixed(2)} (${single.note}) gamit ang Visa credit card. Nadagdagan ang utang sa Visa, walang nabawas sa cash balances mo.`
-              : `✓ Charged ${symbol}${single.amount.toFixed(2)} (${single.note}) to Visa credit card. Added to credit debt.`;
-          } else if (single.type === 'expense') {
-            const isLost = single.categoryId === 'Adjustment' || single.note.toLowerCase().includes('lost') || single.note.toLowerCase().includes('nawala');
-            if (isLost) {
-              fullResponse = isTagalog
-                ? `✓ Na-record na ang nawalang ${symbol}${single.amount.toFixed(2)} (${single.note}). Nabawas na ito sa ${single.bankName} balance mo!`
-                : `✓ Recorded ${symbol}${single.amount.toFixed(2)} lost money (${single.note}). Deducted from your ${single.bankName} balance!`;
-            } else {
-              fullResponse = isTagalog
-                ? `✓ Na-record na ang ${single.note} worth ${symbol}${single.amount.toFixed(2)} (${single.categoryId}). Nabawas na ito sa ${single.bankName} card mo!`
-                : `✓ Logged ${symbol}${single.amount.toFixed(2)} expense for "${single.note}" under ${single.categoryId} on ${single.bankName}.`;
-            }
-          } else {
-            fullResponse = isTagalog
-              ? `✓ Na-record na ang natanggap mong ${single.note} worth +${symbol}${single.amount.toFixed(2)}. Nadagdag na ito sa ${single.bankName} card mo!`
-              : `✓ Logged +${symbol}${single.amount.toFixed(2)} income to ${single.bankName}.`;
-          }
-        } else {
-          const listStr = savedItems
-            .map(i => `• ${i.note}: ${symbol}${i.amount.toFixed(2)} [${i.bankName || 'GCash'}]`)
-            .join('\n');
-          fullResponse = isTagalog
-            ? `✓ Na-record ko na ang ${savedItems.length} transactions:\n${listStr}`
-            : `✓ Logged ${savedItems.length} transactions:\n${listStr}`;
-        }
-      } catch (err) {
-        console.error('Failed to execute AI transaction:', err);
-        fullResponse = "I understood the transaction, but I couldn't save it locally. Nothing was changed.";
-      }
-    } else {
-      fullResponse = isTagalog
-        ? "May maitutulong ba ako sa iyong budget, cards, o transactions ngayong araw?"
-        : "How can I help you manage your budget and cards today?";
-    }
+    fullResponse = isTagalog
+      ? "May maitutulong ba ako sa iyong budget, cards, o transactions ngayong araw?"
+      : "How can I help you manage your budget and cards today?";
   }
 
   // Stream output token by token

@@ -22,6 +22,7 @@ import {
   CalendarClock,
   ArrowDownCircle,
   CreditCard,
+  Trash2,
 } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { CleanAlertModal } from '../common/CleanAlertModal';
@@ -33,7 +34,7 @@ interface Props {
 
 export const InstallmentModal: React.FC<Props> = ({ visible, onClose }) => {
   const { colors } = useTheme();
-  const { installments, addInstallment, payCutoff } = useInstallments();
+  const { installments, addInstallment, payCutoff, deleteInstallment } = useInstallments();
   const { symbol } = useCurrency();
 
   const [activeTab, setActiveTab] = useState<'plans' | 'create'>('plans');
@@ -230,26 +231,43 @@ export const InstallmentModal: React.FC<Props> = ({ visible, onClose }) => {
                         },
                       ]}
                     >
-                      <View style={styles.cardHeader}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.cardTitle, { color: colors.text }]}>
+                      {/* Top Header Row */}
+                      <View style={styles.cardHeaderRow}>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
                             {inst.title}
                           </Text>
                           <Text style={[styles.cardDate, { color: colors.textMuted }]}>
                             Next cut-off: {format(inst.nextCutoff, 'MMM d, yyyy')}
                           </Text>
                         </View>
-                        {isDone ? (
-                          <View style={styles.completedBadge}>
-                            <CheckCircle2 size={16} color="#10B981" />
-                            <Text style={styles.completedText}>Completed</Text>
+
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            {isDone ? (
+                              <View style={styles.completedBadge}>
+                                <CheckCircle2 size={14} color="#10B981" />
+                                <Text style={styles.completedText}>Completed</Text>
+                              </View>
+                            ) : (
+                              <Text style={[styles.monthlyRate, { color: colors.text }]}>
+                                {formatCurrency(inst.monthlyAmount)}
+                                <Text style={{ fontSize: 11, fontWeight: '400', color: colors.textMuted }}>/cut-off</Text>
+                              </Text>
+                            )}
+                            <TouchableOpacity
+                              onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                deleteInstallment(inst.id);
+                              }}
+                              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                              style={[styles.deleteIconBtn, { backgroundColor: `${colors.textMuted}15` }]}
+                              activeOpacity={0.6}
+                            >
+                              <Trash2 size={14} color={colors.textMuted} />
+                            </TouchableOpacity>
                           </View>
-                        ) : (
-                          <Text style={[styles.monthlyRate, { color: colors.text }]}>
-                            {formatCurrency(inst.monthlyAmount)}
-                            <Text style={{ fontSize: 11, color: colors.textMuted }}>/cut-off</Text>
-                          </Text>
-                        )}
+                        </View>
                       </View>
 
                       {/* Progress Bar */}
@@ -260,7 +278,7 @@ export const InstallmentModal: React.FC<Props> = ({ visible, onClose }) => {
                               styles.progressBar,
                               {
                                 backgroundColor: isDone ? '#10B981' : colors.primary,
-                                width: `${progress * 100}%`,
+                                width: `${Math.min(100, Math.max(0, progress * 100))}%`,
                               },
                             ]}
                           />
@@ -501,27 +519,35 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   card: {
-    padding: 16,
-    borderRadius: 18,
+    padding: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    gap: 12,
+    gap: 14,
   },
-  cardHeader: {
+  cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   cardTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   cardDate: {
-    fontSize: 11.5,
+    fontSize: 12,
     marginTop: 3,
   },
   monthlyRate: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
+  },
+  deleteIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   completedBadge: {
     flexDirection: 'row',

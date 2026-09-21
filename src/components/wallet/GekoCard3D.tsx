@@ -101,6 +101,7 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
   const { currency } = useCurrency();
   const [isFlipped, setIsFlipped] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
+  const [isGlReady, setIsGlReady] = useState(false);
 
   // Rotation and interaction refs
   const rotX = useRef(0);
@@ -182,7 +183,7 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
     const currentBank = bankName || (accountType?.includes('DEBIT') ? accountType.split('•')[1]?.trim() : '');
     const isGeko = !currentBank || currentBank.toLowerCase().includes('geko') || currentBank.toLowerCase().includes('all') || currentBank.toLowerCase().includes('platinum');
     
-    const titleText = isGeko ? 'TOTAL BALANCE' : `${currentBank.toUpperCase()} BALANCE`;
+    const titleText = isGeko ? 'TOTAL CASH BALANCE' : `${currentBank.toUpperCase()} BALANCE`;
     drawString(titleText, 46, 155, 2);
 
     const balanceStr = isHidden ? '••••••••' : formatCurrency(balance);
@@ -265,15 +266,31 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
 
   // Three.js context initialization
   const onContextCreate = useCallback((gl: any) => {
+    // Polyfill getShaderPrecisionFormat to avoid Hermes crash when expo-gl returns null
+    const origGetShaderPrecisionFormat = gl.getShaderPrecisionFormat ? gl.getShaderPrecisionFormat.bind(gl) : null;
+    gl.getShaderPrecisionFormat = (shaderType: number, precisionType: number) => {
+      try {
+        const res = origGetShaderPrecisionFormat ? origGetShaderPrecisionFormat(shaderType, precisionType) : null;
+        if (res && typeof res.precision === 'number') {
+          return res;
+        }
+      } catch (e) { }
+      return { rangeMin: 127, rangeMax: 127, precision: 23 };
+    };
+
     const width = gl.drawingBufferWidth || (SCREEN_WIDTH - 40);
     const glHeight = gl.drawingBufferHeight || height;
 
     const scene = new THREE.Scene();
 
-    // Camera: positioned so the full 3D card fits with generous padding
+    // Camera setup: Home card (height >= 200) keeps unzoomed camera (3.2z, 68 fov), small grid cards use 2.45z
+    const isSmallCard = height < 200;
+    const fov = isSmallCard ? 65 : 68;
+    const cameraZ = isSmallCard ? 2.45 : 3.2;
+
     const aspect = width / glHeight;
-    const camera = new THREE.PerspectiveCamera(68, aspect, 0.1, 100);
-    camera.position.set(0, 0, 3.2);
+    const camera = new THREE.PerspectiveCamera(fov, aspect, 0.1, 100);
+    camera.position.set(0, 0, cameraZ);
     camera.lookAt(0, 0, 0);
 
     // Renderer (pixelRatio 1 because drawingBuffer is already in device pixels)
@@ -294,6 +311,10 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
     });
     renderer.setPixelRatio(1);
     renderer.setSize(width, glHeight, false);
+    renderer.setClearColor(0x000000, 0);
+    if (gl.clearColor) {
+      gl.clearColor(0, 0, 0, 0);
+    }
 
     // Create Text DataTexture
     const textTexture = new THREE.DataTexture(
@@ -447,9 +468,9 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
 
         } else if (uCardType == 2) {
           // ── GOTYME REAL-WORLD BESPOKE 3D SHADER MOTIF ──
-          // Sleek Dark Obsidian Top + Electric Cyan/Teal Bottom + Expanding Horizontal Line Grid
-          vec3 gotymeDark = vec3(0.07, 0.09, 0.12);
-          vec3 gotymeCyan = vec3(0.0, 0.82, 0.78);
+          // Sleek Dark Obsidian Top + Electric Cyan/Teal Bottom + Expanding Horizontal Line Grid & Slow Holographic Wave
+          vec3 gotymeDark = vec3(0.05, 0.07, 0.10);
+          vec3 gotymeCyan = vec3(0.0, 0.85, 0.82);
 
           // 1. Vertical Split Background (Dark Top half, Electric Cyan Bottom half)
           float cyanCoverage = smoothstep(0.48, 0.40, vUv.y);
@@ -464,16 +485,26 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
             float threshold = mix(-0.25, 0.65, lineProgress);
             float stripeMask = smoothstep(threshold, threshold + 0.08, linePattern);
             
+            // Slow, ultra-smooth ambient breathing pulse on stripes
+            float slowPulse = sin(uTime * 0.3) * 0.06 + 0.94;
+
             if (vUv.y >= 0.42) {
-              col = mix(col, gotymeCyan, stripeMask * 0.95);
+              col = mix(col, gotymeCyan * slowPulse, stripeMask * 0.95);
             } else {
               col = mix(col, gotymeDark, (1.0 - stripeMask) * 0.85);
             }
           }
 
-          // 3. Subtle Metallic Cyber Sheen Reflection
-          float gotymeSheen = smoothstep(0.22, 0.0, abs((vUv.x + vUv.y * 0.3) - (uLightPos.x + 0.1))) * uShineIntensity;
-          col += vec3(0.3, 0.95, 0.90) * gotymeSheen * 0.35;
+          // 3. Ultra-Slow Holographic Laser Wave Sweep (Slow-mo Elegant Effect)
+          float wavePhase = sin((vUv.x * 2.8 + vUv.y * 1.6) - uTime * 0.22) * 0.5 + 0.5;
+          float holoGlow = pow(wavePhase, 4.0) * 0.28;
+          vec3 holoShimmer = mix(vec3(0.0, 0.95, 0.85), vec3(0.15, 0.75, 1.0), wavePhase);
+          col += holoShimmer * holoGlow;
+
+          // 4. Smooth Specular Sheen & Light Glint
+          float lightGlint = sin(vUv.x * 4.0 - uTime * 0.15) * 0.5 + 0.5;
+          float gotymeSheen = smoothstep(0.22, 0.0, abs((vUv.x + vUv.y * 0.3) - (uLightPos.x + 0.1))) * (uShineIntensity + 0.35);
+          col += vec3(0.25, 0.95, 0.90) * gotymeSheen * 0.38 * (0.85 + lightGlint * 0.3);
 
         } else if (uCardType == 3) {
           // ── BPI BESPOKE REAL-WORLD 3D SHADER MOTIF ──
@@ -1093,7 +1124,6 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
     const startTime = Date.now();
 
     const animate = () => {
-      animFrameId.current = requestAnimationFrame(animate);
       const elapsedTime = (Date.now() - startTime) / 1000;
 
       frontUniforms.uTime.value = elapsedTime;
@@ -1103,34 +1133,43 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
       const targetC1 = parseColorToVec3(curC1, '#0B0F19');
       const targetC2 = parseColorToVec3(curC2, '#1E293B');
 
-      // Buttery smooth real-time color interpolation (lerp) for 3D card
-      frontUniforms.uColor1.value.lerp(targetC1, 0.14);
-      frontUniforms.uColor2.value.lerp(targetC2, 0.14);
+      if (interactive) {
+        frontUniforms.uColor1.value.lerp(targetC1, 0.14);
+        frontUniforms.uColor2.value.lerp(targetC2, 0.14);
+      } else {
+        frontUniforms.uColor1.value.copy(targetC1);
+        frontUniforms.uColor2.value.copy(targetC2);
+      }
       frontUniforms.uCardType.value = getCardTypeInt(curAcc, curBnk);
 
       backUniforms.uColor1.value.copy(frontUniforms.uColor1.value);
       backUniforms.uColor2.value.copy(frontUniforms.uColor2.value);
 
-      // Ultra-responsive rotation lerp (0.48 for instant finger tracking, 0.14 for spring snap-back)
-      const lerpSpeed = touchActive.current ? 0.48 : 0.14;
-      rotX.current += (targetRotX.current - rotX.current) * lerpSpeed;
-      rotY.current += (targetRotY.current - rotY.current) * lerpSpeed;
-      currentFlipY.current += (targetFlipY.current - currentFlipY.current) * 0.16;
+      if (interactive) {
+        const lerpSpeed = touchActive.current ? 0.48 : 0.14;
+        rotX.current += (targetRotX.current - rotX.current) * lerpSpeed;
+        rotY.current += (targetRotY.current - rotY.current) * lerpSpeed;
+        currentFlipY.current += (targetFlipY.current - currentFlipY.current) * 0.16;
 
-      // Shine only activates when the user touches / holds / moves the card
-      const targetShine = touchActive.current ? 1.0 : 0.0;
-      shineIntensity.current += (targetShine - shineIntensity.current) * 0.20;
+        const targetShine = touchActive.current ? 1.0 : 0.0;
+        shineIntensity.current += (targetShine - shineIntensity.current) * 0.20;
+
+        if (!touchActive.current) {
+          targetLightPos.current = { x: 0.5, y: 0.5 };
+        }
+
+        lightPos.current.x += (targetLightPos.current.x - lightPos.current.x) * 0.18;
+        lightPos.current.y += (targetLightPos.current.y - lightPos.current.y) * 0.18;
+      } else {
+        rotX.current = 0;
+        rotY.current = 0;
+        currentFlipY.current = 0;
+        shineIntensity.current = 0;
+        lightPos.current = { x: 0.5, y: 0.5 };
+      }
 
       frontUniforms.uShineIntensity.value = shineIntensity.current;
       backUniforms.uShineIntensity.value = shineIntensity.current;
-
-      if (!touchActive.current) {
-        // Resting stationary center light - completely remove auto shine sweep
-        targetLightPos.current = { x: 0.5, y: 0.5 };
-      }
-
-      lightPos.current.x += (targetLightPos.current.x - lightPos.current.x) * 0.18;
-      lightPos.current.y += (targetLightPos.current.y - lightPos.current.y) * 0.18;
 
       frontUniforms.uLightPos.value.set(lightPos.current.x, lightPos.current.y);
       backUniforms.uLightPos.value.set(lightPos.current.x, lightPos.current.y);
@@ -1148,6 +1187,12 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
 
       renderer.render(scene, camera);
       gl.endFrameEXP();
+      setIsGlReady(true);
+
+      // Only continue frame loop if card is interactive (interactive = true)
+      if (interactive) {
+        animFrameId.current = requestAnimationFrame(animate);
+      }
     };
 
     animate();
@@ -1166,15 +1211,24 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
     };
   }, [height, color1, color2, accountType, bankName, updateCardText]);
 
+  const isSmallCard = height < 200;
+  const wrapperBg = isSmallCard ? (color1 || '#0F172A') : 'transparent';
+  const glOpacity = isSmallCard ? (isGlReady ? 1 : 0) : 1;
+
   return (
     <View style={styles.outerContainer}>
       {/* Full 3D WebGL Canvas */}
       <View
-        style={[styles.canvasWrapper, { height }]}
+        style={[styles.canvasWrapper, { height, backgroundColor: wrapperBg }]}
         {...(interactive ? panResponder.panHandlers : {})}
       >
         <GLView
-          style={{ width: '100%', height }}
+          style={{
+            width: '100%',
+            height,
+            backgroundColor: 'transparent',
+            opacity: glOpacity,
+          }}
           onContextCreate={onContextCreate}
         />
       </View>
@@ -1188,11 +1242,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 0,
     paddingHorizontal: 0,
+    backgroundColor: 'transparent',
   },
   canvasWrapper: {
     width: '100%',
     borderRadius: 20,
     overflow: 'hidden',
     position: 'relative',
+    backgroundColor: 'transparent',
   },
 });

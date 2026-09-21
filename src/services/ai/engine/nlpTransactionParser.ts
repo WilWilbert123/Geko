@@ -9,6 +9,25 @@ export interface ParsedTransaction {
 }
 
 const INCOME_KEYWORDS = [
+  'add',
+  'added',
+  'adding',
+  'dagdag',
+  'magdagdag',
+  'padagdag',
+  'lagay',
+  'maglagay',
+  'ipasok',
+  'pasok',
+  'deposit',
+  'deposited',
+  'cash in',
+  'cashin',
+  'cash-in',
+  'top up',
+  'topup',
+  'top-up',
+  'load',
   'sweldo',
   'sahod',
   'kita',
@@ -21,20 +40,22 @@ const INCOME_KEYWORDS = [
   'receive',
   'received',
   'got paid',
+  'plus',
 ];
 
 const BANK_KEYWORDS: Record<string, string[]> = {
-  GCash: ['gcash', 'g-cash', 'g cash'],
-  GoTyme: ['gotyme', 'go tyme', 'tyme'],
-  BPI: ['bpi'],
-  Maya: ['maya', 'paymaya', 'pay maya'],
-  Landbank: ['landbank', 'land bank'],
-  PNB: ['pnb'],
-  BDO: ['bdo'],
-  MariBank: ['maribank', 'mari bank'],
-  Metrobank: ['metrobank', 'metro bank'],
-  UnionBank: ['unionbank', 'union bank', 'ub'],
+  GCash: ['gcash', 'g-cash', 'g cash', 'gcash credit'],
+  GoTyme: ['gotyme', 'go tyme', 'go-tyme', 'gotime', 'go time', 'tyme', 'gotyme bank', 'go-time'],
+  BPI: ['bpi', 'bpi bank', 'bpi savings'],
+  Maya: ['maya', 'paymaya', 'pay maya', 'pay-maya'],
+  Landbank: ['landbank', 'land bank', 'land-bank'],
+  PNB: ['pnb', 'pnb bank'],
+  BDO: ['bdo', 'bdo bank'],
+  MariBank: ['maribank', 'mari bank', 'mari-bank', 'seabank', 'sea bank'],
+  Metrobank: ['metrobank', 'metro bank', 'metro-bank'],
+  UnionBank: ['unionbank', 'union bank', 'union-bank', 'ub'],
   Visa: ['visa', 'visa credit', 'credit card', 'creditcard', 'cc'],
+  Cash: ['physical cash', 'geko cash', 'pera sa bulsa', 'papel', 'bulsa', 'cash money', 'kwarta'],
 };
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
@@ -134,6 +155,9 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     'salary',
     'income',
     'payroll',
+    'deposit',
+    'cashin',
+    'dagdag',
   ],
   Adjustment: [
     'nawala',
@@ -177,6 +201,10 @@ const FILLER_WORDS = [
   'and',
   'for',
   'on',
+  'to',
+  'into',
+  'in',
+  'at',
   'pesos',
   'peso',
   'php',
@@ -187,6 +215,17 @@ const FILLER_WORDS = [
   'pay',
   'paid',
   'add',
+  'added',
+  'dagdag',
+  'magdagdag',
+  'padagdag',
+  'lagay',
+  'maglagay',
+  'deposit',
+  'cashin',
+  'cash-in',
+  'topup',
+  'top-up',
   'deduct',
   'using',
   'via',
@@ -238,9 +277,44 @@ export const normalizeAmount = (text: string): number => {
 
 export const detectBank = (text: string): string | undefined => {
   const lower = text.toLowerCase();
+  
+  // 1. Check exact word boundaries for specific banks first
+  if (/\bgcash\b/i.test(lower) || /\bg-cash\b/i.test(lower) || /\bg cash\b/i.test(lower)) {
+    return 'GCash';
+  }
+  if (/\bgotyme\b/i.test(lower) || /\bgo-tyme\b/i.test(lower) || /\bgo tyme\b/i.test(lower)) {
+    return 'GoTyme';
+  }
+  if (/\bmaribank\b/i.test(lower) || /\bmari-bank\b/i.test(lower) || /\bmari bank\b/i.test(lower) || /\bseabank\b/i.test(lower)) {
+    return 'MariBank';
+  }
+  if (/\bmetrobank\b/i.test(lower) || /\bmetro-bank\b/i.test(lower) || /\bmetro bank\b/i.test(lower)) {
+    return 'Metrobank';
+  }
+  if (/\bunionbank\b/i.test(lower) || /\bunion-bank\b/i.test(lower) || /\bunion bank\b/i.test(lower)) {
+    return 'UnionBank';
+  }
+  if (/\blandbank\b/i.test(lower) || /\bland-bank\b/i.test(lower) || /\bland bank\b/i.test(lower)) {
+    return 'Landbank';
+  }
+  if (/\bpnb\b/i.test(lower)) return 'PNB';
+  if (/\bbdo\b/i.test(lower)) return 'BDO';
+  if (/\bbpi\b/i.test(lower)) return 'BPI';
+  if (/\bmaya\b/i.test(lower) || /\bpaymaya\b/i.test(lower)) return 'Maya';
+  if (/\bvisa\b/i.test(lower)) return 'Visa';
+  
+  // Standalone 'cash' word check (must NOT match 'gcash')
+  if (/\bcash\b/i.test(lower) && !lower.includes('gcash')) {
+    return 'Cash';
+  }
+
   for (const [bank, keywords] of Object.entries(BANK_KEYWORDS)) {
-    if (keywords.some((kw) => lower.includes(kw))) {
-      return bank;
+    for (const kw of keywords) {
+      const kwCleaned = kw.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleaned = lower.replace(/[^a-z0-9]/g, '');
+      if (lower.includes(kw.toLowerCase()) || (kwCleaned.length >= 3 && cleaned.includes(kwCleaned))) {
+        return bank;
+      }
     }
   }
   return undefined;
@@ -257,12 +331,14 @@ const detectCategory = (text: string, isIncome: boolean): string => {
   return 'Food';
 };
 
-const cleanNote = (rawText: string): string => {
+const PREPOSITIONS = ['to', 'into', 'in', 'sa', 'papunta', 'dito', 'para', 'for', 'on', 'at', 'with', 'from', 'by'];
+
+const cleanNote = (rawText: string, isIncome: boolean = false): string => {
   const lower = rawText.toLowerCase();
   const isLost = ['nawala', 'nawalan', 'lost', 'missing', 'stolen', 'nanakaw', 'nahulog'].some(w => lower.includes(w));
 
   let words = lower.split(/\s+/);
-  words = words.filter((w) => !FILLER_WORDS.includes(w) && !/^\d+$/.test(w) && !/^\d+k$/i.test(w));
+  words = words.filter((w) => !FILLER_WORDS.includes(w) && !PREPOSITIONS.includes(w) && !/^\d+$/.test(w) && !/^\d+k$/i.test(w));
   let result = words.join(' ').trim();
 
   // Normalize coffee typos
@@ -274,8 +350,8 @@ const cleanNote = (rawText: string): string => {
     return result.length > 0 && result.toLowerCase() !== 'lost money' ? `Lost Money - ${result}` : 'Lost Money';
   }
 
-  if (!result) {
-    return rawText.trim();
+  if (!result || PREPOSITIONS.includes(result.toLowerCase())) {
+    return isIncome ? 'Cash-In / Deposit' : '';
   }
 
   // Capitalize title case nicely
@@ -328,6 +404,24 @@ export const parseTransactionsFromText = (input: string): ParsedTransaction[] =>
     }
   }
 
+  // 1.5 Check for ATM WITHDRAWAL / CASH WITHDRAWAL intent (e.g., "withdraw 1000 sa BPI", "nagwithdraw 1000", "kuha cash 1k")
+  if (lowerInput.includes('withdraw') || lowerInput.includes('nagwithdraw') || lowerInput.includes('kuha cash')) {
+    const amount = normalizeAmount(trimmed);
+    if (amount > 0) {
+      const sourceBank = detectBank(trimmed) || 'BPI';
+      return [
+        {
+          amount,
+          type: 'transfer',
+          categoryId: 'Housing',
+          note: `ATM Cash Withdrawal from ${sourceBank}`,
+          sourceBank,
+          destinationBank: 'Cash',
+        },
+      ];
+    }
+  }
+
   // 2. Check for CREDIT CARD PAYMENT intent (e.g., "nagbayad ako ng Visa 5000 gamit GCash" or "pay 5k Visa from GCash")
   if (
     (lowerInput.includes('nagbayad') || lowerInput.includes('pay') || lowerInput.includes('paid')) &&
@@ -373,7 +467,7 @@ export const parseTransactionsFromText = (input: string): ParsedTransaction[] =>
     if (amount > 0) {
       const isIncome = INCOME_KEYWORDS.some((kw) => segment.toLowerCase().includes(kw));
       const categoryId = detectCategory(segment, isIncome);
-      const note = cleanNote(segment) || (isIncome ? 'Salary / Income' : 'Expense');
+      const note = cleanNote(segment, isIncome) || (isIncome ? 'Cash-In / Deposit' : 'Expense');
       const isCredit = segmentBank.toLowerCase() === 'visa';
 
       results.push({

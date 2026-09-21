@@ -15,7 +15,6 @@ import { useTheme } from '../hooks/useTheme';
 import { useTransactions } from '../hooks/useTransactions';
 import { BalanceCard } from '../components/home/BalanceCard';
 import { ActionRow } from '../components/home/ActionRow';
-import { BudgetMeters } from '../components/home/BudgetMeters';
 import { RecentActivity } from '../components/home/RecentActivity';
 import { useTodayStats } from '../hooks/useTodayStats';
 import { useCurrency } from '../hooks/useCurrency';
@@ -43,7 +42,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const { balance, refresh: refreshTransactions } = useTransactions();
   const { spentToday, refresh: refreshStats } = useTodayStats();
   const { currency, toggleCurrency, symbol } = useCurrency();
-  const { resetAllCardBalances } = useCards();
+  const { totalAssets, resetAllCardBalances } = useCards();
 
   const displayName = useSyncExternalStore(subscribeUserStore, getDisplayName);
 
@@ -68,6 +67,25 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
       setDisplayName(trimmed);
       setProfileModalVisible(false);
     }
+  };
+
+  const handleResetCardBalances = () => {
+    Alert.alert(
+      'Reset All Cards Balance?',
+      'Are you sure you want to reset all card and e-wallet balances to ₱0.00?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset to ₱0.00',
+          style: 'destructive',
+          onPress: async () => {
+            await resetAllCardBalances(0);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            Alert.alert('Reset Complete', 'All card balances have been set to ₱0.00.');
+          },
+        },
+      ]
+    );
   };
 
   const handleResetData = () => {
@@ -171,11 +189,10 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
         {/* ── 3D Card (Preserving approved 3D design) ── */}
         <View style={{ marginHorizontal: -20 }}>
-          <BalanceCard balance={balance} spentToday={spentToday} />
+          <BalanceCard balance={totalAssets} spentToday={spentToday} />
         </View>
 
         <ActionRow />
-        <BudgetMeters />
         <RecentActivity />
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -223,13 +240,23 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
             </View>
 
             {!showOnboarding && (
-              <TouchableOpacity
-                style={[styles.dangerBtn, { borderColor: '#EF444422', backgroundColor: '#EF444411' }]}
-                onPress={handleResetData}
-              >
-                <Trash2 size={16} color="#EF4444" />
-                <Text style={styles.dangerBtnText}>Reset All Financial Data</Text>
-              </TouchableOpacity>
+              <View style={{ gap: 8, marginTop: 8 }}>
+                <TouchableOpacity
+                  style={[styles.dangerBtn, { borderColor: '#F43F5E33', backgroundColor: 'rgba(244, 63, 94, 0.1)', marginTop: 0 }]}
+                  onPress={handleResetCardBalances}
+                >
+                  <X size={16} color="#F43F5E" />
+                  <Text style={[styles.dangerBtnText, { color: '#F43F5E' }]}>Reset All Cards Balance to ₱0.00</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.dangerBtn, { borderColor: '#EF444422', backgroundColor: '#EF444411', marginTop: 0 }]}
+                  onPress={handleResetData}
+                >
+                  <Trash2 size={16} color="#EF4444" />
+                  <Text style={styles.dangerBtnText}>Reset All Financial Data</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>
