@@ -13,8 +13,9 @@ import {
 import { useTheme } from '../../hooks/useTheme';
 import { formatCurrency } from '../../utils/formatters';
 import { GekoCard3D } from '../wallet/GekoCard3D';
-import { TrendingDown, Edit3, X, Check } from 'lucide-react-native';
+import { TrendingDown, ArrowDown, PieChart, Edit3, X, Check, Wifi } from 'lucide-react-native';
 import { useCards, Card } from '../../hooks/useCards';
+import { getBankTheme } from '../../utils/bankThemes';
 import * as Haptics from 'expo-haptics';
 
 interface BalanceCardProps {
@@ -54,11 +55,14 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
     : 'ALL ACCOUNTS • GEKO PLATINUM';
   const cardNumber = activeCard ? activeCard.cardNumber : '4289 •••• •••• 9012';
 
-  // Budget Calculation
-  const cardBudget = activeCard ? activeCard.budget || 0 : 0;
-  const budgetSpent = spentToday;
-  const budgetRatio = cardBudget > 0 ? Math.min(1, budgetSpent / cardBudget) : 0;
-  const budgetPercent = Math.round(budgetRatio * 100);
+  // Budget Left Calculation:
+  // For individual cards: if custom budget limit is set (> 0), use (budget - spent); otherwise use actual card balance!
+  // For ALL accounts: if total budget is set, use (totalBudget - spent); otherwise use totalAssets!
+  const displayBudgetLeft = activeCard
+    ? (activeCard.budget && activeCard.budget > 0
+      ? Math.max(0, activeCard.budget - spentToday)
+      : Math.max(0, cardBalance))
+    : Math.max(0, totalAssets);
 
   const openCardEditor = (card: Card | null) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -86,78 +90,80 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
     setIsEditModalOpen(false);
   };
 
-
   return (
     <View style={styles.container}>
-      {/* ── Bank Category / Account Selector Pill Bar ── */}
+      {/* ── Bank Category / Account Selector Bar (Sleek Mini Cards) ── */}
       <View style={styles.tabContainer}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tabScrollContent}
         >
-          {/* ALL ACCOUNTS / GEKO TOTAL TAB */}
+          {/* ALL ACCOUNTS / GEKO TOTAL MINI 3D CARD */}
           <TouchableOpacity
             style={[
-              styles.bankTab,
+              styles.miniCardTab,
               selectedBankId === 'ALL'
-                ? { backgroundColor: '#1E293B', borderColor: 'rgba(255,255,255,0.3)' }
-                : { backgroundColor: colors.surfaceHighlight, borderColor: colors.border },
+                ? styles.miniCardActive
+                : styles.miniCardInactive,
             ]}
             onPress={() => {
               Haptics.selectionAsync();
               setSelectedBankId('ALL');
             }}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
-            <View
-              style={[
-                styles.tabDot,
-                { backgroundColor: selectedBankId === 'ALL' ? '#10B981' : '#64748B' },
-              ]}
-            />
-            <Text
-              style={[
-                styles.tabText,
-                { color: selectedBankId === 'ALL' ? '#FFFFFF' : colors.textMuted },
-              ]}
-            >
-              Geko (Total)
-            </Text>
+            <View style={{ flex: 1 }} pointerEvents="none">
+              <GekoCard3D
+                balance={totalAssets || balance}
+                bankName="GEKO"
+                accountType="ALL ACCOUNTS"
+                color1="#0F172A"
+                color2="#1E293B"
+                height={82}
+                cornerRadius={0.04}
+                interactive={false}
+              />
+            </View>
+            {selectedBankId === 'ALL' && (
+              <View style={styles.mini3DActiveGlowDot} />
+            )}
           </TouchableOpacity>
 
-          {/* INDIVIDUAL BANK TABS */}
+          {/* INDIVIDUAL BANK MINI 3D CARDS */}
           {cards.map((c) => {
             const isSelected = selectedBankId === c.id;
+            const theme = getBankTheme(c.bankName, c.color1, c.color2);
+            const cBalance = c.type === 'CREDIT_CARD' ? (c.outstandingBalance || 0) : c.balance;
+
             return (
               <TouchableOpacity
                 key={c.id}
                 style={[
-                  styles.bankTab,
-                  isSelected
-                    ? { backgroundColor: c.color1, borderColor: 'rgba(255,255,255,0.4)' }
-                    : { backgroundColor: colors.surfaceHighlight, borderColor: colors.border },
+                  styles.miniCardTab,
+                  isSelected ? styles.miniCardActive : styles.miniCardInactive,
                 ]}
                 onPress={() => {
                   Haptics.selectionAsync();
                   setSelectedBankId(c.id);
                 }}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
-                <View
-                  style={[
-                    styles.tabDot,
-                    { backgroundColor: isSelected ? '#FFFFFF' : c.color1 },
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.tabText,
-                    { color: isSelected ? '#FFFFFF' : colors.text },
-                  ]}
-                >
-                  {c.bankName}
-                </Text>
+                <View style={{ flex: 1 }} pointerEvents="none">
+                  <GekoCard3D
+                    balance={cBalance}
+                    bankName={c.bankName}
+                    accountType={c.type}
+                    color1={c.color1 || theme.bg1}
+                    color2={c.color2 || theme.bg2}
+                    height={82}
+                    cornerRadius={0.04}
+                    interactive={false}
+                  />
+                </View>
+                {isSelected && (
+                  <View style={styles.mini3DActiveGlowDot} />
+                )}
               </TouchableOpacity>
             );
           })}
@@ -175,54 +181,13 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
         color2={cardColor2}
         expiryDate="10/29"
         height={340}
+        cornerRadius={0.24}
       />
 
-      {/* ── 1-Line Squared Side-By-Side Action & Stat Row ── */}
+      {/* ── 2 Side-By-Side Capsule Cards (Spent Today vs Budget Left) ── */}
       <View style={styles.actionRowGrid}>
-        {/* Left Card: Active Account & Edit Action */}
+        {/* Left Card: Spent Today (Red) */}
         <TouchableOpacity
-          style={[
-            styles.gridCard,
-            { backgroundColor: colors.surfaceHighlight, borderColor: colors.border },
-          ]}
-          onPress={() => openCardEditor(activeCard)}
-          activeOpacity={0.8}
-        >
-          <View style={styles.gridCardContent}>
-            <View style={[styles.bankLogoBadge, { backgroundColor: activeCard ? activeCard.color1 : '#10B981' }]}>
-              <Text style={styles.bankLogoBadgeText}>{activeCard ? activeCard.bankName.charAt(0) : 'G'}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.gridTitle, { color: colors.text }]} numberOfLines={1}>
-                {activeCard ? `${activeCard.bankName}` : 'Geko Total'}
-              </Text>
-              <Text style={[styles.gridSubtitle, { color: colors.textMuted }]} numberOfLines={1}>
-                {activeCard
-                  ? cardBudget > 0
-                    ? `${formatCurrency(budgetSpent)} / ${formatCurrency(cardBudget)}`
-                    : 'Edit Budget'
-                  : 'All Accounts'}
-              </Text>
-            </View>
-            <Edit3 size={13} color={colors.primary} />
-          </View>
-          {activeCard && cardBudget > 0 && (
-            <View style={styles.bottomAccentTrack}>
-              <View
-                style={[
-                  styles.bottomAccentFill,
-                  {
-                    width: `${budgetPercent}%`,
-                    backgroundColor: budgetPercent > 90 ? '#F43F5E' : activeCard.color1,
-                  },
-                ]}
-              />
-            </View>
-          )}
-        </TouchableOpacity>
-
-        {/* Right Card: Spent Today */}
-        <View
           style={[
             styles.gridCard,
             {
@@ -230,19 +195,46 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
               borderColor: colors.border,
             },
           ]}
+          onPress={() => openCardEditor(activeCard)}
+          activeOpacity={0.8}
         >
           <View style={styles.gridCardContent}>
-            <View style={[styles.iconContainer, { backgroundColor: 'rgba(244, 63, 94, 0.12)' }]}>
-              <TrendingDown size={15} color={colors.expense || '#F43F5E'} strokeWidth={2.2} />
+            <View style={[styles.iconContainer, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+              <ArrowDown size={17} color="#EF4444" strokeWidth={2.5} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>SPENT TODAY</Text>
-              <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>
+              <Text style={[styles.statLabel, { color: colors.textMuted }]}>Spent Today</Text>
+              <Text style={[styles.statValue, { color: '#EF4444' }]} numberOfLines={1}>
                 {formatCurrency(spentToday)}
               </Text>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
+
+        {/* Right Card: Budget Left (Green) */}
+        <TouchableOpacity
+          style={[
+            styles.gridCard,
+            {
+              backgroundColor: colors.surfaceHighlight || 'rgba(255,255,255,0.05)',
+              borderColor: colors.border,
+            },
+          ]}
+          onPress={() => openCardEditor(activeCard)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.gridCardContent}>
+            <View style={[styles.iconContainer, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+              <PieChart size={17} color="#10B981" strokeWidth={2.2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.statLabel, { color: colors.textMuted }]}>Budget Left</Text>
+              <Text style={[styles.statValue, { color: '#10B981' }]} numberOfLines={1}>
+                {formatCurrency(displayBudgetLeft)}
+              </Text>
+            </View>
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* ── Edit Card Money Balance & Budget Modal ── */}
@@ -342,33 +334,54 @@ const styles = StyleSheet.create({
   container: {
     marginVertical: 8,
   },
-  /* Tab Bar */
+  /* Mini 3D Card Category Bar */
   tabContainer: {
-    marginBottom: 8,
+    marginBottom: 10,
     paddingHorizontal: 16,
   },
   tabScrollContent: {
-    gap: 8,
+    gap: 10,
     paddingRight: 16,
+    paddingVertical: 6,
   },
-  bankTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+  miniCardTab: {
+    width: 130,
+    height: 82,
+    borderRadius: 8,
+    position: 'relative',
+    backgroundColor: 'transparent',
+  },
+  miniCardActive: {
+    borderWidth: 2,
+    borderColor: '#38BDF8',
+    borderRadius: 8,
+    opacity: 1,
+    transform: [{ scale: 1.04 }],
+    shadowColor: '#38BDF8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  miniCardInactive: {
     borderWidth: 1,
-    gap: 8,
+    borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 8,
+    opacity: 0.85,
   },
-  tabDot: {
+  mini3DActiveGlowDot: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
-  tabText: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    backgroundColor: '#38BDF8',
+    shadowColor: '#38BDF8',
+    shadowRadius: 6,
+    shadowOpacity: 1,
+    zIndex: 10,
+    elevation: 10,
   },
   /* Budget Bar Card */
   budgetBarCard: {

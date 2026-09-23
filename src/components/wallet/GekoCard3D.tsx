@@ -19,7 +19,12 @@ const CARD_ASPECT = 1.586;
 const CARD_WIDTH_3D = 4.8;
 const CARD_HEIGHT_3D = CARD_WIDTH_3D / CARD_ASPECT; // ~2.77
 const CARD_DEPTH_3D = 0.048;
-const CORNER_RADIUS = 0.18;
+const CORNER_RADIUS = 0.24;
+
+const parseColorToVec3 = (hex?: string, fallback: string = '#000000'): THREE.Vector3 => {
+  const c = new THREE.Color(hex || fallback);
+  return new THREE.Vector3(c.r, c.g, c.b);
+};
 
 // High-resolution bitmap font dictionary for 3D card text rendering
 const FONT: Record<string, number[]> = {
@@ -41,6 +46,8 @@ const FONT: Record<string, number[]> = {
   '•': [0x00, 0x1C, 0x1C, 0x1C, 0x00],
   '-': [0x08, 0x08, 0x08, 0x08, 0x08],
   '/': [0x60, 0x18, 0x06, 0x01, 0x00],
+  '(': [0x1C, 0x22, 0x41, 0x00, 0x00],
+  ')': [0x00, 0x00, 0x41, 0x22, 0x1C],
   'A': [0x7C, 0x12, 0x11, 0x12, 0x7C],
   'B': [0x7F, 0x49, 0x49, 0x49, 0x36],
   'C': [0x3E, 0x41, 0x41, 0x41, 0x22],
@@ -85,18 +92,20 @@ interface GekoCard3DProps {
   color2?: string;
   interactive?: boolean;
   height?: number;
+  cornerRadius?: number;
 }
 
-export const GekoCard3D: React.FC<GekoCard3DProps> = ({
+const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
   balance = 9350,
   cardholderName = 'GEKO MEMBER',
-  expiryDate = '10/29',
+  expiryDate = '',
   accountType,
   bankName,
   color1 = '#0F172A',
   color2 = '#1E293B',
   height = 230,
   interactive = true,
+  cornerRadius,
 }) => {
   const { currency } = useCurrency();
   const [isFlipped, setIsFlipped] = useState(false);
@@ -182,27 +191,22 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
     // In WebGL UV coordinates: Y=0 is bottom, Y=323 is top.
     const currentBank = bankName || (accountType?.includes('DEBIT') ? accountType.split('•')[1]?.trim() : '');
     const isGeko = !currentBank || currentBank.toLowerCase().includes('geko') || currentBank.toLowerCase().includes('all') || currentBank.toLowerCase().includes('platinum');
-    
-    const titleText = isGeko ? 'TOTAL CASH BALANCE' : `${currentBank.toUpperCase()} BALANCE`;
-    drawString(titleText, 46, 155, 2);
+
+    // 1. TOP-LEFT: Card Brand / Bank Name
+    const brandStr = isGeko ? 'GEKO' : currentBank.toUpperCase();
+    drawString(brandStr, 35, 250, 3);
+
+    // 2. BOTTOM-LEFT: Balance Label & Balance Amount
+    const titleText = isGeko ? 'TOTAL BALANCE' : `${currentBank.toUpperCase()} BALANCE`;
+    drawString(titleText, 35, 90, 2);
 
     const balanceStr = isHidden ? '••••••••' : formatCurrency(balance);
-    drawString(balanceStr, 46, 96, 4);
-
-    drawString(cardholderName, 46, 25, 2);
-    drawString(expiryDate, 380, 25, 2);
-
-    // If a specific bank (GCash, BPI, GoTyme, Maya, Landbank, PNB), draw the bank name at top-right of the card!
-    if (!isGeko && currentBank) {
-      const bankLogoStr = currentBank.toUpperCase();
-      const startX = Math.max(260, 480 - bankLogoStr.length * 20);
-      drawString(bankLogoStr, startX, 255, 3);
-    }
+    drawString(balanceStr, 35, 32, 4);
 
     if (textTextureRef.current) {
       textTextureRef.current.needsUpdate = true;
     }
-  }, [balance, isHidden, cardholderName, expiryDate, currency, bankName, accountType]);
+  }, [balance, isHidden, currency, bankName, accountType]);
 
   useEffect(() => {
     updateCardText();
@@ -215,9 +219,11 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
     let startTime = 0;
 
     return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2;
+        // Only capture horizontal swipes so vertical screen scrolling is buttery-smooth
+        const isHorizontal = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5;
+        return isHorizontal && Math.abs(gestureState.dx) > 8;
       },
       onPanResponderGrant: (evt) => {
         touchActive.current = true;
@@ -283,10 +289,10 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
 
     const scene = new THREE.Scene();
 
-    // Camera setup: Home card (height >= 200) keeps unzoomed camera (3.2z, 68 fov), small grid cards use 2.45z
+    // Camera setup: Home card (height >= 200) keeps unzoomed camera (3.2z, 68 fov), small cards use 2.30z so card fills canvas edge-to-edge without background container
     const isSmallCard = height < 200;
     const fov = isSmallCard ? 65 : 68;
-    const cameraZ = isSmallCard ? 2.45 : 3.2;
+    const cameraZ = isSmallCard ? 2.30 : 3.2;
 
     const aspect = width / glHeight;
     const camera = new THREE.PerspectiveCamera(fov, aspect, 0.1, 100);
@@ -333,7 +339,7 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
     const y = -CARD_HEIGHT_3D / 2;
     const w = CARD_WIDTH_3D;
     const h = CARD_HEIGHT_3D;
-    const r = CORNER_RADIUS;
+    const r = cornerRadius !== undefined ? cornerRadius : (isSmallCard ? 0.08 : CORNER_RADIUS);
 
     shape.moveTo(x + r, y);
     shape.lineTo(x + w - r, y);
@@ -372,12 +378,17 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
     }
     faceGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
 
-    const parseColorToVec3 = (hex?: string, fallback = '#0F172A') => {
+    const _tempColor = new THREE.Color();
+    const _targetC1 = new THREE.Vector3();
+    const _targetC2 = new THREE.Vector3();
+
+    const updateColorVec3 = (outVec: THREE.Vector3, hex?: string, fallback = '#0F172A') => {
       try {
-        const c = new THREE.Color(hex || fallback);
-        return new THREE.Vector3(c.r, c.g, c.b);
+        _tempColor.set(hex || fallback);
+        outVec.set(_tempColor.r, _tempColor.g, _tempColor.b);
       } catch (e) {
-        return new THREE.Vector3(0.06, 0.08, 0.12);
+        _tempColor.set(fallback);
+        outVec.set(_tempColor.r, _tempColor.g, _tempColor.b);
       }
     };
 
@@ -395,8 +406,12 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
       if (str.includes('unionbank') || str.includes('unibank') || str.includes('union')) return 10;
       if (str.includes('security')) return 11;
       if (str.includes('visa')) return 12;
+      if (str.includes('cash') || str.includes('pera') || str.includes('bulsa')) return 13;
       return 0;
     };
+
+    updateColorVec3(_targetC1, color1, '#0B0F19');
+    updateColorVec3(_targetC2, color2, '#1E293B');
 
     // Front Shader Material
     const frontUniforms = {
@@ -404,8 +419,8 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
       uLightPos: { value: new THREE.Vector2(0.5, 0.5) },
       uTextTexture: { value: textTexture },
       uShineIntensity: { value: 0.0 },
-      uColor1: { value: parseColorToVec3(color1, '#0B0F19') },
-      uColor2: { value: parseColorToVec3(color2, '#1E293B') },
+      uColor1: { value: _targetC1.clone() },
+      uColor2: { value: _targetC2.clone() },
       uCardType: { value: getCardTypeInt(accountType, bankName) },
     };
 
@@ -531,35 +546,25 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
           float bandIndex2 = floor(rotUv.y * ribbonScale);
           float weavePattern = mod(bandIndex1 + bandIndex2, 2.0);
 
-          vec3 bpiCrimsonDark = vec3(0.48, 0.03, 0.07);
-          vec3 bpiCrimsonMid = vec3(0.75, 0.06, 0.12);
-          vec3 bpiCrimsonBright = vec3(0.92, 0.12, 0.18);
+          vec3 bpiMaroonDark = vec3(0.24, 0.02, 0.04);   // Deep Maroon (#3D050A)
+          vec3 bpiMaroonMid = vec3(0.42, 0.04, 0.08);    // Rich Maroon (#6B0A14)
+          vec3 bpiMaroonSoft = vec3(0.55, 0.07, 0.11);   // Elegant Burgundy (#8C121C)
 
-          vec3 baseRibbon = mix(bpiCrimsonDark, bpiCrimsonMid, weavePattern * 0.6 + 0.4);
-          baseRibbon = mix(baseRibbon, bpiCrimsonBright, (vUv.x + vUv.y) * 0.35);
+          vec3 baseRibbon = mix(bpiMaroonDark, bpiMaroonMid, weavePattern * 0.5 + 0.5);
+          baseRibbon = mix(baseRibbon, bpiMaroonSoft, (vUv.x + vUv.y) * 0.3);
           col = baseRibbon * ribbonShading;
 
           // Drop shadow cast by overlapping ribbons
           float overlapShadow = smoothstep(0.0, 0.25, r1) * smoothstep(0.0, 0.25, r2);
           col *= 0.82 + 0.18 * overlapShadow;
 
-          // 3. Golden Diagonal Lens Flare Rays (cutting across the red ribbons)
+          // 3. Golden Diagonal Lens Flare Rays (cutting across the maroon ribbons)
           float lightRay1 = smoothstep(0.035, 0.0, abs((vUv.x * 1.1 + vUv.y) - (0.65 + sin(uTime * 0.08) * 0.08)));
           float lightRay2 = smoothstep(0.025, 0.0, abs((vUv.x * 1.1 + vUv.y) - (1.15 + cos(uTime * 0.06) * 0.08)));
           float lightRay3 = smoothstep(0.045, 0.0, abs((vUv.x * 1.1 + vUv.y) - (0.35 - sin(uTime * 0.07) * 0.06)));
 
-          vec3 goldRayColor = vec3(1.0, 0.88, 0.45);
-          col += goldRayColor * (lightRay1 * 0.85 + lightRay2 * 0.65 + lightRay3 * 0.45);
-
-          // 4. Subtle BPI Shield & Crown Crest Watermark (Bottom-Right)
-          vec2 crestPos = vUv - vec2(0.75, 0.30);
-          float dCrestBody = sdRoundedBox(crestPos, vec2(0.032, 0.042), 0.01);
-          float dCrestCrown = sdRoundedBox(crestPos - vec2(0.0, 0.05), vec2(0.028, 0.01), 0.004);
-          float dCrest = min(dCrestBody, dCrestCrown);
-          if (dCrest < 0.0) {
-            vec3 crestGold = vec3(0.95, 0.78, 0.25);
-            col = mix(col, crestGold, 0.38);
-          }
+          vec3 goldRayColor = vec3(0.92, 0.78, 0.38);
+          col += goldRayColor * (lightRay1 * 0.35 + lightRay2 * 0.25 + lightRay3 * 0.15);
 
         } else if (uCardType == 4) {
           // ── MAYA REAL-WORLD BLACK 3D SHADER MOTIF ──
@@ -619,32 +624,38 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
           col += vec3(0.5, 0.9, 0.5) * lbSheen * 0.35;
 
         } else if (uCardType == 6) {
-          // ── PNB GOLD VISA REAL-WORLD 3D SHADER MOTIF ──
-          // Metallic Warm Gold + Flowing Spectrum Ribbon Wave across center
-          vec3 pnbGoldBase = vec3(0.85, 0.70, 0.25);
-          vec3 pnbGoldHighlight = vec3(0.95, 0.82, 0.38);
-          col = mix(pnbGoldBase, pnbGoldHighlight, vUv.y * 0.7 + vUv.x * 0.3);
+          // ── PNB REAL-WORLD 24K GOLD 3D SHADER MOTIF ──
+          // Premium 24K Brushed Gold + Molten Liquid Gold & Champagne Wave across center
+          vec3 pnbGoldDeep = vec3(0.68, 0.52, 0.15);      // Rich Bronze Gold Depth
+          vec3 pnbGoldMid = vec3(0.88, 0.72, 0.28);       // 24K Gold Body
+          vec3 pnbGoldBright = vec3(0.98, 0.86, 0.42);    // Champagne Gold Highlight
+          
+          col = mix(pnbGoldDeep, pnbGoldMid, vUv.y * 0.6 + vUv.x * 0.4);
+          float goldGrain = fract(sin(vUv.x * 850.0 + vUv.y * 420.0) * 43758.54) * 0.025;
+          col += vec3(goldGrain * 0.4, goldGrain * 0.35, goldGrain * 0.1);
 
-          // Flowing Rainbow Spectrum Ribbon Wave across center (Luxurious Slow Motion)
+          // Flowing Liquid Gold Wave across center (Pure Champagne & Molten Gold)
           float waveCenter = 0.48 + sin(vUv.x * 5.0 - uTime * 0.12) * 0.08 + cos(vUv.x * 9.0 + uTime * 0.05) * 0.04;
           float distToWave = abs(vUv.y - waveCenter);
-          float waveRibbon = smoothstep(0.09, 0.0, distToWave);
+          float waveRibbon = smoothstep(0.095, 0.0, distToWave);
 
           if (waveRibbon > 0.0) {
-            // Smooth rainbow spectrum gradient (Red -> Orange -> Yellow -> Green -> Cyan -> Blue -> Violet)
-            float spectrumT = vUv.x * 1.3 + (vUv.y - waveCenter) * 1.5 + uTime * 0.04;
-            vec3 spectrumCol = 0.5 + 0.5 * cos(6.28318 * (spectrumT + vec3(0.0, 0.33, 0.67)));
+            // Luxurious Molten Gold & Metallic Platinum Strand Gradient
+            float wavePhase = sin(vUv.x * 12.0 - uTime * 0.15) * 0.5 + 0.5;
+            vec3 liquidGoldCore = mix(vec3(0.92, 0.70, 0.20), vec3(1.0, 0.92, 0.58), wavePhase);
             
-            // Internal wave strand ribbons
-            float waveStrands = sin((vUv.y - waveCenter) * 90.0 + vUv.x * 15.0) * 0.5 + 0.5;
-            spectrumCol = mix(spectrumCol, vec3(1.0), waveStrands * 0.25);
+            // Shimmering Platinum White Specular Strands
+            float waveStrands = sin((vUv.y - waveCenter) * 110.0 + vUv.x * 20.0) * 0.5 + 0.5;
+            vec3 strandColor = mix(liquidGoldCore, vec3(1.0, 0.98, 0.85), waveStrands * 0.60);
 
-            col = mix(col, spectrumCol, waveRibbon * 0.88);
+            // Soft Gold Glow Edge
+            float edgeGlow = smoothstep(0.095, 0.02, distToWave);
+            col = mix(col, strandColor, edgeGlow * 0.85);
           }
 
           // Gold Specular Light Sheen
           float goldGlint = smoothstep(0.2, 0.0, abs((vUv.x + vUv.y * 0.5) - (uLightPos.x + 0.2))) * uShineIntensity;
-          col += vec3(0.95, 0.85, 0.45) * goldGlint * 0.5;
+          col += vec3(1.0, 0.92, 0.55) * goldGlint * 0.55;
 
         } else if (uCardType == 7) {
           // ── BDO REAL-WORLD VIRTUAL/DEBIT 3D SHADER MOTIF ──
@@ -689,37 +700,39 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
           col += vec3(0.4, 0.8, 1.0) * bdoGlint * 0.35;
 
         } else if (uCardType == 8) {
-          // ── MARIBANK REAL-WORLD 3D SHADER MOTIF ──
-          // Sea Sunset Tangerine Orange + Playful Smile Watermark & Ocean Waves
-          vec3 mariTangerineDark = vec3(0.90, 0.30, 0.06);
-          vec3 mariTangerineBright = vec3(1.0, 0.45, 0.12);
-          col = mix(mariTangerineDark, mariTangerineBright, vUv.y * 0.7 + vUv.x * 0.3);
+          // ── MARIBANK BESPOKE 3D SHADER MOTIF ──
+          // 1. Rich Deep Crimson-Coral to Sunset Tangerine Liquid Gradient
+          vec3 mariDeepCrimson = vec3(0.48, 0.06, 0.02);
+          vec3 mariSunsetOrange = vec3(0.98, 0.32, 0.06);
+          vec3 mariGoldenPeach = vec3(1.00, 0.58, 0.20);
 
-          vec3 mariCreamWhite = vec3(1.0, 0.95, 0.90);
+          float gradMix = vUv.y * 0.65 + vUv.x * 0.35;
+          col = mix(mariDeepCrimson, mariSunsetOrange, gradMix);
 
-          // 1. MariBank Ocean Wave Logo Watermark (Top-Left)
-          vec2 mLogoPos = vUv - vec2(0.14, 0.81);
-          float dCircle = abs(length(mLogoPos) - 0.045);
-          float circleMask = smoothstep(0.005, 0.0, dCircle);
-          float wave1 = smoothstep(0.004, 0.0, abs(mLogoPos.y + 0.065 - sin(mLogoPos.x * 35.0) * 0.005));
-          float wave2 = smoothstep(0.004, 0.0, abs(mLogoPos.y + 0.078 - sin(mLogoPos.x * 35.0) * 0.005));
-          col = mix(col, mariCreamWhite, max(circleMask, max(wave1, wave2)) * 0.75);
+          // 2. Flowing Fluid Metallic Waves across top-right region
+          vec2 waveUv = vUv * vec2(1.586, 1.0);
+          float wave1 = sin(waveUv.x * 7.0 - waveUv.y * 4.0 + uTime * 0.3) * 0.5 + 0.5;
+          float wave2 = cos(waveUv.x * 11.0 + waveUv.y * 6.0 - uTime * 0.2) * 0.5 + 0.5;
+          float fluidWave = smoothstep(0.35, 0.65, wave1 * 0.6 + wave2 * 0.4);
 
-          // 2. Playful Smile & Heart Line Art Watermark (Upper-Right Center)
-          vec2 smilePos = vUv - vec2(0.68, 0.64);
-          float smileCurve = smilePos.y + (smilePos.x * smilePos.x * 3.5) - 0.02;
-          float smileLine = (smilePos.x > -0.06 && smilePos.x < 0.06 && abs(smilePos.y) < 0.06) ? smoothstep(0.005, 0.0, abs(smileCurve)) : 0.0;
+          float rightRegion = smoothstep(0.25, 0.95, vUv.x + vUv.y * 0.4);
+          col = mix(col, mariGoldenPeach, fluidWave * rightRegion * 0.38);
 
-          // Eye dots
-          float eyeLeft = smoothstep(0.006, 0.0, length(smilePos - vec2(-0.03, 0.035)));
-          float eyeRight = smoothstep(0.006, 0.0, length(smilePos - vec2(0.03, 0.035)));
+          // 3. Micro-Guilloche Curved Ribbon Pinstripes
+          float ribbon = sin((vUv.x * 16.0 + sin(vUv.y * 12.0 + uTime * 0.2) * 2.0)) * 0.5 + 0.5;
+          float ribbonMask = smoothstep(0.48, 0.52, ribbon);
+          vec3 goldSpecular = vec3(1.0, 0.88, 0.50);
+          col = mix(col, goldSpecular, ribbonMask * rightRegion * 0.18);
 
-          float smileFace = max(smileLine, max(eyeLeft, eyeRight));
-          col = mix(col, mariCreamWhite, smileFace * 0.40);
+          // 4. Outer Metallic Pinstripe Border Frame
+          vec2 framePos = vUv - vec2(0.5, 0.5);
+          float dFrame = sdRoundedBox(framePos, vec2(0.47, 0.45), 0.04);
+          float pinstripe = smoothstep(0.003, 0.0, abs(dFrame));
+          col = mix(col, vec3(1.0, 0.82, 0.40), pinstripe * 0.55);
 
-          // 3. Soft Sea Ripple Motion
-          float seaWaves = sin(vUv.x * 12.0 + vUv.y * 8.0 - uTime * 0.12) * 0.5 + 0.5;
-          col += vec3(1.0, 0.7, 0.3) * seaWaves * 0.10;
+          // 5. Dynamic Interactive Golden Sunburst Reflection
+          float sunGlint = smoothstep(0.30, 0.0, length(vUv - uLightPos)) * uShineIntensity;
+          col += vec3(1.0, 0.85, 0.50) * sunGlint * 0.45;
 
         } else if (uCardType == 9) {
           // ── METROBANK BESPOKE 3D SHADER MOTIF ──
@@ -817,6 +830,103 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
           float visaSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * uShineIntensity;
           col += vec3(0.6, 0.85, 1.0) * visaSheen * 0.40;
 
+        } else if (uCardType == 13) {
+          // ── EXACT 3D BIFOLD PURE BLACK WALLET WITH GOLD BUTTON SNAP & TOP CARDS ──
+          // Inspired by 3D bifold onyx black wallet with top cards poking out & yellow snap button
+          
+          vec3 walletCharcoalDark = vec3(0.04, 0.04, 0.05);  // Pure Onyx Black (#0A0A0D)
+          vec3 walletCharcoalMid = vec3(0.09, 0.09, 0.11);   // Sleek Soft Black (#17171C)
+          vec3 walletStitchColor = vec3(0.01, 0.01, 0.02);   // Dark Inset Seam
+          vec3 goldButtonColor = vec3(0.96, 0.65, 0.12);     // Gold/Yellow Snap Button (#F59E0B)
+          vec3 cardDarkColor = vec3(0.07, 0.07, 0.09);       // Dark Top Card Body (#121217)
+          vec3 cardGoldTab = vec3(0.98, 0.74, 0.18);         // Gold Rectangular Tab (#FBBF24)
+
+          // Background outside top cards & wallet
+          col = mix(walletCharcoalDark, walletCharcoalMid, vUv.y * 0.6 + 0.2);
+
+          // 1. TOP CARDS STICKING OUT FROM WALLET POCKET (vUv.y > 0.64)
+          if (vUv.y > 0.64) {
+            // Card 1 (Back Left Angled Card)
+            vec2 c1Center = vec2(0.48, 0.78);
+            vec2 c1Rot = vec2(
+              (vUv.x - c1Center.x) * 0.92 - (vUv.y - c1Center.y) * 0.38,
+              (vUv.x - c1Center.x) * 0.38 + (vUv.y - c1Center.y) * 0.92
+            );
+            float dCard1 = sdRoundedBox(c1Rot, vec2(0.24, 0.18), 0.04);
+
+            // Card 2 (Front Right Angled Card)
+            vec2 c2Center = vec2(0.62, 0.74);
+            vec2 c2Rot = vec2(
+              (vUv.x - c2Center.x) * 0.97 - (vUv.y - c2Center.y) * 0.22,
+              (vUv.x - c2Center.x) * 0.22 + (vUv.y - c2Center.y) * 0.97
+            );
+            float dCard2 = sdRoundedBox(c2Rot, vec2(0.22, 0.16), 0.04);
+
+            if (dCard1 < 0.0) {
+              col = cardDarkColor;
+              // Gold Rectangular Chip Tab on Card 1
+              float dTab1 = sdRoundedBox(c1Rot - vec2(0.08, 0.08), vec2(0.05, 0.022), 0.008);
+              if (dTab1 < 0.0) col = cardGoldTab;
+            }
+
+            if (dCard2 < 0.0) {
+              col = cardDarkColor * 1.1;
+              // Gold Rectangular Chip Tab on Card 2
+              float dTab2 = sdRoundedBox(c2Rot - vec2(0.06, 0.06), vec2(0.05, 0.022), 0.008);
+              if (dTab2 < 0.0) col = cardGoldTab;
+            }
+          }
+
+          // 2. MAIN 3D BIFOLD WALLET BODY (vUv.y <= 0.72)
+          vec2 walletCenter = vec2(0.46, 0.36);
+          float dWallet = sdRoundedBox(vUv - walletCenter, vec2(0.44, 0.34), 0.08);
+
+          if (vUv.y <= 0.72) {
+            // Soft rounded 3D clay lighting gradient on wallet body
+            float clayShade = smoothstep(-0.35, 0.35, vUv.x) * 0.25 + smoothstep(-0.25, 0.25, vUv.y) * 0.15;
+            vec3 walletBodyCol = mix(walletCharcoalDark, walletCharcoalMid, 0.5 + clayShade);
+
+            // Top Wallet Opening Pocket Edge Shadow
+            float topEdgeShadow = smoothstep(0.72, 0.65, vUv.y);
+            walletBodyCol *= mix(0.75, 1.0, topEdgeShadow);
+
+            col = walletBodyCol;
+
+            // 3. Dotted Stitching Seam Line (running along right and bottom edge)
+            float dStitchBorder = abs(dWallet + 0.035);
+            if (dStitchBorder < 0.004 && (vUv.x > 0.40 || vUv.y < 0.25)) {
+              float dashPattern = sin((vUv.x + vUv.y) * 160.0);
+              if (dashPattern > 0.1) {
+                col = walletStitchColor;
+              }
+            }
+          }
+
+          // 4. RIGHT LEATHER CLOSURE STRAP & GOLD SNAP BUTTON
+          vec2 strapPos = vUv - vec2(0.85, 0.42);
+          float dStrap = sdRoundedBox(strapPos, vec2(0.11, 0.09), 0.045);
+          if (dStrap < 0.0) {
+            col = mix(walletCharcoalDark, walletCharcoalMid, (strapPos.y + 0.09) / 0.18);
+            // Strap edge outline bevel
+            float strapBevel = smoothstep(-0.005, 0.0, dStrap);
+            col = mix(col, vec3(0.08, 0.08, 0.10), strapBevel * 0.4);
+
+            // Gold Circular Snap Button
+            float dButton = length(strapPos - vec2(0.015, 0.0));
+            if (dButton < 0.038) {
+              float buttonSpec = smoothstep(0.038, 0.0, dButton);
+              col = mix(goldButtonColor * 0.75, goldButtonColor, buttonSpec);
+              // Inner highlight dot
+              if (length(strapPos - vec2(0.005, 0.01)) < 0.012) {
+                col += vec3(0.2, 0.2, 0.1);
+              }
+            }
+          }
+
+          // Specular Soft Sheen
+          float softSheen = smoothstep(0.30, 0.0, length(vUv - uLightPos)) * (uShineIntensity + 0.20);
+          col += vec3(0.25, 0.25, 0.30) * softSheen * 0.25;
+
         } else {
           // ── DEFAULT GEKO PLATINUM 3D SHADER MOTIF ──
           vec2 grid = vec2(68.0, 43.0);
@@ -856,109 +966,73 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
           col = mix(col, dotColor, dotMask * 0.88);
         }
 
-        // 3. EMV Smart Chip (Top-Left)
-        vec2 chipCenter = vec2(0.175, 0.68);
-        vec2 chipHalfSize = vec2(0.075, 0.11);
-        float dChip = sdRoundedBox(vUv - chipCenter, chipHalfSize, 0.018);
-        float chipMask = smoothstep(0.002, -0.002, dChip);
+        // 3. EMV Smart Chip (Mid-Left) - Only for card assets, disabled for Cash Wallet
+        if (uCardType != 13) {
+          vec2 chipCenter = vec2(0.165, 0.54);
+          vec2 chipHalfSize = vec2(0.062, 0.085);
+          float dChip = sdRoundedBox(vUv - chipCenter, chipHalfSize, 0.015);
+          float chipMask = smoothstep(0.002, -0.002, dChip);
 
-        if (chipMask > 0.0) {
-          vec3 chipGrad = mix(vec3(0.84, 0.80, 0.70), vec3(0.96, 0.93, 0.84), (vUv.y - 0.57) / 0.22);
-          vec2 chipLocal = vUv - chipCenter;
-          float grooveH = smoothstep(0.0025, 0.0, abs(chipLocal.y));
-          float grooveV1 = smoothstep(0.0025, 0.0, abs(chipLocal.x + 0.038));
-          float grooveV2 = smoothstep(0.0025, 0.0, abs(chipLocal.x - 0.038));
-          float centerPad = sdRoundedBox(chipLocal, vec2(0.028, 0.05), 0.008);
-          float centerPadGroove = smoothstep(0.0025, 0.0, abs(centerPad));
+          if (chipMask > 0.0) {
+            vec3 chipGrad = mix(vec3(0.84, 0.80, 0.70), vec3(0.96, 0.93, 0.84), (vUv.y - (chipCenter.y - chipHalfSize.y)) / (chipHalfSize.y * 2.0));
+            vec2 chipLocal = vUv - chipCenter;
+            float grooveH = smoothstep(0.0025, 0.0, abs(chipLocal.y));
+            float grooveV1 = smoothstep(0.0025, 0.0, abs(chipLocal.x + chipHalfSize.x * 0.5));
+            float grooveV2 = smoothstep(0.0025, 0.0, abs(chipLocal.x - chipHalfSize.x * 0.5));
+            float centerPad = sdRoundedBox(chipLocal, chipHalfSize * 0.4, 0.006);
+            float centerPadGroove = smoothstep(0.0025, 0.0, abs(centerPad));
 
-          float anyGroove = max(max(grooveH, max(grooveV1, grooveV2)), centerPadGroove);
-          vec3 grooveColor = vec3(0.32, 0.28, 0.20);
-          float chipBorder = smoothstep(0.006, 0.001, abs(dChip));
-          vec3 chipSurface = mix(chipGrad, grooveColor, anyGroove * 0.85);
-          chipSurface += vec3(chipBorder * 0.3);
+            float anyGroove = max(max(grooveH, max(grooveV1, grooveV2)), centerPadGroove);
+            vec3 grooveColor = vec3(0.32, 0.28, 0.20);
+            float chipBorder = smoothstep(0.006, 0.001, abs(dChip));
+            vec3 chipSurface = mix(chipGrad, grooveColor, anyGroove * 0.85);
+            chipSurface += vec3(chipBorder * 0.3);
 
-          float chipLight = pow(max(0.0, 1.0 - length(vUv - uLightPos) * 2.0), 12.0) * 0.6;
-          chipSurface += vec3(chipLight);
+            float chipLight = pow(max(0.0, 1.0 - length(vUv - uLightPos) * 2.0), 12.0) * 0.6;
+            chipSurface += vec3(chipLight);
 
-          col = mix(col, chipSurface, chipMask);
-        }
-
-        // 4. Contactless / NFC Wave
-        vec2 nfcCenter = vec2(0.282, 0.68);
-        vec2 nfcDelta = vUv - nfcCenter;
-        float nfcDist = length(nfcDelta);
-        if (nfcDelta.x > 0.002 && abs(nfcDelta.y) < nfcDelta.x * 1.3) {
-          float arc1 = smoothstep(0.0035, 0.0, abs(nfcDist - 0.016));
-          float arc2 = smoothstep(0.0035, 0.0, abs(nfcDist - 0.030));
-          float arc3 = smoothstep(0.0035, 0.0, abs(nfcDist - 0.044));
-          float arc4 = smoothstep(0.0035, 0.0, abs(nfcDist - 0.058));
-          float nfcTotal = max(max(arc1, arc2), max(arc3, arc4));
-          col = mix(col, vec3(0.85, 0.88, 0.94), nfcTotal * 0.9);
-        }
-
-        // 5. GEKO Modern Silver Logo (Top-Right) - Only for default GEKO Total card
-        if (uCardType == 0) {
-          vec2 logoPos = vUv - vec2(0.80, 0.79);
-          float dLogoArea = sdRoundedBox(logoPos, vec2(0.12, 0.06), 0.015);
-          if (dLogoArea < 0.0) {
-            vec2 gP = logoPos - vec2(-0.075, 0.0);
-            float gOuter = sdRoundedBox(gP, vec2(0.018, 0.026), 0.014);
-            float gInner = sdRoundedBox(gP, vec2(0.010, 0.018), 0.007);
-            float gRing = max(smoothstep(0.002, -0.002, gOuter), -smoothstep(0.002, -0.002, gInner));
-            if (gP.x > 0.004 && gP.y > 0.004) gRing = 0.0;
-            if (gP.x > 0.0 && abs(gP.y) < 0.004) gRing = 1.0;
-
-            vec2 eP = logoPos - vec2(-0.03, 0.0);
-            float eStem = (abs(eP.x + 0.012) < 0.0038 && abs(eP.y) < 0.026) ? 1.0 : 0.0;
-            float eTop = (eP.x > -0.012 && eP.x < 0.014 && abs(eP.y - 0.022) < 0.0035) ? 1.0 : 0.0;
-            float eMid = (eP.x > -0.012 && eP.x < 0.009 && abs(eP.y) < 0.0032) ? 1.0 : 0.0;
-            float eBot = (eP.x > -0.012 && eP.x < 0.014 && abs(eP.y + 0.022) < 0.0035) ? 1.0 : 0.0;
-            float eLetter = max(max(eStem, eTop), max(eMid, eBot));
-
-            vec2 kP = logoPos - vec2(0.015, 0.0);
-            float kStem = (abs(kP.x + 0.012) < 0.0038 && abs(kP.y) < 0.026) ? 1.0 : 0.0;
-            float kArmUp = (abs((kP.y - 0.004) - (kP.x + 0.008) * 1.5) < 0.004 && kP.x > -0.008 && kP.x < 0.016 && kP.y > 0.0) ? 1.0 : 0.0;
-            float kArmDn = (abs((kP.y + 0.004) + (kP.x + 0.008) * 1.5) < 0.004 && kP.x > -0.008 && kP.x < 0.016 && kP.y < 0.0) ? 1.0 : 0.0;
-            float kLetter = max(max(kStem, kArmUp), kArmDn);
-
-            vec2 oP = logoPos - vec2(0.06, 0.0);
-            float oOuter = sdRoundedBox(oP, vec2(0.018, 0.026), 0.014);
-            float oInner = sdRoundedBox(oP, vec2(0.010, 0.018), 0.007);
-            float oRing = max(smoothstep(0.002, -0.002, oOuter), -smoothstep(0.002, -0.002, oInner));
-
-            float gekoLogo = max(max(gRing, eLetter), max(kLetter, oRing));
-
-            vec3 logoChrome = mix(vec3(0.85, 0.88, 0.95), vec3(1.0, 1.0, 1.0), (logoPos.y + 0.06) / 0.12);
-            float logoGlint = pow(max(0.0, 1.0 - length(vUv - uLightPos) * 1.6), 14.0) * 1.2;
-            logoChrome += vec3(logoGlint);
-
-            col = mix(col, logoChrome, gekoLogo);
+            col = mix(col, chipSurface, chipMask);
           }
         }
 
-        // 6. VISA / Platinum Foil Emblem (Bottom-Right)
-        vec2 visaPos = vUv - vec2(0.81, 0.18);
-        float dVisaArea = sdRoundedBox(visaPos, vec2(0.10, 0.05), 0.01);
-        if (dVisaArea < 0.0) {
-          float v1 = (abs((visaPos.y - 0.015) + (visaPos.x + 0.06) * 3.5) < 0.004 && visaPos.x > -0.075 && visaPos.x < -0.045) ? 1.0 : 0.0;
-          float v2 = (abs((visaPos.y - 0.015) - (visaPos.x + 0.035) * 3.5) < 0.004 && visaPos.x > -0.05 && visaPos.x < -0.02) ? 1.0 : 0.0;
-          float iStem = (abs(visaPos.x - 0.0) < 0.0035 && abs(visaPos.y - 0.015) < 0.018) ? 1.0 : 0.0;
-          float sTop = (abs(visaPos.y - 0.03) < 0.0035 && visaPos.x > 0.02 && visaPos.x < 0.05) ? 1.0 : 0.0;
-          float sMid = (abs(visaPos.y - 0.015) < 0.0035 && visaPos.x > 0.022 && visaPos.x < 0.048) ? 1.0 : 0.0;
-          float sBot = (abs(visaPos.y + 0.0) < 0.0035 && visaPos.x > 0.02 && visaPos.x < 0.05) ? 1.0 : 0.0;
-          float sL = (abs(visaPos.x - 0.022) < 0.0035 && visaPos.y > 0.015 && visaPos.y < 0.03) ? 1.0 : 0.0;
-          float sR = (abs(visaPos.x - 0.048) < 0.0035 && visaPos.y > -0.002 && visaPos.y < 0.015) ? 1.0 : 0.0;
-          float sLetter = max(max(sTop, sMid), max(max(sBot, sL), sR));
-          float aL = (abs((visaPos.y - 0.015) + (visaPos.x - 0.07) * 3.5) < 0.004 && visaPos.x > 0.055 && visaPos.x < 0.075) ? 1.0 : 0.0;
-          float aR = (abs((visaPos.y - 0.015) - (visaPos.x - 0.085) * 3.5) < 0.004 && visaPos.x > 0.075 && visaPos.x < 0.095) ? 1.0 : 0.0;
-          float aBar = (abs(visaPos.y - 0.01) < 0.0035 && visaPos.x > 0.065 && visaPos.x < 0.088) ? 1.0 : 0.0;
-          float aLetter = max(max(aL, aR), aBar);
+        // 4. Contactless / NFC Wave - Disabled for Cash Wallet
+        if (uCardType != 13) {
+          vec2 nfcCenter = vec2(0.250, 0.54);
+          vec2 nfcDelta = vUv - nfcCenter;
+          float nfcDist = length(nfcDelta);
+          if (nfcDelta.x > 0.002 && abs(nfcDelta.y) < nfcDelta.x * 1.3) {
+            float arc1 = smoothstep(0.0035, 0.0, abs(nfcDist - 0.014));
+            float arc2 = smoothstep(0.0035, 0.0, abs(nfcDist - 0.026));
+            float arc3 = smoothstep(0.0035, 0.0, abs(nfcDist - 0.038));
+            float arc4 = smoothstep(0.0035, 0.0, abs(nfcDist - 0.050));
+            float nfcTotal = max(max(arc1, arc2), max(arc3, arc4));
+            col = mix(col, vec3(0.85, 0.88, 0.94), nfcTotal * 0.9);
+          }
+        }
 
-          float visaText = max(max(max(v1, v2), iStem), max(sLetter, aLetter));
-          float platSub = (abs(visaPos.y + 0.022) < 0.0025 && abs(visaPos.x - 0.01) < 0.065) ? 1.0 : 0.0;
+        // 6. Mastercard Red & Yellow Interlocking Circles Emblem (Disabled for Cash Wallet)
+        if (uCardType != 13) {
+          vec2 mcPos = (vUv - vec2(0.84, 0.14)) * vec2(1.586, 1.0);
+          float radius = 0.070;
+          float dLeft = length(mcPos - vec2(-0.038, 0.0)) - radius;
+          float dRight = length(mcPos - vec2(0.038, 0.0)) - radius;
 
-          vec3 visaSilver = mix(vec3(0.82, 0.85, 0.92), vec3(1.0, 1.0, 1.0), (visaPos.y + 0.05) / 0.10);
-          col = mix(col, visaSilver, max(visaText, platSub * 0.85));
+          vec3 mcRed = vec3(0.92, 0.04, 0.11);    // Mastercard Red (#EB001B)
+          vec3 mcYellow = vec3(0.97, 0.62, 0.10); // Mastercard Yellow (#F79E1B)
+          vec3 mcOrange = vec3(0.95, 0.33, 0.08); // Interlocking Overlap Orange (#FF5F00)
+
+          float maskLeft = smoothstep(0.003, -0.003, dLeft);
+          float maskRight = smoothstep(0.003, -0.003, dRight);
+
+          if (maskLeft > 0.0 || maskRight > 0.0) {
+            if (maskLeft > 0.0 && maskRight > 0.0) {
+              col = mix(col, mcOrange, max(maskLeft, maskRight));
+            } else if (maskLeft > 0.0) {
+              col = mix(col, mcRed, maskLeft);
+            } else {
+              col = mix(col, mcYellow, maskRight);
+            }
+          }
         }
 
         // 7. EMBOSSED CARD BALANCE & DETAILS (Rendered directly ON the physical card!)
@@ -992,11 +1066,6 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
         vec3 holographicGleam = holoRainbow * sweep * 0.22;
         
         col += pureSilverSheen + holographicGleam;
-
-        // Card Edge Rim Highlight
-        float edgeD = sdRoundedBox(vUv - 0.5, vec2(0.48, 0.48), 0.04);
-        float edgeRim = smoothstep(0.004, 0.0, abs(edgeD));
-        col += vec3(edgeRim * 0.35);
 
         gl_FragColor = vec4(col, 1.0);
       }
@@ -1130,15 +1199,15 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
       backUniforms.uTime.value = elapsedTime;
 
       const { color1: curC1, color2: curC2, accountType: curAcc, bankName: curBnk } = cardPropsRef.current;
-      const targetC1 = parseColorToVec3(curC1, '#0B0F19');
-      const targetC2 = parseColorToVec3(curC2, '#1E293B');
+      updateColorVec3(_targetC1, curC1, '#0B0F19');
+      updateColorVec3(_targetC2, curC2, '#1E293B');
 
       if (interactive) {
-        frontUniforms.uColor1.value.lerp(targetC1, 0.14);
-        frontUniforms.uColor2.value.lerp(targetC2, 0.14);
+        frontUniforms.uColor1.value.lerp(_targetC1, 0.14);
+        frontUniforms.uColor2.value.lerp(_targetC2, 0.14);
       } else {
-        frontUniforms.uColor1.value.copy(targetC1);
-        frontUniforms.uColor2.value.copy(targetC2);
+        frontUniforms.uColor1.value.copy(_targetC1);
+        frontUniforms.uColor2.value.copy(_targetC2);
       }
       frontUniforms.uCardType.value = getCardTypeInt(curAcc, curBnk);
 
@@ -1209,17 +1278,18 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
       edgeMaterial.dispose();
       textTexture.dispose();
     };
-  }, [height, color1, color2, accountType, bankName, updateCardText]);
+  }, [height, color1, color2, accountType, bankName, updateCardText, cornerRadius]);
 
   const isSmallCard = height < 200;
-  const wrapperBg = isSmallCard ? (color1 || '#0F172A') : 'transparent';
+  const isCashCard = (bankName || '').toLowerCase().includes('cash') || (accountType || '').toLowerCase().includes('cash');
+  const wrapperBg = 'transparent';
   const glOpacity = isSmallCard ? (isGlReady ? 1 : 0) : 1;
 
   return (
     <View style={styles.outerContainer}>
       {/* Full 3D WebGL Canvas */}
       <View
-        style={[styles.canvasWrapper, { height, backgroundColor: wrapperBg }]}
+        style={[styles.canvasWrapper, { height, backgroundColor: wrapperBg, borderRadius: isSmallCard ? 12 : 24 }]}
         {...(interactive ? panResponder.panHandlers : {})}
       >
         <GLView
@@ -1236,6 +1306,8 @@ export const GekoCard3D: React.FC<GekoCard3DProps> = ({
   );
 };
 
+export const GekoCard3D = React.memo(GekoCard3DComponent);
+
 const styles = StyleSheet.create({
   outerContainer: {
     width: '100%',
@@ -1246,7 +1318,7 @@ const styles = StyleSheet.create({
   },
   canvasWrapper: {
     width: '100%',
-    borderRadius: 20,
+    borderRadius: 24,
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: 'transparent',

@@ -81,7 +81,7 @@ export const useCards = () => {
           if (diff > 0) {
             await db.execute(
               'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
-              [newId, diff, date, 'Salary', 'income', `${bankName} Deposit`, bankName]
+              [newId, diff, date, 'Cash In', 'income', 'Cash-In / Deposit', bankName]
             );
           } else {
             const absDiff = Math.abs(diff);
@@ -122,7 +122,7 @@ export const useCards = () => {
           if (diff > 0) {
             await db.execute(
               'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
-              [newId, diff, date, 'Salary', 'income', `${bankName} Deposit`, bankName]
+              [newId, diff, date, 'Cash In', 'income', 'Cash-In / Deposit', bankName]
             );
           } else {
             const absDiff = Math.abs(diff);
@@ -200,7 +200,7 @@ export const useCards = () => {
         const newId = uuidv4();
         await db.execute(
           'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [newId, newCard.balance, Date.now(), 'Salary', 'income', `${newCard.bankName} Deposit`, newCard.bankName]
+          [newId, newCard.balance, Date.now(), 'Cash In', 'income', 'Cash-In / Deposit', newCard.bankName]
         );
       }
 

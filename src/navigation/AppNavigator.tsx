@@ -52,7 +52,11 @@ export const AppNavigator = () => {
       <Stack.Screen 
         name="AddTransaction" 
         component={AddTransactionModal} 
-        options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} 
+        options={{ 
+          presentation: 'transparentModal', 
+          animation: 'slide_from_bottom',
+          contentStyle: { backgroundColor: 'transparent' } 
+        }} 
       />
     </Stack.Navigator>
   );

@@ -13,6 +13,7 @@ export interface Installment {
   startDate: number;
   nextCutoff: number;
   status: 'active' | 'completed';
+  imageUrl?: string;
 }
 
 export const useInstallments = () => {
@@ -34,9 +35,16 @@ export const useInstallments = () => {
           paidMonths INTEGER NOT NULL,
           startDate INTEGER NOT NULL,
           nextCutoff INTEGER NOT NULL,
-          status TEXT NOT NULL
+          status TEXT NOT NULL,
+          imageUrl TEXT
         );
       `);
+
+      try {
+        await db.execute('ALTER TABLE installments ADD COLUMN imageUrl TEXT');
+      } catch (e) {
+        // column already exists
+      }
 
       const res = await db.execute('SELECT * FROM installments ORDER BY startDate DESC');
       const data = (res.rows?._array || []) as Installment[];
@@ -54,7 +62,7 @@ export const useInstallments = () => {
     return () => sub.remove();
   }, [load]);
 
-  const addInstallment = async (title: string, totalAmount: number, totalMonths: number) => {
+  const addInstallment = async (title: string, totalAmount: number, totalMonths: number, imageUrl?: string) => {
     const db = getDb();
     const id = uuidv4();
     const monthlyAmount = Math.round((totalAmount / totalMonths) * 100) / 100;
@@ -62,8 +70,8 @@ export const useInstallments = () => {
     const nextCutoff = now + 30 * 86400000; // 30 days later
 
     await db.execute(
-      'INSERT INTO installments (id, title, totalAmount, monthlyAmount, totalMonths, paidMonths, startDate, nextCutoff, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, title, totalAmount, monthlyAmount, totalMonths, 0, now, nextCutoff, 'active']
+      'INSERT INTO installments (id, title, totalAmount, monthlyAmount, totalMonths, paidMonths, startDate, nextCutoff, status, imageUrl) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, title, totalAmount, monthlyAmount, totalMonths, 0, now, nextCutoff, 'active', imageUrl || null]
     );
 
     await load();

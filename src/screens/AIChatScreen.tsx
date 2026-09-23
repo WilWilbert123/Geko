@@ -10,9 +10,11 @@ import { loadModel } from '../services/ai/engine/llamaService';
 import { getModelPath } from '../utils/fileSystem';
 
 const PROMPT_CHIPS = [
-  "Analyze my grocery spending this week",
-  "Can I afford dinner tonight?",
-  "Export monthly summary"
+  { icon: '🎯', title: 'What is my current financial goal?', query: 'What is my current financial goal?' },
+  { icon: '📊', title: 'Analyze my spending this week', query: 'Analyze my spending this week' },
+  { icon: '💳', title: 'Check my card & wallet balances', query: 'Show all my bank card balances' },
+  { icon: '🍔', title: 'Can I afford dinner tonight?', query: 'Can I afford dinner tonight?' },
+  { icon: '📅', title: 'When is my salary cutoff?', query: 'When is my salary cutoff?' },
 ];
 
 export const AIChatScreen = () => {
@@ -75,11 +77,13 @@ export const AIChatScreen = () => {
             <View style={styles.chipsContainer}>
               {PROMPT_CHIPS.map(chip => (
                 <TouchableOpacity 
-                  key={chip} 
-                  style={[styles.chip, { backgroundColor: colors.surfaceHighlight }]}
-                  onPress={() => handleSend(chip)}
+                  key={chip.title} 
+                  style={[styles.chip, { backgroundColor: colors.surfaceHighlight || 'rgba(255,255,255,0.06)', borderColor: colors.border }]}
+                  onPress={() => handleSend(chip.query)}
+                  activeOpacity={0.8}
                 >
-                  <Text style={[styles.chipText, { color: colors.text }]}>{chip}</Text>
+                  <Text style={{ fontSize: 16 }}>{chip.icon}</Text>
+                  <Text style={[styles.chipText, { color: colors.text }]}>{chip.title}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -94,7 +98,7 @@ export const AIChatScreen = () => {
         )}
       </ScrollView>
 
-      <View style={[styles.inputContainer, { paddingBottom: insets.bottom + 110, borderTopColor: colors.border, backgroundColor: colors.background }]}>
+      <View style={[styles.inputContainer, { paddingBottom: 12, borderTopColor: colors.border, backgroundColor: colors.background }]}>
         <TextInput
           style={[styles.input, { color: colors.text, backgroundColor: colors.surfaceHighlight }]}
           placeholder="Ask Geko about your budget..."
@@ -166,13 +170,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 22,
+    borderWidth: 1,
+    width: '100%',
+    maxWidth: 340,
+    justifyContent: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
   chipText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 14.5,
+    fontWeight: '600',
+    letterSpacing: -0.1,
   },
   inputContainer: {
     flexDirection: 'row',

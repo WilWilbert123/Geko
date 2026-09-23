@@ -8,15 +8,24 @@ import { RootStackParamList } from '../navigation/types';
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, runOnJS } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Coffee, ShoppingCart, Train, DollarSign, ArrowRightLeft } from 'lucide-react-native';
+import { Coffee, ShoppingCart, Train, DollarSign, ArrowRightLeft, Zap, Gift } from 'lucide-react-native';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddTransaction'>;
 
-const CATEGORIES = [
+const EXPENSE_CATEGORIES = [
   { id: 'Food', icon: Coffee },
   { id: 'Shopping', icon: ShoppingCart },
   { id: 'Transport', icon: Train },
-  { id: 'Salary', icon: DollarSign },
+  { id: 'Utilities', icon: Zap },
+];
+
+const INCOME_CATEGORIES = [
+  { id: 'Cash In', icon: DollarSign },
+  { id: 'Deposit', icon: DollarSign },
+  { id: 'Bonus', icon: Gift },
+];
+
+const TRANSFER_CATEGORIES = [
   { id: 'Transfer', icon: ArrowRightLeft },
 ];
 
@@ -49,14 +58,30 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
     navigation.goBack();
   };
 
+  const handleTypeChange = (newType: 'expense' | 'income' | 'transfer') => {
+    Haptics.selectionAsync();
+    setType(newType);
+    if (newType === 'income') {
+      setCategory('Cash In');
+    } else if (newType === 'expense') {
+      setCategory('Food');
+    } else if (newType === 'transfer') {
+      setCategory('Transfer');
+    }
+  };
+
   const handleSave = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const val = parseFloat(amount);
     if (!isNaN(val) && val > 0) {
+      let finalCategory = category;
+      if (type === 'income' && !['Cash In', 'Deposit', 'Bonus'].includes(finalCategory)) {
+        finalCategory = 'Cash In';
+      }
       await addTransaction({
         amount: val,
         type: type === 'transfer' ? 'expense' : type,
-        categoryId: category,
+        categoryId: finalCategory,
         date: Date.now(),
         note,
         bankName: selectedBank,
@@ -66,10 +91,18 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
   };
 
   const activeColor = type === 'income' ? colors.income : type === 'expense' ? colors.expense : colors.neutral;
+  const categoriesList = type === 'income' ? INCOME_CATEGORIES : type === 'transfer' ? TRANSFER_CATEGORIES : EXPENSE_CATEGORIES;
 
   return (
     <View style={styles.overlay}>
+      <TouchableOpacity 
+        style={styles.backdropTouchable} 
+        activeOpacity={1} 
+        onPress={dismiss} 
+      />
       <PanGestureHandler
+        activeOffsetY={[10, 100]}
+        failOffsetX={[-15, 15]}
         onGestureEvent={(e: any) => {
           if (e.nativeEvent.translationY > 0) {
             translateY.value = e.nativeEvent.translationY;
@@ -94,10 +127,7 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
                   styles.typeButton,
                   type === t ? { backgroundColor: t === 'income' ? colors.income : t === 'expense' ? colors.expense : colors.neutral } : { backgroundColor: colors.surfaceHighlight }
                 ]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setType(t);
-                }}
+                onPress={() => handleTypeChange(t)}
               >
                 <Text style={[styles.typeText, { color: type === t ? colors.background : colors.text }]}>
                   {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -118,7 +148,14 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
 
           {/* Account / Bank Selector */}
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>ACCOUNT / CARD</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scrollContentContainer}
+            style={styles.categoriesScroll}
+          >
             {BANKS.map(b => {
               const isSelected = selectedBank === b.name;
               return (
@@ -144,8 +181,15 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
 
           {/* Category Selector */}
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>CATEGORY</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
-            {CATEGORIES.map(cat => {
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            nestedScrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scrollContentContainer}
+            style={styles.categoriesScroll}
+          >
+            {categoriesList.map(cat => {
               const Icon = cat.icon;
               const isSelected = category === cat.id;
               return (
@@ -160,8 +204,8 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
                     setCategory(cat.id);
                   }}
                 >
-                  <Icon size={16} color={isSelected ? colors.background : colors.text} />
-                  <Text style={[styles.categoryText, { color: isSelected ? colors.background : colors.text }]}>
+                  <Icon size={16} color={isSelected ? '#FFFFFF' : colors.text} />
+                  <Text style={[styles.categoryText, { color: isSelected ? '#FFFFFF' : colors.text }]}>
                     {cat.id}
                   </Text>
                 </TouchableOpacity>
@@ -195,7 +239,11 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'transparent',
+  },
+  backdropTouchable: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
   container: {
     borderTopLeftRadius: 32,
@@ -239,8 +287,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   categoriesScroll: {
-    marginBottom: 24,
-    maxHeight: 40,
+    marginBottom: 20,
+    minHeight: 44,
+  },
+  scrollContentContainer: {
+    paddingRight: 24,
+    alignItems: 'center',
   },
   categoryChip: {
     flexDirection: 'row',
