@@ -1,92 +1,176 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { BlurView } from 'expo-blur';
-import { Icon } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../hooks/useTheme';
-import { Home, Wallet, PieChart, MessageSquare } from 'lucide-react-native';
-
-const ICONS: Record<string, any> = {
-  Home: Home,
-  Wallet: Wallet,
-  Plan: PieChart,
-  AI: MessageSquare,
-};
+import { Home, CreditCard, Plus, MessageSquare, BarChart3 } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 
 export const FloatingTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
-  const { colors, theme } = useTheme();
+  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  const currentRoute = state.routes[state.index].name;
+
+  const tabs = [
+    {
+      id: 'Home',
+      label: 'Home',
+      icon: Home,
+      routeName: 'Home',
+      isFocused: currentRoute === 'Home',
+    },
+    {
+      id: 'Wallet',
+      label: 'Wallet/Accounts',
+      icon: CreditCard,
+      routeName: 'Wallet',
+      isFocused: currentRoute === 'Wallet',
+    },
+    {
+      id: 'QuickAdd',
+      label: 'Quick Add',
+      isCenter: true,
+      onPress: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        navigation.navigate('AddTransaction');
+      },
+    },
+    {
+      id: 'AI',
+      label: 'Chat Geko',
+      icon: MessageSquare,
+      routeName: 'AI',
+      isFocused: currentRoute === 'AI',
+    },
+    {
+      id: 'Plan',
+      label: 'More',
+      icon: BarChart3,
+      routeName: 'Plan',
+      isFocused: currentRoute === 'Plan',
+    },
+  ];
 
   return (
-    <View style={[styles.container, { borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}>
-      <BlurView intensity={80} tint={theme === 'dark' ? 'dark' : 'light'} style={styles.blur}>
-        <View style={styles.content}>
-          {state.routes.map((route, index) => {
-            const { options } = descriptors[route.key];
-            const isFocused = state.index === index;
-            const IconComponent = ICONS[route.name] || Home;
-
-            const onPress = () => {
-              const event = navigation.emit({
-                type: 'tabPress',
-                target: route.key,
-                canPreventDefault: true,
-              });
-
-              if (!isFocused && !event.defaultPrevented) {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                navigation.navigate(route.name);
-              }
-            };
-
+    <View
+      style={[
+        styles.dockedContainer,
+        {
+          backgroundColor: isDark ? '#0B0F19' : '#FFFFFF',
+          borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0',
+          paddingBottom: Math.max(insets.bottom, 8),
+        },
+      ]}
+    >
+      <View style={styles.tabsRow}>
+        {tabs.map((t) => {
+          if (t.isCenter) {
             return (
               <TouchableOpacity
-                key={route.key}
-                accessibilityRole="button"
-                accessibilityState={isFocused ? { selected: true } : {}}
-                onPress={onPress}
-                style={styles.tabItem}
+                key={t.id}
+                style={styles.centerTabContainer}
+                onPress={t.onPress}
+                activeOpacity={0.85}
               >
-                <IconComponent 
-                  size={24} 
-                  color={isFocused ? colors.primary : colors.textMuted}
-                  strokeWidth={isFocused ? 2.5 : 2}
-                />
+                <View style={styles.centerGreenButton}>
+                  <Plus size={26} color="#FFFFFF" strokeWidth={2.8} />
+                </View>
               </TouchableOpacity>
             );
-          })}
-        </View>
-      </BlurView>
+          }
+
+          const IconComp = t.icon!;
+          const isFocused = t.isFocused;
+
+          const handleTabPress = () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            if (!isFocused && t.routeName) {
+              navigation.navigate(t.routeName);
+            }
+          };
+
+          const activeColor = isDark ? '#FFFFFF' : '#0F172A';
+          const inactiveColor = isDark ? '#64748B' : '#64748B';
+
+          return (
+            <TouchableOpacity
+              key={t.id}
+              style={styles.normalTabContainer}
+              onPress={handleTabPress}
+              activeOpacity={0.75}
+            >
+              <IconComp
+                size={22}
+                color={isFocused ? activeColor : inactiveColor}
+                strokeWidth={isFocused ? 2.4 : 1.8}
+              />
+              <Text
+                style={[
+                  styles.tabLabel,
+                  {
+                    color: isFocused ? activeColor : inactiveColor,
+                    fontWeight: isFocused ? '600' : '500',
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {t.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    bottom: 30,
-    left: 40,
-    right: 40,
-    height: 64,
-    borderRadius: 32,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'transparent',
+  dockedContainer: {
+    width: '100%',
+    borderTopWidth: 1,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
   },
-  blur: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
+  tabsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    height: 58,
   },
-  tabItem: {
+  normalTabContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
-  }
+    paddingVertical: 6,
+  },
+  centerTabContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centerGreenButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -16,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  tabLabel: {
+    fontSize: 10,
+    letterSpacing: -0.2,
+    marginTop: 2,
+    textAlign: 'center',
+  },
 });

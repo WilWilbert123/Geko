@@ -18,12 +18,14 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { InstallmentModal } from './InstallmentModal';
+import { BudgetModal } from './BudgetModal';
 
 export const ActionRow = () => {
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
   const [modalVisible, setModalVisible] = useState(false);
   const [installmentModalVisible, setInstallmentModalVisible] = useState(false);
+  const [budgetModalVisible, setBudgetModalVisible] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
 
   const handlePress = (id: string, actionFn?: () => void) => {
@@ -32,6 +34,8 @@ export const ActionRow = () => {
       actionFn();
     } else if (id === 'installment') {
       setInstallmentModalVisible(true);
+    } else if (id === 'budget') {
+      setBudgetModalVisible(true);
     } else {
       setSelectedFeature(id);
       setModalVisible(true);
@@ -49,7 +53,7 @@ export const ActionRow = () => {
       id: 'budget',
       icon: PieChart,
       label: 'Budget',
-      onPress: () => handlePress('budget', () => navigation.navigate('Plan')),
+      onPress: () => handlePress('budget'),
     },
     {
       id: 'goals',
@@ -154,7 +158,7 @@ export const ActionRow = () => {
                   },
                 ]}
               >
-                <Icon size={18} color={colors.text} strokeWidth={1.8} />
+                <Icon size={24} color={colors.text} strokeWidth={1.8} />
               </View>
               <Text
                 style={[styles.label, { color: colors.textMuted }]}
@@ -254,6 +258,12 @@ export const ActionRow = () => {
         visible={installmentModalVisible}
         onClose={() => setInstallmentModalVisible(false)}
       />
+
+      {/* Real Category Budget Manager Modal */}
+      <BudgetModal
+        visible={budgetModalVisible}
+        onClose={() => setBudgetModalVisible(false)}
+      />
     </>
   );
 };
@@ -263,25 +273,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginVertical: 16,
-    paddingHorizontal: 2,
+    marginVertical: 18,
+    marginHorizontal: -12,
+    paddingHorizontal: 4,
   },
   actionButton: {
     flex: 1,
     alignItems: 'center',
-    maxWidth: 56,
+    maxWidth: 68,
   },
   iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
   },
   label: {
-    fontSize: 10.5,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
     marginTop: 6,
     textAlign: 'center',
   },

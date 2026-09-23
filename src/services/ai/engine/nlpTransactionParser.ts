@@ -13,12 +13,21 @@ const INCOME_KEYWORDS = [
   'added',
   'adding',
   'dagdag',
+  'dagdagan',
+  'dadagdagan',
+  'nadagdagan',
   'magdagdag',
   'padagdag',
   'lagay',
+  'lagyan',
   'maglagay',
+  'palagyan',
+  'palagay',
+  'karga',
+  'kargahan',
   'ipasok',
   'pasok',
+  'pumasok',
   'deposit',
   'deposited',
   'cash in',
@@ -217,10 +226,17 @@ const FILLER_WORDS = [
   'add',
   'added',
   'dagdag',
+  'dagdagan',
+  'dadagdagan',
+  'nadagdagan',
   'magdagdag',
   'padagdag',
   'lagay',
+  'lagyan',
   'maglagay',
+  'palagyan',
+  'laman',
+  'mo',
   'deposit',
   'cashin',
   'cash-in',
@@ -321,7 +337,7 @@ export const detectBank = (text: string): string | undefined => {
 };
 
 const detectCategory = (text: string, isIncome: boolean): string => {
-  if (isIncome) return 'Salary';
+  if (isIncome) return 'Cash In';
   const lower = text.toLowerCase();
   for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     if (keywords.some((kw) => lower.includes(kw))) {
@@ -351,7 +367,7 @@ const cleanNote = (rawText: string, isIncome: boolean = false): string => {
   }
 
   if (!result || PREPOSITIONS.includes(result.toLowerCase())) {
-    return isIncome ? 'Cash-In / Deposit' : '';
+    return isIncome ? 'Deposit' : '';
   }
 
   // Capitalize title case nicely

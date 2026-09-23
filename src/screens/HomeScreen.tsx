@@ -20,6 +20,7 @@ import { useTodayStats } from '../hooks/useTodayStats';
 import { useCurrency } from '../hooks/useCurrency';
 import { useCards } from '../hooks/useCards';
 import { getDisplayName, setDisplayName, subscribeUserStore } from '../store/userStore';
+import { ThemeTogglePill } from '../components/common/ThemeTogglePill';
 import { Sun, Moon, User, Check, Trash2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -110,7 +111,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 16 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 16, paddingBottom: 20 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
@@ -164,26 +165,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.themeBtn,
-                {
-                  backgroundColor: isDark ? colors.surface : '#F1F5F9',
-                  borderColor: isDark ? colors.border : '#CBD5E1',
-                },
-              ]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                toggleTheme();
-              }}
-              activeOpacity={0.75}
-            >
-              {isDark ? (
-                <Sun size={16} color="#FBBF24" strokeWidth={2.2} />
-              ) : (
-                <Moon size={16} color="#6366F1" strokeWidth={2.2} />
-              )}
-            </TouchableOpacity>
+            <ThemeTogglePill isDark={isDark} onToggle={toggleTheme} />
           </View>
         </View>
 
@@ -194,7 +176,6 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
         <ActionRow />
         <RecentActivity />
-        <View style={{ height: 100 }} />
       </ScrollView>
 
       {/* Onboarding / Profile Name Modal */}

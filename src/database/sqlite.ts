@@ -168,9 +168,10 @@ export const initDb = async () => {
       }
     }
 
-    // Update existing GoTyme card to sleek dark obsidian color scheme
+    // Update existing GoTyme card to sleek dark obsidian color scheme and reset legacy seed budgets
     try {
       await db.execute("UPDATE cards SET color1 = '#0F172A', color2 = '#00D2C8' WHERE LOWER(bankName) = 'gotyme'");
+      await db.execute("UPDATE cards SET budget = 0 WHERE budget IS NOT NULL");
     } catch (e) {}
 
     // Seed Budgets

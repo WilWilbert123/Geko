@@ -8,6 +8,9 @@ import {
   TextInput,
   ScrollView,
   Pressable,
+  Image,
+  Alert,
+  NativeModules,
 } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { useInstallments, Installment } from '../../hooks/useInstallments';
@@ -23,9 +26,40 @@ import {
   ArrowDownCircle,
   CreditCard,
   Trash2,
+  Camera,
 } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { CleanAlertModal } from '../common/CleanAlertModal';
+
+let ImagePickerModule: typeof import('expo-image-picker') | null = null;
+try {
+  if (NativeModules.ExponentImagePicker || NativeModules.ExpoImagePicker) {
+    ImagePickerModule = require('expo-image-picker');
+  }
+} catch (e) {
+  ImagePickerModule = null;
+}
+
+const PRESET_INSTALLMENT_IMAGES = [
+  { label: '💻 Laptop', uri: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?q=80&w=800' },
+  { label: '📱 Phone', uri: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=800' },
+  { label: '📺 Appliance', uri: 'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?q=80&w=800' },
+  { label: '🎮 Console', uri: 'https://images.unsplash.com/photo-1606813907291-d86efa9b94db?q=80&w=800' },
+  { label: '📸 Camera', uri: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800' },
+  { label: '🚗 Vehicle', uri: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=800' },
+];
+
+const getInstallmentImage = (inst: Installment): string | null => {
+  if (inst.imageUrl && inst.imageUrl.trim().length > 0) return inst.imageUrl;
+  const t = (inst.title || '').toLowerCase();
+  if (t.includes('laptop') || t.includes('macbook') || t.includes('pc')) return PRESET_INSTALLMENT_IMAGES[0].uri;
+  if (t.includes('iphone') || t.includes('phone') || t.includes('samsung')) return PRESET_INSTALLMENT_IMAGES[1].uri;
+  if (t.includes('tv') || t.includes('appliance') || t.includes('refrigerator')) return PRESET_INSTALLMENT_IMAGES[2].uri;
+  if (t.includes('ps5') || t.includes('console') || t.includes('game') || t.includes('onexplayer')) return PRESET_INSTALLMENT_IMAGES[3].uri;
+  if (t.includes('camera') || t.includes('canon') || t.includes('sony')) return PRESET_INSTALLMENT_IMAGES[4].uri;
+  if (t.includes('car') || t.includes('motor') || t.includes('vehicle')) return PRESET_INSTALLMENT_IMAGES[5].uri;
+  return null;
+};
 
 interface Props {
   visible: boolean;
@@ -41,6 +75,7 @@ export const InstallmentModal: React.FC<Props> = ({ visible, onClose }) => {
   const [title, setTitle] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [selectedMonths, setSelectedMonths] = useState(3);
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const [alertConfig, setAlertConfig] = useState<{
@@ -60,6 +95,31 @@ export const InstallmentModal: React.FC<Props> = ({ visible, onClose }) => {
   const calculatedMonthly = totalAmount && !isNaN(Number(totalAmount)) && Number(totalAmount) > 0
     ? (Number(totalAmount) / selectedMonths).toFixed(2)
     : '0.00';
+
+  const handlePickImage = async () => {
+    if (!ImagePickerModule) {
+      Alert.alert('Not Supported', 'Photo library picker is not available on this build.');
+      return;
+    }
+    try {
+      const { status } = await ImagePickerModule.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera roll permission is required to upload a photo.');
+        return;
+      }
+      const result = await ImagePickerModule.launchImageLibraryAsync({
+        mediaTypes: ImagePickerModule.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        setSelectedImageUri(result.assets[0].uri);
+      }
+    } catch (e) {
+      console.error('Image picker error', e);
+    }
+  };
 
   const handleCreate = async () => {
     if (!title.trim()) {
@@ -85,10 +145,11 @@ export const InstallmentModal: React.FC<Props> = ({ visible, onClose }) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const planTitle = title.trim();
     const months = selectedMonths;
-    await addInstallment(planTitle, amt, months);
+    await addInstallment(planTitle, amt, months, selectedImageUri || undefined);
     setTitle('');
     setTotalAmount('');
     setSelectedMonths(3);
+    setSelectedImageUri(null);
     setActiveTab('plans');
     
     setAlertConfig({
@@ -219,6 +280,7 @@ export const InstallmentModal: React.FC<Props> = ({ visible, onClose }) => {
                 installments.map((inst) => {
                   const progress = inst.totalMonths > 0 ? inst.paidMonths / inst.totalMonths : 0;
                   const isDone = inst.status === 'completed';
+                  const imgUri = getInstallmentImage(inst);
 
                   return (
                     <View
@@ -231,6 +293,16 @@ export const InstallmentModal: React.FC<Props> = ({ visible, onClose }) => {
                         },
                       ]}
                     >
+                      {/* Optional Plan Image Banner Header */}
+                      {imgUri ? (
+                        <View style={styles.planCardImageWrapper}>
+                          <Image source={{ uri: imgUri }} style={styles.planCardImage} resizeMode="cover" />
+                          <View style={styles.planCardBadgeTag}>
+                            <Text style={styles.planCardBadgeText}>{inst.totalMonths} Mo Plan</Text>
+                          </View>
+                        </View>
+                      ) : null}
+
                       {/* Top Header Row */}
                       <View style={styles.cardHeaderRow}>
                         <View style={{ flex: 1, paddingRight: 8 }}>
@@ -338,6 +410,48 @@ export const InstallmentModal: React.FC<Props> = ({ visible, onClose }) => {
                     value={title}
                     onChangeText={setTitle}
                   />
+                </View>
+
+                {/* Plan Item Image Selection */}
+                <View style={styles.fieldGroup}>
+                  <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>PLAN ITEM PHOTO</Text>
+                  {selectedImageUri ? (
+                    <View style={styles.imagePreviewContainer}>
+                      <Image source={{ uri: selectedImageUri }} style={styles.imagePreview} resizeMode="cover" />
+                      <TouchableOpacity
+                        style={styles.removeImageBtn}
+                        onPress={() => setSelectedImageUri(null)}
+                      >
+                        <X size={14} color="#FFF" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 8 }}>
+                      <TouchableOpacity
+                        style={[styles.uploadBox, { backgroundColor: colors.surfaceHighlight, borderColor: colors.border }]}
+                        onPress={handlePickImage}
+                      >
+                        <Camera size={18} color={colors.primary} />
+                        <Text style={[styles.uploadBoxText, { color: colors.text }]}>Upload Photo / Gallery</Text>
+                      </TouchableOpacity>
+
+                      <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '500' }}>Or select a quick preset:</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                        {PRESET_INSTALLMENT_IMAGES.map((p) => (
+                          <TouchableOpacity
+                            key={p.label}
+                            style={[
+                              styles.presetChip,
+                              { backgroundColor: colors.surfaceHighlight, borderColor: colors.border },
+                            ]}
+                            onPress={() => setSelectedImageUri(p.uri)}
+                          >
+                            <Text style={{ fontSize: 11.5, color: colors.text, fontWeight: '600' }}>{p.label}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
                 </View>
 
                 <View style={styles.fieldGroup}>
@@ -689,5 +803,74 @@ const styles = StyleSheet.create({
   submitText: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  planCardImageWrapper: {
+    height: 110,
+    width: '100%',
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 4,
+    position: 'relative',
+  },
+  planCardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  planCardBadgeTag: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  planCardBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  uploadBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    gap: 8,
+  },
+  uploadBoxText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  presetChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  imagePreviewContainer: {
+    height: 125,
+    width: '100%',
+    borderRadius: 14,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  imagePreview: {
+    width: '100%',
+    height: '100%',
+  },
+  removeImageBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

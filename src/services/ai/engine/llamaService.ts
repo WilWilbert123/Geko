@@ -73,7 +73,7 @@ export const generateStream = async (
     return fullResponse;
   }
 
-  // 1. Check if input is a Transaction (e.g. "Kumain ako sa labas 180 gamit gotyme") vs a Question
+  // 1. Check if input is a Transaction (e.g. "Kumain ako sa labas 180 gamit gotyme" or "Dagdagan Mo laman ng gcash ko 50") vs a Question
   const isExplicitQuestion =
     lowerUserText.includes('?') ||
     lowerUserText.includes('magkano') ||
@@ -85,7 +85,6 @@ export const generateStream = async (
     lowerUserText.includes('pila') ||
     lowerUserText.includes('ilan') ||
     lowerUserText.includes('ano') ||
-    lowerUserText.includes('laman') ||
     lowerUserText.includes('cards balance') ||
     lowerUserText.includes('card balance') ||
     lowerUserText.includes('wallet balance') ||
@@ -108,30 +107,47 @@ export const generateStream = async (
     lowerUserText.includes('savings') ||
     lowerUserText.includes('target');
 
-  const isCardListQuery =
-    lowerUserText.includes('cards balance') ||
-    lowerUserText.includes('card balance') ||
-    lowerUserText.includes('all cards') ||
-    lowerUserText.includes('all card') ||
-    lowerUserText.includes('list card') ||
-    lowerUserText.includes('list my card') ||
-    lowerUserText.includes('wallets') ||
-    lowerUserText.includes('wallet balance') ||
-    lowerUserText.includes('list wallet') ||
-    lowerUserText.includes('my wallet balance') ||
-    lowerUserText.includes('all my card') ||
-    lowerUserText.includes('all my wallet') ||
-    lowerUserText.includes('all wallet') ||
-    lowerUserText.includes('cards list') ||
-    lowerUserText.includes('show my cards') ||
-    lowerUserText.includes('may laman') ||
-    lowerUserText.includes('laman na pera') ||
-    lowerUserText.includes('may pera') ||
-    lowerUserText.includes('cards with money') ||
-    lowerUserText.includes('with money') ||
+  const isEmptyCardQuery =
+    lowerUserText.includes('walang laman') ||
+    lowerUserText.includes('walang pera') ||
+    lowerUserText.includes('empty card') ||
+    lowerUserText.includes('empty cards') ||
+    lowerUserText.includes('zero balance') ||
+    lowerUserText.includes('0 balance') ||
+    lowerUserText.includes('no balance') ||
+    lowerUserText.includes('no money') ||
     (
-      (lowerUserText.includes('card') || lowerUserText.includes('cards') || lowerUserText.includes('wallet') || lowerUserText.includes('wallets') || lowerUserText.includes('bank')) &&
-      (lowerUserText.includes('all') || lowerUserText.includes('list') || lowerUserText.includes('show') || lowerUserText.includes('my') || lowerUserText.includes('balance') || lowerUserText.includes('can you') || lowerUserText.includes('lahat') || lowerUserText.includes('laman'))
+      (lowerUserText.includes('card') || lowerUserText.includes('cards') || lowerUserText.includes('wallet') || lowerUserText.includes('wallets') || lowerUserText.includes('bank') || lowerUserText.includes('banks')) &&
+      (lowerUserText.includes('empty') || lowerUserText.includes('zero') || lowerUserText.includes('0') || lowerUserText.includes('walang') || lowerUserText.includes('ubos'))
+    );
+
+  const isCardListQuery =
+    !hasValidTransactionIntent && (
+      isEmptyCardQuery ||
+      lowerUserText.includes('cards balance') ||
+      lowerUserText.includes('card balance') ||
+      lowerUserText.includes('all cards') ||
+      lowerUserText.includes('all card') ||
+      lowerUserText.includes('list card') ||
+      lowerUserText.includes('list my card') ||
+      lowerUserText.includes('wallets') ||
+      lowerUserText.includes('wallet balance') ||
+      lowerUserText.includes('list wallet') ||
+      lowerUserText.includes('my wallet balance') ||
+      lowerUserText.includes('all my card') ||
+      lowerUserText.includes('all my wallet') ||
+      lowerUserText.includes('all wallet') ||
+      lowerUserText.includes('cards list') ||
+      lowerUserText.includes('show my cards') ||
+      lowerUserText.includes('may laman') ||
+      lowerUserText.includes('laman na pera') ||
+      lowerUserText.includes('may pera') ||
+      lowerUserText.includes('cards with money') ||
+      lowerUserText.includes('with money') ||
+      (
+        (lowerUserText.includes('card') || lowerUserText.includes('cards') || lowerUserText.includes('wallet') || lowerUserText.includes('wallets') || lowerUserText.includes('bank')) &&
+        (lowerUserText.includes('all') || lowerUserText.includes('list') || lowerUserText.includes('show') || lowerUserText.includes('balance') || lowerUserText.includes('lahat'))
+      )
     );
 
   const isTodaySpendQuery =
@@ -174,6 +190,25 @@ export const generateStream = async (
       lowerUserText.includes('bawas') ||
       lowerUserText.includes('bayad'));
 
+  const isBankMentioned = ['cash', 'gotyme', 'gcash', 'maya', 'maribank', 'bpi', 'bdo', 'metrobank', 'unionbank', 'seabank', 'visa', 'landbank', 'pnb'].some(b => {
+    if (b === 'cash') return /\bcash\b/i.test(lowerUserText) && !lowerUserText.includes('gcash');
+    return lowerUserText.includes(b);
+  });
+
+  const isFollowUpQuery =
+    lowerUserText.includes('how about') ||
+    lowerUserText.includes('what about') ||
+    lowerUserText.includes('how bout') ||
+    lowerUserText.includes('eh sa') ||
+    lowerUserText.includes('eh ang') ||
+    lowerUserText.includes('pano sa') ||
+    lowerUserText.includes('paano sa') ||
+    lowerUserText.includes('paano naman') ||
+    lowerUserText.includes('kamusta sa') ||
+    lowerUserText.includes('musta sa') ||
+    lowerUserText.includes('kumusta sa') ||
+    isBankMentioned;
+
   const isFinancialQuery =
     !hasValidTransactionIntent &&
     (isGoalQuery ||
@@ -181,6 +216,7 @@ export const generateStream = async (
       isTodaySpendQuery ||
       isWeekSpendQuery ||
       isInstallmentQuery ||
+      isFollowUpQuery ||
       lowerUserText.includes('magkano') ||
       lowerUserText.includes('how much') ||
       lowerUserText.includes('what is') ||
@@ -304,7 +340,8 @@ export const generateStream = async (
           paidMonths INTEGER NOT NULL,
           startDate INTEGER NOT NULL,
           nextCutoff INTEGER NOT NULL,
-          status TEXT NOT NULL
+          status TEXT NOT NULL,
+          imageUrl TEXT
         );
       `);
 
@@ -394,7 +431,8 @@ export const generateStream = async (
           paidMonths INTEGER NOT NULL,
           startDate INTEGER NOT NULL,
           nextCutoff INTEGER NOT NULL,
-          status TEXT NOT NULL
+          status TEXT NOT NULL,
+          imageUrl TEXT
         );
       `);
 
@@ -672,51 +710,98 @@ export const generateStream = async (
       const cardsRes = await db.execute('SELECT bankName, balance, type, outstandingBalance, availableCredit FROM cards ORDER BY balance DESC');
       const cards = (cardsRes.rows?._array || []) as any[];
 
-      const hasMoneyOnly = 
-        lowerUserText.includes('may laman') ||
-        lowerUserText.includes('may pera') ||
-        lowerUserText.includes('laman na pera') ||
-        lowerUserText.includes('with money') ||
-        lowerUserText.includes('has money') ||
-        lowerUserText.includes('positive balance') ||
-        lowerUserText.includes('cards with money') ||
-        lowerUserText.includes('nonzero') ||
-        !lowerUserText.includes('all'); // Filter out 0 balance cards by default unless user explicitly asks for "all cards"
+      const isEmptyQuery =
+        lowerUserText.includes('walang laman') ||
+        lowerUserText.includes('walang pera') ||
+        lowerUserText.includes('empty card') ||
+        lowerUserText.includes('empty cards') ||
+        lowerUserText.includes('zero balance') ||
+        lowerUserText.includes('0 balance') ||
+        lowerUserText.includes('no balance') ||
+        lowerUserText.includes('no money') ||
+        lowerUserText.includes('empty') ||
+        lowerUserText.includes('zero') ||
+        (lowerUserText.includes('0') && (lowerUserText.includes('card') || lowerUserText.includes('balance') || lowerUserText.includes('laman')));
 
-      const targetCards = hasMoneyOnly
-        ? cards.filter((c: any) => c.type === 'CREDIT_CARD' ? Number(c.outstandingBalance || 0) > 0 : Number(c.balance || 0) > 0)
-        : cards;
+      const hasMoneyOnly = 
+        !isEmptyQuery && (
+          lowerUserText.includes('may laman') ||
+          lowerUserText.includes('may pera') ||
+          lowerUserText.includes('laman na pera') ||
+          lowerUserText.includes('with money') ||
+          lowerUserText.includes('has money') ||
+          lowerUserText.includes('positive balance') ||
+          lowerUserText.includes('cards with money') ||
+          lowerUserText.includes('nonzero') ||
+          !lowerUserText.includes('all') // Filter out 0 balance cards by default unless user explicitly asks for "all cards" or empty cards
+        );
+
+      let targetCards = cards;
+      if (isEmptyQuery) {
+        targetCards = cards.filter((c: any) => c.type === 'CREDIT_CARD' ? Number(c.outstandingBalance || 0) === 0 : Number(c.balance || 0) === 0);
+      } else if (hasMoneyOnly) {
+        targetCards = cards.filter((c: any) => c.type === 'CREDIT_CARD' ? Number(c.outstandingBalance || 0) > 0 : Number(c.balance || 0) > 0);
+      }
 
       if (targetCards.length === 0) {
-        fullResponse = isTagalog
-          ? `Wala pang cards o e-wallets na may laman na pera sa ngayon.`
-          : `No cards or e-wallets currently have an active balance.`;
+        if (isEmptyQuery) {
+          fullResponse = isTagalog
+            ? `Walang card o e-wallet na walang laman sa ngayon. Lahat ng iyong cards ay may laman na balance!`
+            : `None of your cards or e-wallets are empty. All your cards currently have an active balance!`;
+        } else if (hasMoneyOnly) {
+          fullResponse = isTagalog
+            ? `Wala pang cards o e-wallets na may laman na pera sa ngayon.`
+            : `No cards or e-wallets currently have an active balance.`;
+        } else {
+          fullResponse = isTagalog
+            ? `Wala pang na-record na cards o e-wallets.`
+            : `No cards or e-wallets found.`;
+        }
       } else {
         const cardLines = targetCards.map((c: any) => {
           if (c.type === 'CREDIT_CARD') {
             const debt = Number(c.outstandingBalance || 0);
-            return `${c.bankName} (Credit Debt) = -${debt.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+            return `${c.bankName} (Credit Debt) = ₱${debt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
           } else {
             const bal = Number(c.balance || 0);
-            return `${c.bankName} = ${bal.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+            return `${c.bankName} = ₱${bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
           }
         });
 
-        fullResponse = isTagalog
-          ? (hasMoneyOnly
-              ? `Narito ang mga cards & e-wallets mo na may laman na pera:\n\n` + cardLines.join('\n')
-              : `Narito ang kasalukuyang balance ng iyong mga cards & e-wallets:\n\n` + cardLines.join('\n'))
-          : (hasMoneyOnly
-              ? `Here are your cards & e-wallets with an active balance:\n\n` + cardLines.join('\n')
-              : `Here are all your current card & wallet balances:\n\n` + cardLines.join('\n'));
+        if (isEmptyQuery) {
+          fullResponse = isTagalog
+            ? `Narito ang mga cards & e-wallets mo na walang laman (₱0.00 balance):\n\n` + cardLines.join('\n')
+            : `Here are your empty cards & e-wallets (₱0.00 balance):\n\n` + cardLines.join('\n');
+        } else if (hasMoneyOnly) {
+          fullResponse = isTagalog
+            ? `Narito ang mga cards & e-wallets mo na may laman na pera:\n\n` + cardLines.join('\n')
+            : `Here are your cards & e-wallets with an active balance:\n\n` + cardLines.join('\n');
+        } else {
+          fullResponse = isTagalog
+            ? `Narito ang kasalukuyang balance ng iyong mga cards & e-wallets:\n\n` + cardLines.join('\n')
+            : `Here are all your current card & wallet balances:\n\n` + cardLines.join('\n');
+        }
       }
     } else {
       // ── Dynamic Specific Card/Bank Balance Lookup ──
       const cardsRes = await db.execute('SELECT bankName, balance, type, outstandingBalance, availableCredit FROM cards');
       const allCards = (cardsRes.rows?._array || []) as any[];
       const matchedCards = allCards.filter((c: any) => {
-        const name = (c.bankName || '').toLowerCase();
+        const name = (c.bankName || '').toLowerCase().trim();
         if (!name) return false;
+
+        // Distinguish GCash vs Cash (physical on-hand money)
+        if (name === 'cash') {
+          if (lowerUserText.includes('gcash')) {
+            return false;
+          }
+          return /\bcash\b/i.test(lowerUserText) || lowerUserText.includes('on hand') || lowerUserText.includes('onhand') || lowerUserText.includes('bulsa');
+        }
+
+        if (name === 'gcash') {
+          return lowerUserText.includes('gcash') || lowerUserText.includes('g-cash') || lowerUserText.includes('g cash');
+        }
+
         if (lowerUserText.includes(name)) return true;
         const words = name.split(/\s+/);
         return words.some((w: string) => w.length >= 3 && lowerUserText.includes(w));

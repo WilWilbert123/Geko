@@ -42,11 +42,48 @@ export const useBudgets = () => {
     }
   }, []);
 
+  const updateBudgetLimit = async (id: string, newLimit: number) => {
+    const db = getDb();
+    try {
+      await db.execute('UPDATE budgets SET limitAmount = ? WHERE id = ?', [newLimit, id]);
+      await load();
+      require('react-native').DeviceEventEmitter.emit('transactions_updated');
+    } catch (e) {
+      console.error('Error updating budget limit', e);
+    }
+  };
+
+  const addBudget = async (categoryName: string, limitAmount: number) => {
+    const db = getDb();
+    try {
+      const { uuidv4 } = require('../utils/uuid');
+      await db.execute(
+        'INSERT INTO budgets (id, categoryName, limitAmount) VALUES (?, ?, ?)',
+        [uuidv4(), categoryName, limitAmount]
+      );
+      await load();
+      require('react-native').DeviceEventEmitter.emit('transactions_updated');
+    } catch (e) {
+      console.error('Error adding budget', e);
+    }
+  };
+
+  const deleteBudget = async (id: string) => {
+    const db = getDb();
+    try {
+      await db.execute('DELETE FROM budgets WHERE id = ?', [id]);
+      await load();
+      require('react-native').DeviceEventEmitter.emit('transactions_updated');
+    } catch (e) {
+      console.error('Error deleting budget', e);
+    }
+  };
+
   useEffect(() => {
     load();
     const subscription = require('react-native').DeviceEventEmitter.addListener('transactions_updated', load);
     return () => subscription.remove();
   }, [load]);
 
-  return { budgets, refresh: load };
+  return { budgets, refresh: load, updateBudgetLimit, addBudget, deleteBudget };
 };
