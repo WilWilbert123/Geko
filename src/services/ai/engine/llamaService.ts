@@ -798,7 +798,7 @@ export const generateStream = async (
           return /\bcash\b/i.test(lowerUserText) || lowerUserText.includes('on hand') || lowerUserText.includes('onhand') || lowerUserText.includes('bulsa');
         }
 
-        if (name === 'gcash') {
+        if (name === 'gcash' || name === 'gcash e-wallet' || name === 'gcash ewallet' || name === 'gcash wallet') {
           return lowerUserText.includes('gcash') || lowerUserText.includes('g-cash') || lowerUserText.includes('g cash');
         }
 

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { ExtractedCardInfo } from '../../utils/cardExtractor';
+import { ExtractedCardInfo, getCanonicalBankKey } from '../../utils/cardExtractor';
 import { getBankTheme } from '../../utils/bankThemes';
 import { GekoCard3D } from '../wallet/GekoCard3D';
 
@@ -43,13 +43,21 @@ export const MiniCardItem: React.FC<{ card: ExtractedCardInfo }> = ({ card }) =>
 export const ChatCardBadgeList: React.FC<ChatCardBadgeProps> = ({ cards }) => {
   const uniqueCards = useMemo(() => {
     if (!cards || cards.length === 0) return [];
-    const seen = new Set<string>();
-    return cards.filter(c => {
-      const key = (c.bankName || '').toLowerCase().trim();
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    const map = new Map<string, ExtractedCardInfo>();
+    for (const c of cards) {
+      const key = getCanonicalBankKey(c.bankName);
+      if (!key) continue;
+      if (!map.has(key)) {
+        map.set(key, c);
+      } else {
+        const existing = map.get(key)!;
+        // Prioritize card with non-zero balance or matching user card
+        if ((!existing.balance || existing.balance === 0) && (c.balance || 0) > 0) {
+          map.set(key, c);
+        }
+      }
+    }
+    return Array.from(map.values());
   }, [cards]);
 
   if (uniqueCards.length === 0) return null;

@@ -110,69 +110,19 @@ export const initDb = async () => {
       // Column already exists
     }
 
-    // Seed / Ensure Popular Philippine Bank Cards Exist
-    const popularBanks = [
-      { bankName: 'Cash', balance: 0.00, color1: '#059669', color2: '#10B981', cardNumber: 'PHYSICAL CASH', budget: 10000, type: 'CASH', paymentNetwork: 'OTHER' },
-      { bankName: 'GCash', balance: 12500.50, color1: '#0026B3', color2: '#0055FF', cardNumber: '•••• 4029', budget: 15000, type: 'EWALLET', paymentNetwork: 'OTHER' },
-      { bankName: 'GoTyme', balance: 5200.75, color1: '#0F172A', color2: '#00D2C8', cardNumber: '•••• 8832', budget: 10000, type: 'BANK', paymentNetwork: 'VISA' },
-      { bankName: 'BPI', balance: 45000.00, color1: '#8B0000', color2: '#C8102E', cardNumber: '•••• 1123', budget: 30000, type: 'BANK', paymentNetwork: 'MASTERCARD' },
-      { bankName: 'PNB', balance: 18500.00, color1: '#D4AF37', color2: '#E6CA65', cardNumber: '•••• 7740', budget: 20000, type: 'BANK', paymentNetwork: 'VISA' },
-      { bankName: 'BDO', balance: 32400.00, color1: '#002B66', color2: '#004080', cardNumber: '•••• 3091', budget: 25000, type: 'BANK', paymentNetwork: 'VISA' },
-      { bankName: 'MariBank', balance: 9800.25, color1: '#E64A19', color2: '#FF7043', cardNumber: '•••• 6612', budget: 15000, type: 'BANK', paymentNetwork: 'MASTERCARD' },
-      { bankName: 'Metrobank', balance: 28000.00, color1: '#002277', color2: '#0044CC', cardNumber: '•••• 5104', budget: 20000, type: 'BANK', paymentNetwork: 'VISA' },
-      { bankName: 'Maya', balance: 8400.00, color1: '#0B0E14', color2: '#00E676', cardNumber: '•••• 5519', budget: 12000, type: 'EWALLET', paymentNetwork: 'MASTERCARD' },
-      { bankName: 'Landbank', balance: 10000.00, color1: '#004D25', color2: '#0A8A43', cardNumber: '•••• 9941', budget: 15000, type: 'BANK', paymentNetwork: 'MASTERCARD' },
-      { bankName: 'UnionBank', balance: 15600.00, color1: '#E65100', color2: '#FF8800', cardNumber: '•••• 2284', budget: 18000, type: 'BANK', paymentNetwork: 'VISA' },
-      { 
-        bankName: 'Visa', 
-        balance: 0, 
-        color1: '#1A1F71', 
-        color2: '#0055FF', 
-        cardNumber: '•••• 4882', 
-        budget: 20000, 
-        type: 'CREDIT_CARD', 
-        paymentNetwork: 'VISA',
-        creditLimit: 50000,
-        availableCredit: 40000,
-        outstandingBalance: 10000,
-        statementDate: '15th',
-        dueDate: '30th',
-        minimumPayment: 1000
-      },
-    ];
-
-    for (const b of popularBanks) {
-      const existRes = await db.execute('SELECT id FROM cards WHERE LOWER(bankName) = LOWER(?)', [b.bankName]);
-      if (!existRes.rows || existRes.rows.length === 0) {
-        await db.execute(
-          `INSERT INTO cards (id, bankName, balance, color1, color2, cardNumber, budget, type, paymentNetwork, creditLimit, availableCredit, outstandingBalance, statementDate, dueDate, minimumPayment) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            uuidv4(), 
-            b.bankName, 
-            b.balance, 
-            b.color1, 
-            b.color2, 
-            b.cardNumber, 
-            b.budget, 
-            b.type || 'EWALLET',
-            b.paymentNetwork || 'OTHER',
-            b.creditLimit || 0,
-            b.availableCredit || 0,
-            b.outstandingBalance || 0,
-            b.statementDate || '',
-            b.dueDate || '',
-            b.minimumPayment || 0
-          ]
-        );
-      }
-    }
-
-    // Update existing GoTyme card to sleek dark obsidian color scheme and reset legacy seed budgets
+    // Ensure clean blank slate for cards: start with 0 cards as requested.
+    // The user connects their own cards in the Wallet/Accounts tab.
     try {
-      await db.execute("UPDATE cards SET color1 = '#0F172A', color2 = '#00D2C8' WHERE LOWER(bankName) = 'gotyme'");
-      await db.execute("UPDATE cards SET budget = 0 WHERE budget IS NOT NULL");
-    } catch (e) {}
+      await db.execute('CREATE TABLE IF NOT EXISTS __app_meta__ (key TEXT PRIMARY KEY, value TEXT)');
+      const metaRes = await db.execute("SELECT value FROM __app_meta__ WHERE key = 'cards_blank_slate_reset_v4'");
+      const alreadyReset = metaRes.rows && metaRes.rows.length > 0;
+      if (!alreadyReset) {
+        await db.execute('DELETE FROM cards');
+        await db.execute("INSERT OR REPLACE INTO __app_meta__ (key, value) VALUES ('cards_blank_slate_reset_v4', '1')");
+      }
+    } catch (e) {
+      console.log('[SQLite] Blank slate check error:', e);
+    }
 
     // Seed Budgets
     const resBudgets = await db.execute('SELECT count(*) as count FROM budgets');

@@ -10,10 +10,11 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../hooks/useTheme';
 import { formatCurrency } from '../../utils/formatters';
 import { GekoCard3D } from '../wallet/GekoCard3D';
-import { TrendingDown, ArrowDown, PieChart, Edit3, X, Check, Wifi } from 'lucide-react-native';
+import { TrendingDown, ArrowDown, PieChart, Edit3, X, Check, Wifi, Plus, ChevronRight } from 'lucide-react-native';
 import { useCards, Card } from '../../hooks/useCards';
 import { getBankTheme } from '../../utils/bankThemes';
 import * as Haptics from 'expo-haptics';
@@ -28,6 +29,7 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
   spentToday = 0,
 }) => {
   const { colors } = useTheme();
+  const navigation = useNavigation<any>();
   const { cards, totalAssets, updateCardBudget, updateCardDetails, resetAllCardBalances } = useCards();
 
   const [selectedBankId, setSelectedBankId] = useState<string>('ALL');
@@ -48,11 +50,11 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
   const cardBalance = activeCard
     ? (activeCard.type === 'CREDIT_CARD' ? (activeCard.outstandingBalance || 0) : activeCard.balance)
     : (totalAssets || balance);
-  const cardColor1 = activeCard ? activeCard.color1 : '#0F172A';
-  const cardColor2 = activeCard ? activeCard.color2 : '#1E293B';
+  const cardColor1 = activeCard ? (activeCard.color1 || getBankTheme(activeCard.bankName).bg1) : '#0F172A';
+  const cardColor2 = activeCard ? (activeCard.color2 || getBankTheme(activeCard.bankName).bg2) : '#1E293B';
   const accountType = activeCard
     ? (activeCard.type === 'CREDIT_CARD' ? `CREDIT • ${activeCard.bankName.toUpperCase()}` : `DEBIT • ${activeCard.bankName.toUpperCase()}`)
-    : 'ALL ACCOUNTS • GEKO PLATINUM';
+    : (cards.length === 0 ? 'GEKO WALLET • PRIMARY' : 'ALL ACCOUNTS • GEKO PLATINUM');
   const cardNumber = activeCard ? activeCard.cardNumber : '4289 •••• •••• 9012';
 
   // Budget Left Calculation:
@@ -93,82 +95,86 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
   return (
     <View style={styles.container}>
       {/* ── Bank Category / Account Selector Bar (Sleek Mini Cards) ── */}
-      <View style={styles.tabContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabScrollContent}
-        >
-          {/* ALL ACCOUNTS / GEKO TOTAL MINI 3D CARD */}
-          <TouchableOpacity
-            style={[
-              styles.miniCardTab,
-              selectedBankId === 'ALL'
-                ? styles.miniCardActive
-                : styles.miniCardInactive,
-            ]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setSelectedBankId('ALL');
-            }}
-            activeOpacity={0.85}
+      {cards.length > 0 && (
+        <View style={styles.tabContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabScrollContent}
           >
-            <View style={{ flex: 1 }} pointerEvents="none">
-              <GekoCard3D
-                balance={totalAssets || balance}
-                bankName="GEKO"
-                accountType="ALL ACCOUNTS"
-                color1="#0F172A"
-                color2="#1E293B"
-                height={82}
-                cornerRadius={0.04}
-                interactive={false}
-              />
-            </View>
-            {selectedBankId === 'ALL' && (
-              <View style={styles.mini3DActiveGlowDot} />
-            )}
-          </TouchableOpacity>
+            {/* ALL ACCOUNTS / GEKO TOTAL MINI 3D CARD */}
+            <TouchableOpacity
+              style={[
+                styles.miniCardTab,
+                selectedBankId === 'ALL'
+                  ? styles.miniCardActive
+                  : styles.miniCardInactive,
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setSelectedBankId('ALL');
+              }}
+              activeOpacity={0.85}
+            >
+              <View style={{ flex: 1 }} pointerEvents="none">
+                <GekoCard3D
+                  balance={totalAssets || balance}
+                  bankName="GEKO"
+                  accountType="ALL ACCOUNTS"
+                  color1="#0F172A"
+                  color2="#1E293B"
+                  height={82}
+                  cornerRadius={0.04}
+                  interactive={false}
+                  paymentNetwork="OTHER"
+                />
+              </View>
+              {selectedBankId === 'ALL' && (
+                <View style={styles.mini3DActiveGlowDot} />
+              )}
+            </TouchableOpacity>
 
-          {/* INDIVIDUAL BANK MINI 3D CARDS */}
-          {cards.map((c) => {
-            const isSelected = selectedBankId === c.id;
-            const theme = getBankTheme(c.bankName, c.color1, c.color2);
-            const cBalance = c.type === 'CREDIT_CARD' ? (c.outstandingBalance || 0) : c.balance;
+            {/* INDIVIDUAL BANK MINI 3D CARDS */}
+            {cards.map((c, idx) => {
+              const isSelected = selectedBankId === c.id;
+              const theme = getBankTheme(c.bankName, c.color1, c.color2);
+              const cBalance = c.type === 'CREDIT_CARD' ? (c.outstandingBalance || 0) : c.balance;
 
-            return (
-              <TouchableOpacity
-                key={c.id}
-                style={[
-                  styles.miniCardTab,
-                  isSelected ? styles.miniCardActive : styles.miniCardInactive,
-                ]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setSelectedBankId(c.id);
-                }}
-                activeOpacity={0.85}
-              >
-                <View style={{ flex: 1 }} pointerEvents="none">
-                  <GekoCard3D
-                    balance={cBalance}
-                    bankName={c.bankName}
-                    accountType={c.type}
-                    color1={c.color1 || theme.bg1}
-                    color2={c.color2 || theme.bg2}
-                    height={82}
-                    cornerRadius={0.04}
-                    interactive={false}
-                  />
-                </View>
-                {isSelected && (
-                  <View style={styles.mini3DActiveGlowDot} />
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+              return (
+                <TouchableOpacity
+                  key={`mini-card-${c.id}-${idx}`}
+                  style={[
+                    styles.miniCardTab,
+                    isSelected ? styles.miniCardActive : styles.miniCardInactive,
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSelectedBankId(c.id);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ flex: 1 }} pointerEvents="none">
+                    <GekoCard3D
+                      balance={cBalance}
+                      bankName={c.bankName}
+                      accountType={c.type}
+                      color1={c.color1 || theme.bg1}
+                      color2={c.color2 || theme.bg2}
+                      height={82}
+                      cornerRadius={0.04}
+                      interactive={false}
+                      paymentNetwork={c.paymentNetwork || theme.network}
+                    />
+                  </View>
+                  {isSelected && (
+                    <View style={styles.mini3DActiveGlowDot} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {/* ── Dynamic 3D GEKO Bank Card ── */}
       <GekoCard3D
@@ -180,9 +186,35 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
         color1={cardColor1}
         color2={cardColor2}
         expiryDate="10/29"
-        height={340}
-        cornerRadius={0.24}
+        height={260}
+        cornerRadius={0.20}
+        paymentNetwork={activeCard ? (activeCard.paymentNetwork || getBankTheme(activeCard.bankName).network) : 'OTHER'}
       />
+
+      {/* ── Hint when no accounts are connected ── */}
+      {cards.length === 0 && (
+        <TouchableOpacity
+          style={[styles.connectFirstCardHint, { backgroundColor: colors.surfaceHighlight || 'rgba(16, 185, 129, 0.06)' }]}
+          activeOpacity={0.8}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            navigation.navigate('Wallet');
+          }}
+        >
+          <View style={styles.connectHintLeft}>
+            <View style={styles.connectHintIconWrap}>
+              <Plus size={16} color="#10B981" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.connectHintTitle, { color: colors.text }]}>No cards connected yet</Text>
+              <Text style={[styles.connectHintSub, { color: colors.textMuted }]}>
+                Tap here or open Wallet / Accounts to add your first card or e-wallet
+              </Text>
+            </View>
+          </View>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+      )}
 
       {/* ── 2 Side-By-Side Capsule Cards (Spent Today vs Budget Left) ── */}
       <View style={styles.actionRowGrid}>
@@ -406,7 +438,7 @@ const styles = StyleSheet.create({
   actionRowGrid: {
     flexDirection: 'row',
     marginHorizontal: 20,
-    marginTop: 10,
+    marginTop: 4,
     marginBottom: 8,
     gap: 10,
   },
@@ -557,5 +589,41 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '700',
     fontSize: 14,
+  },
+  connectFirstCardHint: {
+    marginTop: 8,
+    marginHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  connectHintLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  connectHintIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  connectHintTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  connectHintSub: {
+    fontSize: 11,
+    marginTop: 2,
+    lineHeight: 15,
   },
 });

@@ -27,6 +27,14 @@ export const useCards = () => {
   const load = useCallback(async () => {
     const db = getDb();
     try {
+      // Unify GCash naming: ensure 'GCash E-Wallet' is cleanly mapped to 'GCash'
+      try {
+        await db.execute("UPDATE cards SET bankName = 'GCash' WHERE LOWER(bankName) = 'gcash e-wallet' OR LOWER(bankName) = 'gcash ewallet'");
+        await db.execute("UPDATE transactions SET bankName = 'GCash' WHERE LOWER(bankName) = 'gcash e-wallet' OR LOWER(bankName) = 'gcash ewallet'");
+      } catch (e) {
+        // Ignore if tables don't exist yet
+      }
+
       const res = await db.execute('SELECT * FROM cards');
       const data = (res.rows?._array || []).map((row: any) => ({
         ...row,
@@ -175,6 +183,7 @@ export const useCards = () => {
     type?: string;
     paymentNetwork?: string;
     creditLimit?: number;
+    outstandingBalance?: number;
     budget?: number;
     color1?: string;
     color2?: string;
@@ -187,20 +196,22 @@ export const useCards = () => {
     const cardType = newCard.type || 'EWALLET';
     const network = newCard.paymentNetwork || 'VISA';
     const limit = newCard.creditLimit || 0;
-    const avail = cardType === 'CREDIT_CARD' ? limit : 0;
+    const debt = cardType === 'CREDIT_CARD' ? (newCard.outstandingBalance ?? newCard.balance ?? 0) : 0;
+    const avail = cardType === 'CREDIT_CARD' ? Math.max(0, limit - debt) : 0;
+    const bal = cardType === 'CREDIT_CARD' ? 0 : newCard.balance;
 
     try {
       await db.execute(
         `INSERT INTO cards (id, bankName, balance, color1, color2, cardNumber, budget, type, paymentNetwork, creditLimit, availableCredit, outstandingBalance)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, newCard.bankName, newCard.balance, color1, color2, cardNumber, newCard.budget || 0, cardType, network, limit, avail, 0]
+        [id, newCard.bankName, bal, color1, color2, cardNumber, newCard.budget || 0, cardType, network, limit, avail, debt]
       );
 
-      if (newCard.balance > 0 && cardType !== 'CREDIT_CARD') {
+      if (bal > 0 && cardType !== 'CREDIT_CARD') {
         const newId = uuidv4();
         await db.execute(
           'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [newId, newCard.balance, Date.now(), 'Cash In', 'income', 'Cash-In / Deposit', newCard.bankName]
+          [newId, bal, Date.now(), 'Cash In', 'income', 'Starting Balance / Deposit', newCard.bankName]
         );
       }
 
@@ -223,6 +234,17 @@ export const useCards = () => {
     }
   };
 
+  const clearAllCards = async () => {
+    const db = getDb();
+    try {
+      await db.execute('DELETE FROM cards');
+      await load();
+      require('react-native').DeviceEventEmitter.emit('transactions_updated');
+    } catch (e) {
+      console.error('Failed to clear all cards', e);
+    }
+  };
+
   return {
     cards,
     totalAssets,
@@ -235,5 +257,6 @@ export const useCards = () => {
     resetAllCardBalances,
     addCard,
     deleteCard,
+    clearAllCards,
   };
 };

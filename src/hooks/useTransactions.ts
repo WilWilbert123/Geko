@@ -52,13 +52,13 @@ export const useTransactions = () => {
       try {
         if (t.type === 'expense') {
           await db.execute(
-            'UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)',
-            [t.amount, bankName]
+            'UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?) OR (LOWER(?) = "gcash" AND (LOWER(bankName) = "gcash e-wallet" OR LOWER(bankName) = "gcash ewallet"))',
+            [t.amount, bankName, bankName]
           );
         } else if (t.type === 'income') {
           await db.execute(
-            'UPDATE cards SET balance = balance + ? WHERE LOWER(bankName) = LOWER(?)',
-            [t.amount, bankName]
+            'UPDATE cards SET balance = balance + ? WHERE LOWER(bankName) = LOWER(?) OR (LOWER(?) = "gcash" AND (LOWER(bankName) = "gcash e-wallet" OR LOWER(bankName) = "gcash ewallet"))',
+            [t.amount, bankName, bankName]
           );
         }
       } catch (e) {
