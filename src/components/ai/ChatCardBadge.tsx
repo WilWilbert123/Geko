@@ -35,6 +35,7 @@ export const MiniCardItem: React.FC<{ card: ExtractedCardInfo }> = ({ card }) =>
         color2={card.color2 || theme.bg2}
         height={112}
         interactive={false}
+        paymentNetwork={theme.network}
       />
     </TouchableOpacity>
   );

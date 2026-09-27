@@ -6,6 +6,7 @@ import {
   Dimensions,
   PanResponder,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { GLView } from 'expo-gl';
 import * as THREE from 'three';
@@ -13,8 +14,21 @@ import * as Haptics from 'expo-haptics';
 import { RotateCw, Eye, EyeOff } from 'lucide-react-native';
 import { formatCurrency } from '../../utils/formatters';
 import { useCurrency } from '../../hooks/useCurrency';
+import { getBankTheme } from '../../utils/bankThemes';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// ── Polyfill minimal global document for Hermes & Three.js ──
+if (typeof (global as any).document === 'undefined') {
+  (global as any).document = {
+    createElement: (tag: string) => ({
+      style: {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }),
+    createElementNS: (_ns: string, tag: string) => (global as any).document.createElement(tag),
+  };
+}
 const CARD_ASPECT = 1.586;
 const CARD_WIDTH_3D = 4.8;
 const CARD_HEIGHT_3D = CARD_WIDTH_3D / CARD_ASPECT; // ~2.77
@@ -74,6 +88,74 @@ const FONT: Record<string, number[]> = {
   'X': [0x63, 0x14, 0x08, 0x14, 0x63],
   'Y': [0x07, 0x08, 0x70, 0x08, 0x07],
   'Z': [0x61, 0x51, 0x49, 0x45, 0x43],
+};
+
+// High-resolution bitmap patterns for official italicized VISA logo rasterization
+const VISA_GLYPHS: Record<string, string[]> = {
+  V: [
+    '11111000001111', // Top row with iconic left serif/wing
+    '11111000001111',
+    '01111000011110',
+    '01111000011110',
+    '00111000111100',
+    '00111000111100',
+    '00011101111000',
+    '00011101111000',
+    '00001111110000',
+    '00001111110000',
+    '00000111100000',
+    '00000111100000',
+    '00000011000000',
+    '00000011000000',
+  ],
+  I: [
+    '1111111111',
+    '1111111111',
+    '0001111000',
+    '0001111000',
+    '0001111000',
+    '0001111000',
+    '0001111000',
+    '0001111000',
+    '0001111000',
+    '0001111000',
+    '0001111000',
+    '0001111000',
+    '1111111111',
+    '1111111111',
+  ],
+  S: [
+    '01111111110',
+    '11111111111',
+    '11100000111',
+    '11100000000',
+    '11111111000',
+    '01111111100',
+    '00011111110',
+    '00000000111',
+    '00000000111',
+    '11100000111',
+    '11100000111',
+    '11111111111',
+    '11111111110',
+    '01111111100',
+  ],
+  A: [
+    '000001100000',
+    '000001100000',
+    '000011110000',
+    '000011110000',
+    '000110011000',
+    '000110011000',
+    '001111111100',
+    '001111111100',
+    '011100001110',
+    '011100001110',
+    '111000000111',
+    '111000000111',
+    '111000000111',
+    '111000000111',
+  ],
 };
 
 const TEX_W = 512;
@@ -186,33 +268,73 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
       }
     };
 
+    const drawVisaLogo = (startX: number, startY: number, scale: number) => {
+      let cx = startX;
+      const word = ['V', 'I', 'S', 'A'];
+      for (const ch of word) {
+        const charRows = VISA_GLYPHS[ch];
+        if (!charRows) continue;
+        const numRows = charRows.length;
+        for (let r = 0; r < numRows; r++) {
+          const rowStr = charRows[numRows - 1 - r];
+          const slant = Math.round((r / (numRows - 1)) * 3 * scale);
+          for (let c = 0; c < rowStr.length; c++) {
+            if (rowStr[c] === '1') {
+              for (let sx = 0; sx < scale; sx++) {
+                for (let sy = 0; sy < scale; sy++) {
+                  const px = cx + c * scale + slant + sx;
+                  const py = startY + r * scale + sy;
+                  if (px >= 0 && px < TEX_W && py >= 0 && py < TEX_H) {
+                    const idx = (py * TEX_W + px) * 4;
+                    buf[idx] = 255;
+                    buf[idx + 1] = 255;
+                    buf[idx + 2] = 255;
+                    buf[idx + 3] = 255;
+                  }
+                }
+              }
+            }
+          }
+        }
+        const maxColWidth = charRows[0].length;
+        cx += (maxColWidth + 2) * scale;
+      }
+    };
+
     // Clear texture buffer before redrawing
     textDataRef.current.fill(0);
 
     // Draw embossed details directly onto card surface:
     // In WebGL UV coordinates: Y=0 is bottom, Y=323 is top.
     const currentBank = bankName || (accountType?.includes('DEBIT') ? accountType.split('•')[1]?.trim() : '');
+    const theme = getBankTheme(currentBank || accountType || bankName || '');
+    const effectiveNetwork = paymentNetwork || theme.network;
+    const isVisa = effectiveNetwork === 'VISA' || (currentBank && currentBank.toLowerCase().includes('visa')) || (accountType && accountType.toLowerCase().includes('visa'));
+
     const isGeko = !currentBank || currentBank.toUpperCase() === 'GEKO' || accountType?.toUpperCase().includes('GEKO') || (!bankName && !accountType);
-    const startX = 64; // Generous left padding away from the rounded edge
+    const startX = 42; // Sleek left margin away from the rounded edge
 
     if (isGeko) {
       // ── Authentic Iconic Geko Platinum Layout ──
-      // Middle: TOTAL CASH BALANCE and Centered Large Currency Balance (with generous left padding)
       drawString('TOTAL CASH BALANCE', startX, 155, 2);
       const balanceStr = isHidden ? '••••••••' : formatCurrency(balance);
       drawString(balanceStr, startX, 96, 4);
 
       // Bottom: Cardholder Name (Bottom-Left) & Expiry Date (Bottom-Right)
       drawString(cardholderName || 'GEKO MEMBER', startX, 25, 2);
-      drawString(expiryDate || '10/29', 370, 25, 2);
+      drawString(expiryDate || '10/29', 395, 25, 2);
+
+      if (isVisa) {
+        drawVisaLogo(365, 140, 2);
+      }
     } else {
       // ── Bespoke Bank / Credit Card Layout ──
-      // 1. TOP-LEFT: Card Brand / Bank Name (with generous left spacing)
+      // 1. TOP-LEFT: Card Brand / Bank Name (shifted slightly to the left)
       const brandStr = currentBank.toUpperCase();
       const brandScale = brandStr.length > 25 ? 1 : brandStr.length > 17 ? 2 : 3;
       drawString(brandStr, startX, 250, brandScale);
 
-      // 2. BOTTOM-LEFT: Balance Label & Balance Amount (with generous matching left spacing)
+      // 2. BOTTOM-LEFT: Balance Label & Balance Amount (shifted slightly to the left)
       const isCredit = accountType === 'CREDIT_CARD' || currentBank.toLowerCase().includes('credit');
       const titleText = isCredit ? 'OUTSTANDING BALANCE' : 'BALANCE';
       drawString(titleText, startX, 90, 2);
@@ -221,10 +343,9 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
       const balScale = balanceStr.length > 12 ? 3 : 4;
       drawString(balanceStr, startX, 32, balScale);
 
-      // 3. BOTTOM-RIGHT: Draw VISA text on card if network is Visa (generous right margin so SA is fully visible)
-      const netStr = `${paymentNetwork || ''} ${currentBank} ${accountType || ''}`.toLowerCase();
-      if (netStr.includes('visa')) {
-        drawString('VISA', 376, 34, 3);
+      // 3. BOTTOM-RIGHT: Payment Network Logo (VISA) (shifted slightly to the right)
+      if (isVisa) {
+        drawVisaLogo(365, 30, 2);
       }
     }
 
@@ -482,7 +603,9 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
       if (str.includes('luvit')) return 33; // Luvit Neon Ribbon Loop
       if (str.includes('palawan')) return 32; // PalawanPay Solar Geodesic Lattice
       if (str.includes('paypal')) return 31; // PayPal Dynamic Dual Flow Waves
-      if (str.includes('grab') || str.includes('wise') || str.includes('paymongo')) return 18;
+      if (str.includes('wise')) return 18; // Wise Electric Lime & Giant Faded '7' Arrow
+      if (str.includes('grab')) return 48; // GrabPay Emerald Green
+      if (str.includes('paymongo')) return 18;
       if (str.includes('shopee') || str.includes('maribank') || str.includes('seabank')) return 8;
 
       // 4. Digital Banks
@@ -493,7 +616,7 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
       if (str.includes('ownbank')) return 34; // OwnBank Kinetic Ascending Arcs
       if (str.includes('diskartech')) return 35; // DiskarTech Dual Swirl
       if (str.includes('uno')) return 28; // UNO Digital Aurora Ribbon
-      if (str.includes('uniondigital')) return 25; // UnionDigital Ultraviolet Pulse
+      if (str.includes('uniondigital')) return 30; // UnionDigital Lavender & Giant Faded 'UD' Watermark
       if (str.includes('ofbank')) return 36; // OFBank Global Meridian Arcs
       if (str.includes('netbank')) return 37; // Netbank Chiseled Metallic Monolith
 
@@ -579,12 +702,22 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
       }
 
       void main() {
-        // 1. Dynamic Base Gradient
-        vec3 col = mix(uColor1, uColor2, vUv.y * 0.8 + vUv.x * 0.2);
+        // 1. Dynamic Base Gradient & Brushed Metallic Surface
+        vec3 col = mix(uColor1, uColor2, vUv.y * 0.75 + vUv.x * 0.25);
 
-        // Brushed metal horizontal grain
-        float brush = fract(sin(vUv.y * 1400.0) * 43758.5453) * 0.022;
-        col += vec3(brush);
+        // Micro-etched Brushed Metallic Grain
+        float customGrain = fract(sin(vUv.x * 880.0 + vUv.y * 1240.0) * 43758.54) * 0.030;
+        col += vec3(customGrain);
+
+        // Double Beveled Metallic Frame Border
+        vec2 framePos = vUv - vec2(0.5, 0.5);
+        float dFrame = sdRoundedBox(framePos, vec2(0.47, 0.46), 0.03);
+        float frameBorder = smoothstep(0.003, 0.0, abs(dFrame));
+        col = mix(col, vec3(1.0), frameBorder * 0.18);
+
+        // Dynamic Anisotropic Specular Light Sheen
+        float customSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.35);
+        col += vec3(0.9, 0.95, 1.0) * customSheen * 0.35;
 
         if (uCardType == 1) {
           // ── GCASH BESPOKE 3D SHADER MOTIF (Slightly Darker Royal Navy Blue) ──
@@ -697,29 +830,71 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           col += goldRayColor * (lightRay1 * 0.35 + lightRay2 * 0.25 + lightRay3 * 0.15);
 
         } else if (uCardType == 4) {
-          // ── MAYA REAL-WORLD BLACK 3D SHADER MOTIF ──
-          // Sleek Matte Obsidian Black + Giant 'm' Watermark & Subtle Cyber Sheen
-          vec3 mayaObsidian = vec3(0.05, 0.06, 0.08);
-          float mayaGrain = fract(sin(vUv.x * 927.0 + vUv.y * 531.0) * 43758.54) * 0.032;
-          col = mayaObsidian + vec3(mayaGrain);
+          // ── MAYA REAL-WORLD VIBRANT PINK 3D SHADER MOTIF ──
+          // Signature Vibrant Magenta Pink + GIANT 3D Faded Textured 'm' Arch Watermark & Sparkling Glitters
+          vec3 mayaMagentaDark = vec3(0.68, 0.05, 0.35); // #AD1457
+          vec3 mayaMagentaBright = vec3(0.92, 0.08, 0.45); // #E91E63
+          col = mix(mayaMagentaDark, mayaMagentaBright, vUv.y * 0.6 + vUv.x * 0.4);
 
-          // 1. Giant Dark Graphite 'm' Watermark Emblem (Bottom-Left)
-          vec2 mPos = vUv - vec2(0.24, 0.18);
-          float arch1 = sdRoundedBox(mPos - vec2(-0.07, 0.0), vec2(0.045, 0.16), 0.04);
-          float arch2 = sdRoundedBox(mPos - vec2(0.07, 0.0), vec2(0.045, 0.16), 0.04);
-          float mWatermark = min(arch1, arch2);
-          if (mWatermark < 0.0 && vUv.y < 0.40) {
-            col = mix(col, vec3(0.20, 0.22, 0.28), 0.70);
+          // 1. Multi-layered 3D Radial Center Light Gradient
+          float distCenter = length(vUv - vec2(0.42, 0.52));
+          float radialGlow = smoothstep(0.75, 0.0, distCenter);
+          col += vec3(0.18, 0.04, 0.12) * radialGlow;
+
+          // 2. Fine Stardust Micro-Texture
+          float mayaGrain = fract(sin(vUv.x * 927.0 + vUv.y * 531.0) * 43758.54) * 0.038;
+          col += vec3(mayaGrain * 0.6, mayaGrain * 0.2, mayaGrain * 0.4);
+
+          // 3. GIANT 3D Faded Textured 'm' Arch Watermark (Right Half of Card)
+          if (vUv.x > 0.30) {
+            vec2 mPos = (vUv - vec2(0.70, 0.42)) * vec2(1.25, 1.0);
+            
+            float loop1 = sdRoundedBox(mPos - vec2(-0.16, -0.05), vec2(0.12, 0.32), 0.12);
+            float loop2 = sdRoundedBox(mPos - vec2(0.16, -0.05), vec2(0.12, 0.32), 0.12);
+            float mArchShape = min(loop1, loop2);
+            
+            float mWatermark = smoothstep(0.06, -0.02, mArchShape);
+            
+            // 3D Luminous Bevel Edge Highlight for the 'm' Arch
+            float mBevel = smoothstep(0.06, 0.01, abs(mArchShape)) * smoothstep(0.0, 0.08, abs(mArchShape));
+            
+            // Micro-guilloche & stardust noise inside watermark
+            float mTexture = sin(vUv.x * 140.0 + vUv.y * 90.0 + uTime * 0.1) * 0.12 + 0.88;
+            vec3 watermarkPink = vec3(0.98, 0.62, 0.78); // Soft faded translucent light pink
+            col = mix(col, watermarkPink * mTexture, mWatermark * 0.45);
+            col += vec3(1.0, 0.82, 0.94) * mBevel * 0.40; // Luminous 3D arch edge glow
           }
 
-          // 2. Gentle Cyber Wave Glow
-          vec3 neonGreen = vec3(0.0, 0.95, 0.45);
-          float cyberWave = sin(vUv.x * 8.0 + vUv.y * 5.0 - uTime * 0.12) * 0.5 + 0.5;
-          col += neonGreen * cyberWave * 0.05;
+          // 4. Maya Signature Micro-Glitters & Subtle Star Flare Sparkles
+          vec2 mGlitterUv = vUv * vec2(160.0, 100.0);
+          vec2 mGlitterId = floor(mGlitterUv);
+          float mSeed = fract(sin(dot(mGlitterId, vec2(12.9898, 78.233))) * 43758.5453);
+          
+          if (mSeed > 0.935) {
+            // Base static micro-glitter flake
+            vec3 microGlitterCol = mix(vec3(1.0, 0.82, 0.92), vec3(1.0, 0.95, 0.70), fract(mSeed * 17.0));
+            float staticGleam = (mSeed - 0.935) * 12.0;
+            col += microGlitterCol * staticGleam;
 
-          // 3. Smooth Specular Sheen Reflection
-          float mayaSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * uShineIntensity;
-          col += vec3(0.8, 1.0, 0.9) * mayaSheen * 0.35;
+            // Subtle 4-Point Star Flare Sparkle on select glitters (slight & elegant)
+            if (mSeed > 0.975) {
+              vec2 starCenter = (mGlitterId + 0.5) / vec2(160.0, 100.0);
+              vec2 dStar = abs(vUv - starCenter) * vec2(1.586, 1.0);
+              
+              float starBeamH = smoothstep(0.0022, 0.0, dStar.y) * smoothstep(0.035, 0.0, dStar.x);
+              float starBeamV = smoothstep(0.0022, 0.0, dStar.x) * smoothstep(0.035, 0.0, dStar.y);
+              float starCross = max(starBeamH, starBeamV);
+
+              // Gentle slight breathing shimmer
+              float starPulse = sin(uTime * 1.5 + mSeed * 12.0) * 0.22 + 0.78;
+              vec3 starColor = vec3(1.0, 0.96, 0.88); // Soft diamond white / champagne glow
+              col += starColor * starCross * starPulse * 0.45;
+            }
+          }
+
+          // 5. Smooth Specular Sheen Reflection
+          float mayaSheen = smoothstep(0.24, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.35);
+          col += vec3(1.0, 0.85, 0.95) * mayaSheen * 0.35;
 
         } else if (uCardType == 5) {
           // ── LANDBANK REAL-WORLD 3D SHADER MOTIF ──
@@ -754,38 +929,43 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           col += vec3(0.5, 0.9, 0.5) * lbSheen * 0.35;
 
         } else if (uCardType == 6) {
-          // ── PNB REAL-WORLD 24K GOLD 3D SHADER MOTIF ──
-          // Premium 24K Brushed Gold + Molten Liquid Gold & Champagne Wave across center
-          vec3 pnbGoldDeep = vec3(0.68, 0.52, 0.15);      // Rich Bronze Gold Depth
-          vec3 pnbGoldMid = vec3(0.88, 0.72, 0.28);       // 24K Gold Body
-          vec3 pnbGoldBright = vec3(0.98, 0.86, 0.42);    // Champagne Gold Highlight
+          // ── 6. PNB / BPI / BDO 24K BRUSHED GOLD + CONCENTRIC RADIAL RIPPLE ARCS (Inspired by User Image 4) ──
+          vec3 pnbGoldDeep = vec3(0.72, 0.54, 0.14);      // Rich Bronze Gold Depth
+          vec3 pnbGoldMid = vec3(0.92, 0.76, 0.26);       // 24K Gold Body
+          vec3 pnbGoldBright = vec3(1.0, 0.90, 0.48);    // Champagne Gold Highlight
           
           col = mix(pnbGoldDeep, pnbGoldMid, vUv.y * 0.6 + vUv.x * 0.4);
-          float goldGrain = fract(sin(vUv.x * 850.0 + vUv.y * 420.0) * 43758.54) * 0.025;
-          col += vec3(goldGrain * 0.4, goldGrain * 0.35, goldGrain * 0.1);
 
-          // Flowing Liquid Gold Wave across center (Pure Champagne & Molten Gold)
+          // Brushed 24K Gold Metallic Grain
+          float goldGrain = fract(sin(vUv.x * 920.0 + vUv.y * 1480.0) * 43758.54) * 0.030;
+          col += vec3(goldGrain * 0.45, goldGrain * 0.38, goldGrain * 0.12);
+
+          // 1. Concentric Radial Ripple Arcs radiating from Chip (Center at vec2(0.24, 0.52)) (inspired by User Image 4)
+          vec2 chipCenter = vec2(0.24, 0.52);
+          float distChip = length((vUv - chipCenter) * vec2(1.586, 1.0));
+          float radialArcs = sin(distChip * 54.0) * 0.5 + 0.5;
+          float arcMask = smoothstep(0.12, 0.85, distChip) * smoothstep(0.95, 0.20, vUv.x);
+          
+          vec3 arcGold = mix(pnbGoldMid, pnbGoldBright, radialArcs);
+          col = mix(col, arcGold, arcMask * 0.35);
+
+          // 2. Flowing Liquid Gold Wave Ribbon across center
           float waveCenter = 0.48 + sin(vUv.x * 5.0 - uTime * 0.12) * 0.08 + cos(vUv.x * 9.0 + uTime * 0.05) * 0.04;
           float distToWave = abs(vUv.y - waveCenter);
           float waveRibbon = smoothstep(0.095, 0.0, distToWave);
 
           if (waveRibbon > 0.0) {
-            // Luxurious Molten Gold & Metallic Platinum Strand Gradient
             float wavePhase = sin(vUv.x * 12.0 - uTime * 0.15) * 0.5 + 0.5;
-            vec3 liquidGoldCore = mix(vec3(0.92, 0.70, 0.20), vec3(1.0, 0.92, 0.58), wavePhase);
-            
-            // Shimmering Platinum White Specular Strands
+            vec3 liquidGoldCore = mix(vec3(0.94, 0.72, 0.18), vec3(1.0, 0.95, 0.62), wavePhase);
             float waveStrands = sin((vUv.y - waveCenter) * 110.0 + vUv.x * 20.0) * 0.5 + 0.5;
             vec3 strandColor = mix(liquidGoldCore, vec3(1.0, 0.98, 0.85), waveStrands * 0.60);
-
-            // Soft Gold Glow Edge
             float edgeGlow = smoothstep(0.095, 0.02, distToWave);
             col = mix(col, strandColor, edgeGlow * 0.85);
           }
 
-          // Gold Specular Light Sheen
-          float goldGlint = smoothstep(0.2, 0.0, abs((vUv.x + vUv.y * 0.5) - (uLightPos.x + 0.2))) * uShineIntensity;
-          col += vec3(1.0, 0.92, 0.55) * goldGlint * 0.55;
+          // 3. Gold Specular Light Sheen
+          float goldGlint = smoothstep(0.2, 0.0, abs((vUv.x + vUv.y * 0.5) - (uLightPos.x + 0.2))) * (uShineIntensity + 0.35);
+          col += vec3(1.0, 0.95, 0.60) * goldGlint * 0.55;
 
         } else if (uCardType == 7) {
           // ── BDO REAL-WORLD VIRTUAL/DEBIT 3D SHADER MOTIF ──
@@ -1058,51 +1238,101 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           col += vec3(0.25, 0.25, 0.30) * softSheen * 0.25;
 
         } else if (uCardType == 14) {
-          // ── 14. TITANIUM / PLATINUM SLATE (BPI Platinum, BDO Platinum, Metrobank Titanium/Platinum, EastWest Platinum, HSBC Platinum, RCBC Visa Platinum) ──
-          vec3 platDark = vec3(0.12, 0.14, 0.18);
-          vec3 platMid = vec3(0.24, 0.28, 0.35);
-          vec3 platSilver = vec3(0.82, 0.86, 0.94);
-          col = mix(platDark, platMid, vUv.y * 0.7 + vUv.x * 0.3);
+          // ── 14. LUXURY ENGRAVED MECHANICAL WATCH MOVEMENT & TITANIUM PLATINUM (Inspired by User Image 2) ──
+          vec3 slateBase = mix(uColor1, uColor2, vUv.y * 0.7 + vUv.x * 0.3);
+          vec3 darkMetal = mix(vec3(0.06, 0.07, 0.09), slateBase, 0.50);
+          vec3 metallicSilver = vec3(0.85, 0.88, 0.95);
 
-          // Fine precision laser guilloche diagonal hatch
-          float pGrid = sin((vUv.x * 0.707 + vUv.y * 0.707) * 90.0) * cos((-vUv.x * 0.707 + vUv.y * 0.707) * 90.0);
-          col += platSilver * smoothstep(0.3, 0.8, pGrid) * 0.22;
+          col = darkMetal;
 
-          // Brushed titanium horizontal grain
-          float tGrain = fract(sin(vUv.y * 1200.0) * 43758.5453) * 0.035;
+          // Brushed titanium grain
+          float tGrain = fract(sin(vUv.x * 950.0 + vUv.y * 1350.0) * 43758.54) * 0.028;
           col += vec3(tGrain);
 
-          // Platinum mirror light streak
+          // 1. Right Side Large Master Watch Gear (Center at vec2(0.72, 0.42))
+          vec2 gearCenter1 = vUv - vec2(0.72, 0.42);
+          float distGear1 = length(gearCenter1 * vec2(1.586, 1.0));
+          float gearAngle1 = atan(gearCenter1.y, gearCenter1.x);
+
+          // Gear outer teeth
+          float teeth1 = sin(gearAngle1 * 32.0) * 0.012;
+          float outerRing1 = abs(distGear1 - (0.34 + teeth1));
+          float lineOuter1 = smoothstep(0.005, 0.0, outerRing1);
+
+          // Concentric precision etched circles
+          float ringA1 = smoothstep(0.004, 0.0, abs(distGear1 - 0.28));
+          float ringB1 = smoothstep(0.004, 0.0, abs(distGear1 - 0.22));
+          float ringC1 = smoothstep(0.004, 0.0, abs(distGear1 - 0.15));
+          float ringCenter1 = smoothstep(0.005, 0.0, abs(distGear1 - 0.05));
+
+          // Radial gear spokes (6 main spokes)
+          float spokeAngle1 = sin(gearAngle1 * 6.0);
+          float spoke1 = smoothstep(0.98, 1.0, spokeAngle1) * step(0.06, distGear1) * step(distGear1, 0.28);
+
+          // 2. Left Side Secondary Interlocking Watch Gear (Center at vec2(0.28, 0.75))
+          vec2 gearCenter2 = vUv - vec2(0.28, 0.75);
+          float distGear2 = length(gearCenter2 * vec2(1.586, 1.0));
+          float gearAngle2 = atan(gearCenter2.y, gearCenter2.x);
+          float teeth2 = sin(gearAngle2 * 24.0) * 0.010;
+          float outerRing2 = abs(distGear2 - (0.22 + teeth2));
+          float lineOuter2 = smoothstep(0.005, 0.0, outerRing2);
+          float ringA2 = smoothstep(0.004, 0.0, abs(distGear2 - 0.16));
+
+          // 3. Fine Horizontal Parallel Engraved Striped Lines (Left Side)
+          float stripeRegion = step(vUv.x, 0.42) * step(0.48, vUv.y);
+          float fineStripes = sin(vUv.y * 180.0) * 0.5 + 0.5;
+          float stripePattern = smoothstep(0.40, 0.60, fineStripes) * stripeRegion;
+
+          // Combine gear engravings & pinstripes
+          float totalEngraving = max(max(lineOuter1, max(ringA1, max(ringB1, max(ringC1, ringCenter1)))), spoke1);
+          totalEngraving = max(totalEngraving, max(lineOuter2, ringA2));
+          totalEngraving = max(totalEngraving, stripePattern * 0.65);
+
+          // Engraved Metallic Specular Highlight (catches ambient 3D lighting)
+          float lightReflection = smoothstep(0.35, 0.0, length(vUv - uLightPos)) * (uShineIntensity + 0.45);
+          vec3 engravedGleam = mix(metallicSilver * 0.65, vec3(1.0, 0.98, 0.92), lightReflection);
+
+          col = mix(col, engravedGleam, totalEngraving * 0.85);
+
+          // Platinum Specular Anisotropic Light Streak
           float platStreak = smoothstep(0.18, 0.0, abs((vUv.x * 1.2 + vUv.y * 0.4) - (uLightPos.x * 1.4))) * (uShineIntensity + 0.35);
           col += vec3(0.9, 0.95, 1.0) * platStreak * 0.45;
 
         } else if (uCardType == 15) {
-          // ── 15. BLACK / INFINITE ONYX LUXURY (BPI Signature, RCBC Black Card Platinum, EastWest Priority Visa Infinite, Security Bank World, Metrobank World, Maya Black) ──
-          vec3 onyxDark = vec3(0.04, 0.04, 0.05);
-          vec3 onyxLight = vec3(0.10, 0.10, 0.13);
-          col = mix(onyxDark, onyxLight, vUv.y * 0.5 + 0.3);
+          // ── 15. BLACK ONYX LUXURY + SWEEPING LIQUID GOLD RIBBONS & GLITTER STARDUST (Inspired by User Image 3 & 5) ──
+          vec3 onyxBlack = vec3(0.04, 0.04, 0.06);
+          col = onyxBlack;
 
-          // Infinite loop mathematical curves & golden concentric rings
-          vec2 infC = vUv - vec2(0.65, 0.45);
-          float rL = length(infC - vec2(-0.16, 0.0));
-          float rR = length(infC - vec2(0.16, 0.0));
-          float loop1 = smoothstep(0.007, 0.0, abs(rL - 0.20));
-          float loop2 = smoothstep(0.007, 0.0, abs(rR - 0.20));
-          float loop3 = smoothstep(0.005, 0.0, abs(rL - 0.12));
-          float loop4 = smoothstep(0.005, 0.0, abs(rR - 0.12));
-          float allLoops = max(max(loop1, loop2), max(loop3, loop4));
+          // 1. Sparkling Gold Glitter / Micro-Dust Texture (inspired by Image 3)
+          float goldGlitter = fract(sin(vUv.x * 1420.0 + vUv.y * 1180.0) * 43758.54);
+          float dustMask = step(0.92, goldGlitter);
+          vec3 dustColor = mix(vec3(1.0, 0.84, 0.30), vec3(1.0, 0.96, 0.65), fract(goldGlitter * 10.0));
 
-          vec3 goldAccent = vec3(0.95, 0.78, 0.32);
-          float slowPulse = 0.8 + 0.2 * sin(uTime * 0.15);
-          col = mix(col, goldAccent * slowPulse, allLoops * 0.75);
+          // 2. Sweeping Dynamic Liquid Gold Waves (Bottom-Right Arcs)
+          float strand1 = smoothstep(0.04, 0.0, abs(vUv.y - (0.08 + sin(vUv.x * 3.8 + 0.2) * 0.28)));
+          float strand2 = smoothstep(0.03, 0.0, abs(vUv.y - (0.02 + sin(vUv.x * 4.2 - 0.3) * 0.24)));
+          float strand3 = smoothstep(0.06, 0.0, abs(vUv.y - (0.16 + sin(vUv.x * 3.2 + 0.6) * 0.32)));
 
-          // Subtle carbon weave texture
-          float weave = sin(vUv.x * 240.0) * sin(vUv.y * 240.0);
-          col += vec3(0.04) * smoothstep(0.0, 0.5, weave);
+          // Liquid Gold Band with Sparkling Glitter Body
+          float bandGlitter = dustMask * strand3 * 0.85;
+          vec3 goldCore = vec3(0.96, 0.78, 0.22);      // Rich 24K Gold
+          vec3 goldHighlight = vec3(1.0, 0.94, 0.62); // Champagne Gold
 
-          // Specular obsidian reflection
-          float onyxGleam = smoothstep(0.20, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.25);
-          col += vec3(0.9, 0.82, 0.6) * onyxGleam * 0.35;
+          col = mix(col, goldCore, (strand1 + strand2 * 0.8) * 0.90);
+          col += dustColor * bandGlitter * 0.95;
+
+          // 3. Infinite loop golden filigree (Top-Right)
+          vec2 infC = vUv - vec2(0.78, 0.72);
+          float rL = length(infC - vec2(-0.08, 0.0));
+          float rR = length(infC - vec2(0.08, 0.0));
+          float loop1 = smoothstep(0.005, 0.0, abs(rL - 0.10));
+          float loop2 = smoothstep(0.005, 0.0, abs(rR - 0.10));
+          float allLoops = max(loop1, loop2);
+          col = mix(col, goldHighlight, allLoops * 0.75);
+
+          // 4. Obsidian Anisotropic Specular Light Gleam
+          float onyxGleam = smoothstep(0.20, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.30);
+          col += vec3(1.0, 0.90, 0.65) * onyxGleam * 0.40;
 
         } else if (uCardType == 16) {
           // ── 16. CASHBACK / VITALITY CORALS & FACETS (BPI Amore Cashback, UnionBank Cash Back, EastWest EveryDay, HSBC Red) ──
@@ -1259,44 +1489,57 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           col += vec3(0.98, 0.98, 1.0) * asGlint * 0.35;
 
         } else if (uCardType == 25) {
-          // ── 25. TONIK & UNIONDIGITAL ULTRAVIOLET NEON PULSE ──
-          vec3 uvIndigo = vec3(0.20, 0.04, 0.38);
-          vec3 uvViolet = vec3(0.48, 0.12, 0.82);
-          col = mix(uvIndigo, uvViolet, vUv.y * 0.7 + vUv.x * 0.3);
+          // ── 25. TONIK ULTRAVIOLET & GIANT FADED 't' CROSS WATERMARK ──
+          vec3 tonikIndigo = vec3(0.42, 0.25, 0.72); // #673AB7
+          vec3 tonikViolet = vec3(0.55, 0.32, 0.85); // #7E57C2
+          col = mix(tonikIndigo, tonikViolet, vUv.y * 0.7 + vUv.x * 0.3);
 
-          vec2 tPos = vUv - vec2(0.70, 0.48);
-          float tArc = abs(length(tPos) - 0.26);
-          float tRing = smoothstep(0.04, 0.0, tArc);
-          vec3 neonLilac = vec3(0.82, 0.55, 1.0);
-          col = mix(col, neonLilac, tRing * 0.38);
+          // GIANT Faded 't' Cross Watermark (Right Half)
+          if (vUv.x > 0.38) {
+            vec2 tPos = vUv - vec2(0.72, 0.48);
+            float tPillar = smoothstep(0.08, 0.0, abs(tPos.x));
+            float tCross = smoothstep(0.07, 0.0, abs(tPos.y - 0.08)) * smoothstep(0.32, 0.0, length(tPos));
+            float tWatermark = max(tPillar, tCross);
+
+            vec3 softLilac = vec3(0.92, 0.88, 0.98);
+            col = mix(col, softLilac, tWatermark * 0.32);
+          }
 
           float tSheen = smoothstep(0.24, 0.0, abs((vUv.x * 1.1 + vUv.y * 0.4) - uLightPos.x)) * (uShineIntensity + 0.35);
           col += vec3(0.9, 0.6, 1.0) * tSheen * 0.45;
 
         } else if (uCardType == 26) {
-          // ── 26. KOMO ELECTRIC TURQUOISE DYNAMIC CURVES ──
-          vec3 komoTeal = vec3(0.04, 0.42, 0.55);
-          vec3 komoCyan = vec3(0.02, 0.72, 0.85);
+          // ── 26. KOMO ELECTRIC TURQUOISE & GIANT FADED 'k' WATERMARK ──
+          vec3 komoTeal = vec3(0.0, 0.65, 0.75); // #00ACC1
+          vec3 komoCyan = vec3(0.0, 0.78, 0.88); // #00BCD4
           col = mix(komoTeal, komoCyan, vUv.x * 0.7 + vUv.y * 0.3);
 
-          vec2 kWing = vUv - vec2(0.72, 0.46);
-          float dWing1 = abs(kWing.y - abs(kWing.x * 1.4));
-          float wingMask = smoothstep(0.08, 0.0, dWing1) * smoothstep(0.45, 0.0, length(kWing));
-          col = mix(col, vec3(0.35, 0.92, 1.0), wingMask * 0.40);
+          // GIANT Faded 'k' Watermark (Right Half)
+          if (vUv.x > 0.40) {
+            vec2 kPos = vUv - vec2(0.72, 0.48);
+            float kStem = smoothstep(0.06, 0.0, abs(kPos.x + 0.12));
+            float kUpper = smoothstep(0.06, 0.0, abs((kPos.y - 0.02) - kPos.x * 1.2)) * smoothstep(0.0, 0.28, kPos.x);
+            float kLower = smoothstep(0.06, 0.0, abs((kPos.y + 0.02) + kPos.x * 1.2)) * smoothstep(0.0, 0.28, kPos.x);
+            float kWatermark = max(kStem, max(kUpper, kLower));
+
+            vec3 softIceCyan = vec3(0.85, 0.96, 0.98);
+            col = mix(col, softIceCyan, kWatermark * 0.32);
+          }
 
           float komoSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.35);
           col += vec3(0.65, 0.98, 1.0) * komoSheen * 0.45;
 
         } else if (uCardType == 27) {
-          // ── 27. SALMON SUNSET STRATA & ROSE GOLD DUNES ──
-          vec3 salmonDeep = vec3(0.62, 0.08, 0.22);
-          vec3 salmonPeach = vec3(0.96, 0.38, 0.44);
+          // ── 27. SALMON SUNSET & GIANT FADED WAVE DUNES WATERMARK ──
+          vec3 salmonDeep = vec3(0.96, 0.38, 0.38); // Coral pink
+          vec3 salmonPeach = vec3(0.98, 0.52, 0.48);
           col = mix(salmonDeep, salmonPeach, vUv.y * 0.6 + vUv.x * 0.4);
 
-          float dune = sin(vUv.x * 5.0 + sin(vUv.y * 6.0) * 1.5 - uTime * 0.15) * 0.5 + 0.5;
-          float duneMask = smoothstep(0.35, 0.65, dune);
-          vec3 roseGold = vec3(1.0, 0.78, 0.82);
-          col = mix(col, roseGold, duneMask * 0.28);
+          // GIANT Faded Smooth Curved Wave Dunes Watermark
+          float dune = sin(vUv.x * 4.2 + sin(vUv.y * 5.0) * 1.2 - uTime * 0.15) * 0.5 + 0.5;
+          float duneMask = smoothstep(0.32, 0.68, dune) * smoothstep(0.25, 0.95, vUv.x);
+          vec3 rosePeach = vec3(1.0, 0.82, 0.80);
+          col = mix(col, rosePeach, duneMask * 0.35);
 
           float salmonGlint = smoothstep(0.20, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.35);
           col += vec3(1.0, 0.88, 0.88) * salmonGlint * 0.40;
@@ -1336,19 +1579,52 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           float beepSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.3);
           col += vec3(0.65, 0.85, 1.0) * beepSheen * 0.40;
 
+        } else if (uCardType == 30) {
+          // ── 30. UNIONDIGITAL LAVENDER & GIANT FADED 'UD' WATERMARK ──
+          vec3 udLavender = vec3(0.52, 0.55, 0.82); // #7986CB
+          vec3 udViolet = vec3(0.38, 0.42, 0.72); // #5C6BC0
+          col = mix(udLavender, udViolet, vUv.y * 0.7 + vUv.x * 0.3);
+
+          // GIANT Faded 'UD' Overlapping Arches Watermark (Right Half)
+          if (vUv.x > 0.38) {
+            vec2 udPos = vUv - vec2(0.70, 0.48);
+            float uArch = smoothstep(0.06, 0.0, abs(length(udPos - vec2(-0.10, 0.05)) - 0.18));
+            float dArch = smoothstep(0.06, 0.0, abs(length(udPos - vec2(0.10, -0.05)) - 0.18));
+            float udWatermark = max(uArch, dArch);
+
+            vec3 softLilacWhite = vec3(0.92, 0.93, 0.98);
+            col = mix(col, softLilacWhite, udWatermark * 0.32);
+          }
+
+          float udSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.35);
+          col += vec3(0.85, 0.88, 1.0) * udSheen * 0.45;
+
         } else if (uCardType == 31) {
-          // ── 31. PAYPAL DYNAMIC DUAL FLOW WAVES ──
-          vec3 ppDarkBlue = vec3(0.00, 0.16, 0.48);
-          vec3 ppLightBlue = vec3(0.00, 0.42, 0.82);
+          // ── 31. PAYPAL ROYAL NAVY & GIANT FADED DOUBLE 'P' LOGO WATERMARK ──
+          vec3 ppDarkBlue = vec3(0.00, 0.11, 0.39); // #001C64
+          vec3 ppLightBlue = vec3(0.00, 0.19, 0.53); // #003087
           col = mix(ppDarkBlue, ppLightBlue, vUv.y * 0.7 + vUv.x * 0.3);
 
-          float ppWave1 = smoothstep(0.09, 0.0, abs(vUv.y - (0.42 + sin(vUv.x * 4.0 - uTime * 0.12) * 0.14)));
-          float ppWave2 = smoothstep(0.08, 0.0, abs(vUv.y - (0.52 + cos(vUv.x * 4.5 + 0.4 - uTime * 0.10) * 0.12)));
+          // GIANT Faded Double 'P' Logo Watermark (Right Half)
+          if (vUv.x > 0.35) {
+            vec2 p1Pos = vUv - vec2(0.68, 0.46);
+            float p1Stem = smoothstep(0.06, 0.0, abs(p1Pos.x + 0.08)) * smoothstep(-0.25, 0.25, p1Pos.y);
+            float p1Loop = smoothstep(0.06, 0.0, abs(length(p1Pos - vec2(0.0, 0.08)) - 0.12));
+            float p1Watermark = max(p1Stem, p1Loop);
 
-          vec3 cyanFlow = vec3(0.0, 0.78, 1.0);
-          vec3 whiteFlow = vec3(0.85, 0.95, 1.0);
-          col = mix(col, cyanFlow, ppWave1 * 0.50);
-          col = mix(col, whiteFlow, ppWave2 * 0.40);
+            vec2 p2Pos = vUv - vec2(0.76, 0.40);
+            float p2Stem = smoothstep(0.06, 0.0, abs(p2Pos.x + 0.08)) * smoothstep(-0.25, 0.25, p2Pos.y);
+            float p2Loop = smoothstep(0.06, 0.0, abs(length(p2Pos - vec2(0.0, 0.08)) - 0.12));
+            float p2Watermark = max(p2Stem, p2Loop);
+
+            vec3 cyanP = vec3(0.0, 0.44, 0.73);
+            vec3 skyP = vec3(0.0, 0.61, 0.87);
+            col = mix(col, cyanP, p1Watermark * 0.35);
+            col = mix(col, skyP, p2Watermark * 0.40);
+          }
+
+          float ppSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.35);
+          col += vec3(0.6, 0.85, 1.0) * ppSheen * 0.40;
 
         } else if (uCardType == 32) {
           // ── 32. PALAWANPAY SOLAR GEODESIC LATTICE ──
@@ -1379,27 +1655,42 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           col += neonLime * smoothstep(0.12, 0.0, dLoop) * 0.30;
 
         } else if (uCardType == 34) {
-          // ── 34. OWNBANK KINETIC ASCENDING ARCS ──
-          vec3 ownDarkGreen = vec3(0.04, 0.32, 0.16);
-          vec3 ownBrightGreen = vec3(0.08, 0.68, 0.32);
+          // ── 34. OWNBANK VIVID GREEN & GIANT FADED ARROW LOOP WATERMARK ──
+          vec3 ownDarkGreen = vec3(0.0, 0.62, 0.26); // #009E43
+          vec3 ownBrightGreen = vec3(0.0, 0.78, 0.33); // #00C853
           col = mix(ownDarkGreen, ownBrightGreen, vUv.y * 0.6 + vUv.x * 0.4);
 
-          float arcCenter = length(vUv - vec2(0.35, -0.15));
-          float arcSweep = smoothstep(0.015, 0.0, abs(arcCenter - 0.68)) + smoothstep(0.012, 0.0, abs(arcCenter - 0.82));
-          vec3 arcLime = vec3(0.65, 0.98, 0.35);
-          col = mix(col, arcLime, arcSweep * 0.70);
+          // GIANT Faded Circular Arrow Loop 'O' Watermark (Right Half)
+          if (vUv.x > 0.35) {
+            vec2 ownPos = vUv - vec2(0.72, 0.48);
+            float ownLoop = smoothstep(0.08, 0.0, abs(length(ownPos) - 0.26));
+            
+            vec3 glowingChartreuse = vec3(0.80, 1.0, 0.56); // #CCFF90
+            col = mix(col, glowingChartreuse, ownLoop * 0.38);
+          }
+
+          float ownSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.35);
+          col += vec3(0.8, 1.0, 0.7) * ownSheen * 0.45;
 
         } else if (uCardType == 35) {
-          // ── 35. DISKARTECH DUAL SWIRL & ENERGETIC GRADIENT ──
-          vec3 dtTeal = vec3(0.04, 0.45, 0.42);
-          vec3 dtLime = vec3(0.55, 0.82, 0.12);
+          // ── 35. DISKARTECH TEAL-LIME GRADIENT & GIANT FADED 'd' SWIRL WATERMARK ──
+          vec3 dtTeal = vec3(0.0, 0.55, 0.62); // #00897B
+          vec3 dtLime = vec3(0.55, 0.75, 0.12); // #8BC34A
           col = mix(dtTeal, dtLime, vUv.x * 0.75 + vUv.y * 0.25);
 
-          vec2 dtPos = vUv - vec2(0.74, 0.46);
-          float dLoop1 = abs(length(dtPos) - 0.24);
-          float dLoop2 = abs(length(dtPos - vec2(0.06, 0.06)) - 0.16);
-          float allDtLoops = max(smoothstep(0.02, 0.0, dLoop1), smoothstep(0.02, 0.0, dLoop2));
-          col = mix(col, vec3(0.92, 0.98, 0.92), allDtLoops * 0.45);
+          // GIANT Faded Swirling 'd' Watermark (Right Half)
+          if (vUv.x > 0.38) {
+            vec2 dtPos = vUv - vec2(0.72, 0.46);
+            float dLoop = smoothstep(0.07, 0.0, abs(length(dtPos) - 0.22));
+            float dStem = smoothstep(0.06, 0.0, abs(dtPos.x - 0.18)) * smoothstep(-0.25, 0.28, dtPos.y);
+            float dtWatermark = max(dLoop, dStem);
+
+            vec3 softPaleCyan = vec3(0.88, 0.97, 0.98);
+            col = mix(col, softPaleCyan, dtWatermark * 0.32);
+          }
+
+          float dtSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.35);
+          col += vec3(0.85, 1.0, 0.85) * dtSheen * 0.45;
 
         } else if (uCardType == 36) {
           // ── 36. OFBANK GLOBAL MERIDIAN ARCS ──
@@ -1417,19 +1708,25 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           }
 
         } else if (uCardType == 37) {
-          // ── 37. NETBANK CHISELED METALLIC MONOLITH ──
-          vec3 nbGunmetal = vec3(0.10, 0.10, 0.12);
-          vec3 nbGraphite = vec3(0.24, 0.25, 0.28);
+          // ── 37. NETBANK DARK CHARCOAL & GIANT FADED 'N' GEOMETRIC WATERMARK ──
+          vec3 nbGunmetal = vec3(0.12, 0.14, 0.16); // #1F2428
+          vec3 nbGraphite = vec3(0.22, 0.25, 0.28); // #37474F
           col = mix(nbGunmetal, nbGraphite, vUv.y * 0.8 + vUv.x * 0.2);
 
-          vec2 nPos = vUv - vec2(0.72, 0.50);
-          if (abs(nPos.x) < 0.22 && abs(nPos.y) < 0.32) {
-            float nLeft = smoothstep(0.015, 0.0, abs(nPos.x + 0.12));
-            float nDiag = smoothstep(0.018, 0.0, abs((nPos.y + 0.32) / 0.64 - (1.0 - (nPos.x + 0.12) / 0.24)));
-            float nRight = smoothstep(0.015, 0.0, abs(nPos.x - 0.12));
-            float nShape = max(max(nLeft, nRight), nDiag);
-            col = mix(col, vec3(0.55, 0.58, 0.65), nShape * 0.70);
+          // GIANT Faded Geometric 'N' Watermark (Right Half)
+          if (vUv.x > 0.38) {
+            vec2 nPos = vUv - vec2(0.72, 0.50);
+            float nLeft = smoothstep(0.06, 0.0, abs(nPos.x + 0.14));
+            float nRight = smoothstep(0.06, 0.0, abs(nPos.x - 0.14));
+            float nDiag = smoothstep(0.07, 0.0, abs((nPos.y / 0.6) + (nPos.x / 0.28)));
+            float nWatermark = max(max(nLeft, nRight), nDiag) * smoothstep(0.32, 0.0, abs(nPos.y));
+
+            vec3 softMetallicSlate = vec3(0.48, 0.54, 0.60);
+            col = mix(col, softMetallicSlate, nWatermark * 0.38);
           }
+
+          float nbSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.35);
+          col += vec3(0.85, 0.90, 0.95) * nbSheen * 0.40;
 
         } else if (uCardType == 38) {
           // ── 38. CIMB DYNAMIC 3D INTERTWINED TUBULAR RIBBONS ──
@@ -1511,27 +1808,44 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           col = mix(col, pgGold, gMask * 0.25);
 
         } else if (uCardType == 44) {
-          // ── 44. ROBINSONS DYNAMIC FLUID SILK RIBBONS ──
-          vec3 robRedDeep = vec3(0.62, 0.04, 0.08);
-          vec3 robRedBright = vec3(0.92, 0.08, 0.12);
+          // ── 44. ROBINSONS REWARDS VIBRANT RED & GIANT FADED 'R' SWIRL ARCS WATERMARK ──
+          vec3 robRedDeep = vec3(0.72, 0.04, 0.08); // #B71C1C
+          vec3 robRedBright = vec3(0.85, 0.08, 0.12); // #D32F2F
           col = mix(robRedDeep, robRedBright, vUv.y * 0.6 + vUv.x * 0.4);
 
-          float silkWave = smoothstep(0.08, 0.0, abs(vUv.y - (0.45 + sin(vUv.x * 4.8 - uTime * 0.12) * 0.18)));
-          vec3 silkHighlight = vec3(1.0, 0.35, 0.40);
-          col = mix(col, silkHighlight, silkWave * 0.45);
+          // GIANT Faded Orange Sweeping 'R' Swirl Arcs Watermark (Right Half)
+          if (vUv.x > 0.35) {
+            vec2 robPos = vUv - vec2(0.72, 0.46);
+            float rArc1 = smoothstep(0.08, 0.0, abs(length(robPos) - 0.28));
+            float rArc2 = smoothstep(0.06, 0.0, abs(length(robPos - vec2(0.08, -0.08)) - 0.20));
+            float rWatermark = max(rArc1, rArc2);
+
+            vec3 warmOrange = vec3(1.0, 0.43, 0.0); // #FF6D00
+            col = mix(col, warmOrange, rWatermark * 0.42);
+          }
+
+          float robSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.35);
+          col += vec3(1.0, 0.85, 0.80) * robSheen * 0.40;
 
         } else if (uCardType == 45) {
-          // ── 45. SM SMAC DEEP COBALT CONCENTRIC WAVES ──
-          vec3 smacNavyDark = vec3(0.00, 0.16, 0.52);
-          vec3 smacCobalt = vec3(0.05, 0.35, 0.85);
+          // ── 45. SMAC DEEP COBALT & GIANT FADED 'SM' WATERMARK ──
+          vec3 smacNavyDark = vec3(0.05, 0.25, 0.60); // #0D47A1
+          vec3 smacCobalt = vec3(0.08, 0.38, 0.78); // #1565C0
           col = mix(smacNavyDark, smacCobalt, vUv.y * 0.7 + vUv.x * 0.3);
 
-          vec2 smacCenter = vec2(0.85, 0.28);
-          float dSmac = length(vUv - smacCenter);
-          float rings = sin(dSmac * 36.0 - uTime * 0.15) * 0.5 + 0.5;
-          float ringFade = smoothstep(0.75, 0.10, dSmac);
-          vec3 ringCyan = vec3(0.20, 0.75, 1.0);
-          col = mix(col, ringCyan, rings * ringFade * 0.38);
+          // GIANT Faded Stylized 'SM' Letters Watermark (Right Half)
+          if (vUv.x > 0.40) {
+            vec2 smPos = vUv - vec2(0.72, 0.46);
+            float sCurve = smoothstep(0.07, 0.0, abs(sin(smPos.y * 12.0) - smPos.x * 2.5));
+            float mPillar = smoothstep(0.06, 0.0, abs(smPos.x - 0.12));
+            float smWatermark = max(sCurve, mPillar) * smoothstep(0.30, 0.0, abs(smPos.y));
+
+            vec3 skyBlue = vec3(0.39, 0.71, 0.96); // #64B5F6
+            col = mix(col, skyBlue, smWatermark * 0.38);
+          }
+
+          float smacSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.35);
+          col += vec3(0.75, 0.90, 1.0) * smacSheen * 0.40;
 
         } else if (uCardType == 46) {
           // ── 46. 7-ELEVEN SUNRISE SPEED RIBBONS ──
@@ -1558,6 +1872,15 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
 
           float goldLine = smoothstep(0.005, 0.0, abs(vUv.y - 0.22));
           col = mix(col, vec3(0.98, 0.85, 0.40), goldLine * 0.75);
+
+        } else if (uCardType == 48) {
+          // ── 48. GRABPAY VIVID EMERALD GREEN ──
+          vec3 grabGreenDark = vec3(0.0, 0.55, 0.24); // #008C3E
+          vec3 grabGreenBright = vec3(0.0, 0.69, 0.31); // #00B14F
+          col = mix(grabGreenDark, grabGreenBright, vUv.y * 0.6 + vUv.x * 0.4);
+
+          float grabSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.35);
+          col += vec3(0.85, 1.0, 0.85) * grabSheen * 0.40;
 
         } else {
           // ── DEFAULT GEKO PLATINUM 3D SHADER MOTIF ──
@@ -1598,8 +1921,8 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           col = mix(col, dotColor, dotMask * 0.88);
         }
 
-        // 3. EMV Smart Chip - Only for card assets with EMV chip, disabled for Cash Wallet, RFID and Membership cards
-        bool hasChip = (uCardType != 13 && uCardType != 23 && uCardType != 24 && uCardType != 29 && uCardType != 39 && (uCardType < 40 || uCardType > 47));
+        // 3. EMV Smart Chip - Rendered for all cards (disabled only for Physical Cash Wallet)
+        bool hasChip = (uCardType != 13);
         if (hasChip) {
           vec2 chipCenter = (uCardType == 0) ? vec2(0.185, 0.68) : vec2(0.190, 0.54);
           vec2 chipHalfSize = (uCardType == 0) ? vec2(0.075, 0.11) : vec2(0.062, 0.085);
@@ -1737,16 +2060,23 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           col = mix(col, textColor, textSample.a);
         }
 
-        // 8. Dynamic Shining Silver Light Sweep (only visible when held/moved)
+        // 8. Dynamic & Ambient Shining Metallic Light Sweep (Visible resting on Home screen & when tilted)
         float sweepCoord = vUv.x + vUv.y * 0.45;
         float sweepCenter = uLightPos.x * 1.4 + 0.1;
-        float sweep = smoothstep(0.24, 0.0, abs(sweepCoord - sweepCenter)) * uShineIntensity;
+        float baseShine = max(uShineIntensity, 0.28); // Ambient 3D metallic sheen on Home screen resting cards!
+        float sweep = smoothstep(0.26, 0.0, abs(sweepCoord - sweepCenter)) * baseShine;
         
-        vec3 holoRainbow = 0.5 + 0.5 * cos(6.28318 * (sweepCoord * 1.5 + uTime * 0.25 + vec3(0.0, 0.33, 0.67)));
-        vec3 pureSilverSheen = vec3(0.96, 0.98, 1.0) * sweep * 0.5;
-        vec3 holographicGleam = holoRainbow * sweep * 0.22;
+        vec3 holoRainbow = 0.5 + 0.5 * cos(6.28318 * (sweepCoord * 1.5 + uTime * 0.20 + vec3(0.0, 0.33, 0.67)));
+        vec3 pureSilverSheen = vec3(0.96, 0.98, 1.0) * sweep * 0.45;
+        vec3 holographicGleam = holoRainbow * sweep * 0.25;
         
         col += pureSilverSheen + holographicGleam;
+
+        // 10. 3D Outer Bevel Rim Light & Ambient Occlusion (Makes cards pop with real 3D physical depth)
+        vec2 bUv = abs(vUv - vec2(0.5)) * 2.0;
+        float edgeDist = max(bUv.x, bUv.y);
+        float rimGleam = smoothstep(0.92, 0.98, edgeDist) * smoothstep(1.0, 0.98, edgeDist);
+        col += vec3(0.90, 0.95, 1.0) * rimGleam * 0.35;
 
         gl_FragColor = vec4(col, 1.0);
       }
@@ -1763,8 +2093,9 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
       uTime: { value: 0 },
       uLightPos: { value: new THREE.Vector2(0.5, 0.5) },
       uShineIntensity: { value: 0.0 },
-      uColor1: { value: parseColorToVec3(color1, '#0B0F19') },
-      uColor2: { value: parseColorToVec3(color2, '#1E293B') },
+      uColor1: { value: _targetC1.clone() },
+      uColor2: { value: _targetC2.clone() },
+      uCardType: { value: getCardTypeInt(accountType, bankName) },
     };
 
     const backFragmentShader = `
@@ -1774,6 +2105,7 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
       uniform float uShineIntensity;
       uniform vec3 uColor1;
       uniform vec3 uColor2;
+      uniform int uCardType;
       varying vec2 vUv;
 
       float sdRoundedBox(vec2 p, vec2 b, float r) {
@@ -1783,6 +2115,9 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
 
       void main() {
         vec3 col = mix(uColor1, uColor2, vUv.y * 0.8 + vUv.x * 0.2);
+        if (uCardType == 4) {
+          col = mix(vec3(0.68, 0.05, 0.35), vec3(0.88, 0.10, 0.42), vUv.y * 0.6 + vUv.x * 0.4);
+        }
 
         // Magnetic Stripe
         if (vUv.y > 0.70 && vUv.y < 0.88) {
@@ -1880,6 +2215,7 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
       backUniforms.uTime.value = elapsedTime;
 
       const { color1: curC1, color2: curC2, accountType: curAcc, bankName: curBnk, paymentNetwork: curNet } = cardPropsRef.current;
+
       updateColorVec3(_targetC1, curC1, '#0B0F19');
       updateColorVec3(_targetC2, curC2, '#1E293B');
 
@@ -1895,6 +2231,7 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
 
       backUniforms.uColor1.value.copy(frontUniforms.uColor1.value);
       backUniforms.uColor2.value.copy(frontUniforms.uColor2.value);
+      backUniforms.uCardType.value = frontUniforms.uCardType.value;
 
       if (interactive) {
         // Silky smooth damped lerping: 0.22 when dragging for buttery response, 0.12 when returning

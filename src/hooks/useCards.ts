@@ -27,10 +27,11 @@ export const useCards = () => {
   const load = useCallback(async () => {
     const db = getDb();
     try {
-      // Unify GCash naming: ensure 'GCash E-Wallet' is cleanly mapped to 'GCash'
+      // Unify GCash naming & clean up long deposit text in transactions
       try {
         await db.execute("UPDATE cards SET bankName = 'GCash' WHERE LOWER(bankName) = 'gcash e-wallet' OR LOWER(bankName) = 'gcash ewallet'");
         await db.execute("UPDATE transactions SET bankName = 'GCash' WHERE LOWER(bankName) = 'gcash e-wallet' OR LOWER(bankName) = 'gcash ewallet'");
+        await db.execute("UPDATE transactions SET categoryId = 'Deposit', note = 'Deposit' WHERE LOWER(note) LIKE '%starting balance%' OR LOWER(note) LIKE '%cash-in%' OR LOWER(categoryId) LIKE '%cash-in%' OR LOWER(categoryId) LIKE '%cash in%'");
       } catch (e) {
         // Ignore if tables don't exist yet
       }
@@ -89,7 +90,7 @@ export const useCards = () => {
           if (diff > 0) {
             await db.execute(
               'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
-              [newId, diff, date, 'Cash In', 'income', 'Cash-In / Deposit', bankName]
+              [newId, diff, date, 'Deposit', 'income', 'Deposit', bankName]
             );
           } else {
             const absDiff = Math.abs(diff);
@@ -130,7 +131,7 @@ export const useCards = () => {
           if (diff > 0) {
             await db.execute(
               'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
-              [newId, diff, date, 'Cash In', 'income', 'Cash-In / Deposit', bankName]
+              [newId, diff, date, 'Deposit', 'income', 'Deposit', bankName]
             );
           } else {
             const absDiff = Math.abs(diff);
@@ -211,7 +212,7 @@ export const useCards = () => {
         const newId = uuidv4();
         await db.execute(
           'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [newId, bal, Date.now(), 'Cash In', 'income', 'Starting Balance / Deposit', newCard.bankName]
+          [newId, bal, Date.now(), 'Deposit', 'income', 'Deposit', newCard.bankName]
         );
       }
 

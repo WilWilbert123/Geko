@@ -5,16 +5,16 @@ import { useTheme } from '../hooks/useTheme';
 import { useRAGChat } from '../hooks/useRAGChat';
 import { ChatBubble } from '../components/ai/ChatBubble';
 import { StreamingText } from '../components/ai/StreamingText';
-import { Send } from 'lucide-react-native';
+import { Send, Target, BarChart3, CreditCard, Utensils, Calendar } from 'lucide-react-native';
 import { loadModel } from '../services/ai/engine/llamaService';
 import { getModelPath } from '../utils/fileSystem';
 
 const PROMPT_CHIPS = [
-  { icon: '🎯', title: 'What is my current financial goal?', query: 'What is my current financial goal?' },
-  { icon: '📊', title: 'Analyze my spending this week', query: 'Analyze my spending this week' },
-  { icon: '💳', title: 'Check my card & wallet balances', query: 'Show all my bank card balances' },
-  { icon: '🍔', title: 'Can I afford dinner tonight?', query: 'Can I afford dinner tonight?' },
-  { icon: '📅', title: 'When is my salary cutoff?', query: 'When is my salary cutoff?' },
+  { icon: Target, title: 'What is my current financial goal?', query: 'What is my current financial goal?', color: '#EF4444' },
+  { icon: BarChart3, title: 'Analyze my spending this week', query: 'Analyze my spending this week', color: '#3B82F6' },
+  { icon: CreditCard, title: 'Check my card & wallet balances', query: 'Show all my bank card balances', color: '#EAB308' },
+  { icon: Utensils, title: 'Can I afford dinner tonight?', query: 'Can I afford dinner tonight?', color: '#F97316' },
+  { icon: Calendar, title: 'When is my salary cutoff?', query: 'When is my salary cutoff?', color: '#EC4899' },
 ];
 
 export const AIChatScreen = () => {
@@ -75,17 +75,20 @@ export const AIChatScreen = () => {
           <View style={styles.emptyState}>
             <Text style={[styles.emptyTitle, { color: colors.text }]}>How can I help?</Text>
             <View style={styles.chipsContainer}>
-              {PROMPT_CHIPS.map(chip => (
-                <TouchableOpacity 
-                  key={chip.title} 
-                  style={[styles.chip, { backgroundColor: colors.surfaceHighlight || 'rgba(255,255,255,0.06)', borderColor: colors.border }]}
-                  onPress={() => handleSend(chip.query)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={{ fontSize: 16 }}>{chip.icon}</Text>
-                  <Text style={[styles.chipText, { color: colors.text }]}>{chip.title}</Text>
-                </TouchableOpacity>
-              ))}
+              {PROMPT_CHIPS.map(chip => {
+                const IconComponent = chip.icon;
+                return (
+                  <TouchableOpacity 
+                    key={chip.title} 
+                    style={[styles.chip, { backgroundColor: colors.surfaceHighlight || 'rgba(255,255,255,0.06)', borderColor: colors.border }]}
+                    onPress={() => handleSend(chip.query)}
+                    activeOpacity={0.8}
+                  >
+                    <IconComponent size={18} color={chip.color} strokeWidth={2} />
+                    <Text style={[styles.chipText, { color: colors.text }]}>{chip.title}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
         )}

@@ -30,6 +30,13 @@ import {
   Search,
   Sparkles,
   RotateCcw,
+  CreditCard,
+  Smartphone,
+  Zap,
+  Ticket,
+  Gem,
+  Landmark,
+  Globe,
 } from 'lucide-react-native';
 import { GekoCard3D } from '../components/wallet/GekoCard3D';
 import * as Haptics from 'expo-haptics';
@@ -146,17 +153,17 @@ export const WalletScreen = () => {
         name.includes('netbank');
       const isEwallet =
         (c.type === 'EWALLET' ||
-        name.includes('gcash') ||
-        name.includes('maya') ||
-        name.includes('zed') ||
-        name.includes('grab') ||
-        name.includes('shopee') ||
-        name.includes('wise') ||
-        name.includes('cliqq') ||
-        name.includes('palawan') ||
-        name.includes('paypal') ||
-        name.includes('luvit') ||
-        name.includes('payoneer')) && !isPrepaid && !isMembership && !isDigital;
+          name.includes('gcash') ||
+          name.includes('maya') ||
+          name.includes('zed') ||
+          name.includes('grab') ||
+          name.includes('shopee') ||
+          name.includes('wise') ||
+          name.includes('cliqq') ||
+          name.includes('palawan') ||
+          name.includes('paypal') ||
+          name.includes('luvit') ||
+          name.includes('payoneer')) && !isPrepaid && !isMembership && !isDigital;
 
       if (filterCategory === 'CREDIT') return isCredit;
       if (filterCategory === 'DIGITAL') return isDigital;
@@ -418,112 +425,115 @@ export const WalletScreen = () => {
       {/* ── Subtitle & View Controls Bar (Only when cards exist) ── */}
       {cards.length > 0 && (
         <View style={styles.controlsBar}>
-        <Text style={[styles.subtitleText, { color: colors.textMuted }]}>
-          {viewMode === 'stack' ? 'Grouped by category.' : viewMode === 'list' ? 'List view of all cards.' : 'Hold card to inspect & edit.'}
-        </Text>
+          <Text style={[styles.subtitleText, { color: colors.textMuted }]}>
+            {viewMode === 'stack' ? 'Grouped by category.' : viewMode === 'list' ? 'List view of all cards.' : 'Hold card to inspect & edit.'}
+          </Text>
 
-        {/* View Switcher Capsule Toolbar */}
-        <View style={[styles.viewToolbarCapsule, { backgroundColor: colors.surfaceHighlight || '#F1F5F9' }]}>
-          <TouchableOpacity
-            style={[styles.viewToolBtn, filterCategory !== 'ALL' && styles.viewToolBtnActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setFilterCategory((prev) =>
-                prev === 'ALL'
-                  ? 'CREDIT'
-                  : prev === 'CREDIT'
-                  ? 'DIGITAL'
-                  : prev === 'DIGITAL'
-                  ? 'EWALLET'
-                  : prev === 'EWALLET'
-                  ? 'PREPAID'
-                  : prev === 'PREPAID'
-                  ? 'MEMBERSHIP'
-                  : prev === 'MEMBERSHIP'
-                  ? 'BANK'
-                  : prev === 'BANK'
-                  ? 'VISA'
-                  : 'ALL'
-              );
-            }}
-          >
-            <Filter size={15} color={filterCategory !== 'ALL' ? '#FFFFFF' : colors.textMuted} />
-          </TouchableOpacity>
+          {/* View Switcher Capsule Toolbar */}
+          <View style={[styles.viewToolbarCapsule, { backgroundColor: colors.surfaceHighlight || '#F1F5F9' }]}>
+            <TouchableOpacity
+              style={[styles.viewToolBtn, filterCategory !== 'ALL' && styles.viewToolBtnActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setFilterCategory((prev) =>
+                  prev === 'ALL'
+                    ? 'CREDIT'
+                    : prev === 'CREDIT'
+                      ? 'DIGITAL'
+                      : prev === 'DIGITAL'
+                        ? 'EWALLET'
+                        : prev === 'EWALLET'
+                          ? 'PREPAID'
+                          : prev === 'PREPAID'
+                            ? 'MEMBERSHIP'
+                            : prev === 'MEMBERSHIP'
+                              ? 'BANK'
+                              : prev === 'BANK'
+                                ? 'VISA'
+                                : 'ALL'
+                );
+              }}
+            >
+              <Filter size={15} color={filterCategory !== 'ALL' ? '#FFFFFF' : colors.textMuted} />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.viewToolBtn, viewMode === 'grid' && styles.viewToolBtnActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setViewMode('grid');
-            }}
-          >
-            <LayoutGrid size={15} color={viewMode === 'grid' ? '#FFFFFF' : colors.textMuted} />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewToolBtn, viewMode === 'grid' && styles.viewToolBtnActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setViewMode('grid');
+              }}
+            >
+              <LayoutGrid size={15} color={viewMode === 'grid' ? '#FFFFFF' : colors.textMuted} />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.viewToolBtn, viewMode === 'list' && styles.viewToolBtnActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setViewMode('list');
-            }}
-          >
-            <List size={15} color={viewMode === 'list' ? '#FFFFFF' : colors.textMuted} />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewToolBtn, viewMode === 'list' && styles.viewToolBtnActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setViewMode('list');
+              }}
+            >
+              <List size={15} color={viewMode === 'list' ? '#FFFFFF' : colors.textMuted} />
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.viewToolBtn, viewMode === 'stack' && styles.viewToolBtnActive]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setViewMode('stack');
-            }}
-          >
-            <Layers size={15} color={viewMode === 'stack' ? '#FFFFFF' : colors.textMuted} />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewToolBtn, viewMode === 'stack' && styles.viewToolBtnActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setViewMode('stack');
+              }}
+            >
+              <Layers size={15} color={viewMode === 'stack' ? '#FFFFFF' : colors.textMuted} />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
       )}
 
       {/* ── Category Filter Pills Bar (Only when cards exist) ── */}
       {cards.length > 0 && (
         <View style={styles.categoryFilterContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryFilterScroll}
-        >
-          {[
-            { key: 'ALL', label: 'All Accounts' },
-            { key: 'CREDIT', label: '💳 Credit Cards' },
-            { key: 'DIGITAL', label: '📱 Digital Banks' },
-            { key: 'EWALLET', label: '⚡ E-Wallets' },
-            { key: 'PREPAID', label: '🎫 Prepaid & Transit' },
-            { key: 'MEMBERSHIP', label: '💎 Memberships' },
-            { key: 'BANK', label: '🏦 Banks' },
-            { key: 'VISA', label: '🌐 Visa' },
-          ].map((cat) => {
-            const isActive = filterCategory === cat.key;
-            return (
-              <TouchableOpacity
-                key={cat.key}
-                style={[
-                  styles.categoryPill,
-                  isActive
-                    ? { backgroundColor: colors.primary }
-                    : { backgroundColor: colors.surfaceHighlight || '#F1F5F9', borderColor: colors.border },
-                ]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setFilterCategory(cat.key as any);
-                }}
-              >
-                <Text style={[styles.categoryPillText, { color: isActive ? '#FFFFFF' : colors.text }]}>
-                  {cat.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryFilterScroll}
+          >
+            {[
+              { key: 'ALL', label: 'All Accounts', icon: LayoutGrid },
+              { key: 'CREDIT', label: 'Credit Cards', icon: CreditCard },
+              { key: 'DIGITAL', label: 'Digital Banks', icon: Smartphone },
+              { key: 'EWALLET', label: 'E-Wallets', icon: Zap },
+              { key: 'PREPAID', label: 'Prepaid & Transit', icon: Ticket },
+              { key: 'MEMBERSHIP', label: 'Memberships', icon: Gem },
+              { key: 'BANK', label: 'Banks', icon: Landmark },
+              { key: 'VISA', label: 'Visa', icon: Globe },
+            ].map((cat) => {
+              const isActive = filterCategory === cat.key;
+              const IconComp = cat.icon;
+              return (
+                <TouchableOpacity
+                  key={cat.key}
+                  style={[
+                    styles.categoryPill,
+                    { flexDirection: 'row', alignItems: 'center', gap: 6 },
+                    isActive
+                      ? { backgroundColor: colors.primary }
+                      : { backgroundColor: colors.surfaceHighlight || '#F1F5F9', borderColor: colors.border },
+                  ]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setFilterCategory(cat.key as any);
+                  }}
+                >
+                  <IconComp size={14} color={isActive ? '#FFFFFF' : colors.textMuted} />
+                  <Text style={[styles.categoryPillText, { color: isActive ? '#FFFFFF' : colors.text }]}>
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
       )}
 
       {/* ── Main Content Scroll Area with Animation ── */}
@@ -794,22 +804,23 @@ export const WalletScreen = () => {
               <View style={[styles.modalCatTabs, { backgroundColor: colors.surfaceHighlight || '#F1F5F9' }]}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 2, gap: 4 }}>
                   {[
-                    { key: 'ALL', label: 'All' },
-                    { key: 'CREDIT', label: '💳 Credit' },
-                    { key: 'DIGITAL', label: '📱 Digital' },
-                    { key: 'EWALLET', label: '⚡ E-Wallet' },
-                    { key: 'PREPAID', label: '🎫 Prepaid' },
-                    { key: 'MEMBERSHIP', label: '💎 Loyalty' },
-                    { key: 'BANK', label: '🏦 Banks' },
-                    { key: 'CUSTOM', label: '✏️ Custom' },
+                    { key: 'ALL', label: 'All', icon: LayoutGrid },
+                    { key: 'CREDIT', label: 'Credit', icon: CreditCard },
+                    { key: 'DIGITAL', label: 'Digital', icon: Smartphone },
+                    { key: 'EWALLET', label: 'E-Wallet', icon: Zap },
+                    { key: 'PREPAID', label: 'Prepaid', icon: Ticket },
+                    { key: 'MEMBERSHIP', label: 'Loyalty', icon: Gem },
+                    { key: 'BANK', label: 'Banks', icon: Landmark },
+                    { key: 'CUSTOM', label: 'Custom', icon: Edit3 },
                   ].map((tab) => {
                     const isTabActive = presetCategory === tab.key;
+                    const IconComp = tab.icon;
                     return (
                       <TouchableOpacity
                         key={tab.key}
                         style={[
                           styles.modalCatTabBtn,
-                          { paddingHorizontal: 12 },
+                          { paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 5 },
                           isTabActive && {
                             backgroundColor: colors.surface,
                             shadowColor: '#000',
@@ -824,6 +835,7 @@ export const WalletScreen = () => {
                           setPresetCategory(tab.key as any);
                         }}
                       >
+                        <IconComp size={13} color={isTabActive ? colors.primary : colors.textMuted} />
                         <Text
                           style={[
                             styles.modalCatTabText,
@@ -865,16 +877,16 @@ export const WalletScreen = () => {
                       {presetCategory === 'CREDIT'
                         ? 'Philippine Credit Cards (32)'
                         : presetCategory === 'DIGITAL'
-                        ? 'Philippine Digital Banks (12)'
-                        : presetCategory === 'EWALLET'
-                        ? 'E-Wallets (13)'
-                        : presetCategory === 'PREPAID'
-                        ? 'Prepaid & RFID Toll Cards (4)'
-                        : presetCategory === 'MEMBERSHIP'
-                        ? 'Membership & Loyalty Cards (8)'
-                        : presetCategory === 'BANK'
-                        ? 'Universal & Commercial Banks (54)'
-                        : `Matching Presets (${modalPresets.length})`}
+                          ? 'Philippine Digital Banks (12)'
+                          : presetCategory === 'EWALLET'
+                            ? 'E-Wallets (13)'
+                            : presetCategory === 'PREPAID'
+                              ? 'Prepaid & RFID Toll Cards (4)'
+                              : presetCategory === 'MEMBERSHIP'
+                                ? 'Membership & Loyalty Cards (8)'
+                                : presetCategory === 'BANK'
+                                  ? 'Universal & Commercial Banks (54)'
+                                  : `Matching Presets (${modalPresets.length})`}
                     </Text>
                     <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '600' }}>
                       Tap to apply
@@ -902,11 +914,18 @@ export const WalletScreen = () => {
                           activeOpacity={0.82}
                           onPress={() => handleSelectPreset(preset)}
                         >
-                          <View style={[styles.presetColorPreview, { backgroundColor: preset.color1 }]}>
-                            <View style={[styles.presetColorPreviewInner, { backgroundColor: preset.color2 }]} />
-                            <Text style={styles.presetColorInitials}>
-                              {preset.shortName.slice(0, 2).toUpperCase()}
-                            </Text>
+                          <View style={{ width: '100%', height: 78, borderRadius: 10, overflow: 'hidden', marginBottom: 4 }} pointerEvents="none">
+                            <GekoCard3D
+                              balance={0}
+                              bankName={preset.name}
+                              accountType={preset.type}
+                              color1={preset.color1}
+                              color2={preset.color2}
+                              height={78}
+                              cornerRadius={0.06}
+                              interactive={false}
+                              paymentNetwork={preset.network}
+                            />
                           </View>
 
                           <Text style={[styles.presetItemName, { color: colors.text }]} numberOfLines={2}>
@@ -1399,9 +1418,9 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   presetCardItem: {
-    width: 140,
+    width: 148,
     borderRadius: 16,
-    padding: 10,
+    padding: 8,
     gap: 6,
   },
   presetColorPreview: {
