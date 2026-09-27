@@ -13,6 +13,7 @@ import {
   HeartPulse,
   Tag,
   Wallet,
+  Banknote,
 } from 'lucide-react-native';
 import { isToday, isYesterday } from 'date-fns';
 
@@ -89,7 +90,7 @@ const CardMiniBadge = ({ bankName }: { bankName?: string }) => {
   return (
     <View style={styles.cardBadgePill}>
       {scheme.isCash ? (
-        <Text style={styles.cashIconText}>💵</Text>
+        <Banknote size={12} color={scheme.text} style={{ marginRight: 3 }} />
       ) : (
         <View style={[styles.miniCardIcon, { backgroundColor: scheme.cardBg }]}>
           <View style={styles.miniCardChip} />
@@ -103,28 +104,44 @@ const CardMiniBadge = ({ bankName }: { bankName?: string }) => {
 };
 
 const formatCleanTitle = (categoryId?: string, note?: string) => {
-  let cat = (categoryId || '').trim();
-  let n = (note || '').trim();
+  const cat = (categoryId || '').trim();
+  const n = (note || '').trim();
+  const combined = `${cat} ${n}`.toLowerCase();
 
-  // Strip 'Salary' or 'Salary - Cash-In / Deposit'
-  cat = cat.replace(/^Salary\s*(-\s*)?/i, '');
-  cat = cat.replace(/Salary/gi, 'Cash In');
-  cat = cat.replace(/Cash-In\s*\/\s*Deposit/gi, 'Cash In');
-
-  n = n.replace(/^Salary\s*(-\s*)?/i, '');
-  n = n.replace(/Salary/gi, 'Cash In');
-  n = n.replace(/Cash-In\s*\/\s*Deposit/gi, 'Deposit');
-
-  cat = cat.replace(/^[\s-]+|[\s-]+$/g, '').trim();
-  n = n.replace(/^[\s-]+|[\s-]+$/g, '').trim();
-
-  if (!cat) cat = 'Cash In';
-
-  if (!n || n.toLowerCase() === cat.toLowerCase() || n.toLowerCase() === 'cash in' || n.toLowerCase() === 'deposit') {
-    return cat;
+  // 1. Starting balance / Deposit / Cash In variations -> display clean "Deposit"
+  if (
+    combined.includes('starting balance') ||
+    combined.includes('cash-in') ||
+    combined.includes('cash in') ||
+    combined.includes('deposit') ||
+    combined.includes('initial balance')
+  ) {
+    return 'Deposit';
   }
 
-  return `${cat} - ${n}`;
+  // 2. If note is specific (e.g. "Coffee", "Pabango"), display short clean note
+  if (n && n.toLowerCase() !== cat.toLowerCase()) {
+    let cleanNote = n;
+    if (cleanNote.includes('-')) {
+      const parts = cleanNote.split('-');
+      cleanNote = parts[parts.length - 1].trim();
+    }
+    if (cleanNote.length > 0) {
+      return cleanNote.charAt(0).toUpperCase() + cleanNote.slice(1);
+    }
+  }
+
+  // 3. Fallback to clean short category name (e.g. "Food", "Shopping")
+  if (cat) {
+    let cleanCat = cat;
+    if (cleanCat.includes('-')) {
+      const parts = cleanCat.split('-');
+      cleanCat = parts[0].trim();
+    }
+    return cleanCat.charAt(0).toUpperCase() + cleanCat.slice(1);
+  }
+
+  return 'Deposit';
 };
 
 const TransactionItem = ({ item, index }: { item: any; index: number }) => {

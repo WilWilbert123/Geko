@@ -31,15 +31,35 @@ export const generateStream = async (
   const symbol = currency === 'PHP' ? '₱' : '$';
   const isTagalog = /(?:magkano|bumili|bili|kain|kumain|ulam|ng|sa|kami|ako|namin|tayo|sahod|sweldo|gastos|bayad|merienda|pamasahe|tsaka|saka|tapos|pera|utang)/i.test(userText);
 
-  // 0. Check for Cutoff Income Configuration in Chat
+  // 0. Check for Cutoff Income Configuration & Salary Cutoff Inquiries in Chat
+  const isSalaryKeyword =
+    lowerUserText.includes('salary') ||
+    lowerUserText.includes('sweldo') ||
+    lowerUserText.includes('sahod') ||
+    lowerUserText.includes('payday') ||
+    lowerUserText.includes('kita') ||
+    lowerUserText.includes('payout');
+
+  const isCutoffKeyword =
+    lowerUserText.includes('cutoff') ||
+    lowerUserText.includes('cut off') ||
+    lowerUserText.includes('cut-off');
+
   const isSetCutoffQuery =
-    (lowerUserText.includes('cutoff') || lowerUserText.includes('cut off') || lowerUserText.includes('payday')) &&
+    (isCutoffKeyword || lowerUserText.includes('payday')) &&
     (lowerUserText.includes('set') || lowerUserText.includes('income') || lowerUserText.includes('is') || lowerUserText.includes('change') || lowerUserText.includes('update') || lowerUserText.includes('my') || lowerUserText.includes('sweldo') || lowerUserText.includes('sahod')) &&
     /\d+/.test(lowerUserText);
 
   const isGetCutoffQuery =
-    (lowerUserText.includes('cutoff') || lowerUserText.includes('cut off')) &&
-    (lowerUserText.includes('what') || lowerUserText.includes('how much') || lowerUserText.includes('ano') || lowerUserText.includes('magkano'));
+    isSalaryKeyword ||
+    (isCutoffKeyword &&
+      !lowerUserText.includes('installment') &&
+      !lowerUserText.includes('installments') &&
+      !lowerUserText.includes('hulugan') &&
+      !lowerUserText.includes('iphone') &&
+      !lowerUserText.includes('bnpl') &&
+      !lowerUserText.includes('loan') &&
+      !lowerUserText.includes('plan'));
 
   if (isSetCutoffQuery) {
     const amtMatch = lowerUserText.match(/\d+(?:\.\d+)?/);
@@ -60,9 +80,34 @@ export const generateStream = async (
     }
   } else if (isGetCutoffQuery) {
     const curCutoff = getCutoffIncome();
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const day = now.getDate();
+    const lastDay = new Date(year, month + 1, 0).getDate();
+
+    let nextCutoffDate: Date;
+    if (day < 15) {
+      nextCutoffDate = new Date(year, month, 15);
+    } else if (day < lastDay) {
+      nextCutoffDate = new Date(year, month, lastDay);
+    } else {
+      nextCutoffDate = new Date(year, month + 1, 15);
+    }
+
+    const diffMs = nextCutoffDate.getTime() - new Date(year, month, day).getTime();
+    const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    const cutoffDateStr = nextCutoffDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const daysLeftTagalog = daysLeft === 0 ? 'Ngayon' : daysLeft === 1 ? 'Bukas' : `${daysLeft} araw na lang`;
+    const daysLeftEnglish = daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `in ${daysLeft} days`;
+
     fullResponse = isTagalog
-      ? `Ang iyong nakatakdang salary cutoff income ay **${symbol}${curCutoff.toLocaleString('en-US', { minimumFractionDigits: 2 })}** bawat payday (15th & 30th).`
-      : `Your configured salary cutoff income is **${symbol}${curCutoff.toLocaleString('en-US', { minimumFractionDigits: 2 })}** per payday (15th & 30th).`;
+      ? `Ang iyong salary cutoff schedule ay tuwing **ika-15 at ika-30 (o katapusan)** ng bawat buwan.\n\n` +
+        `📅 **Susunod na Salary Cut-off / Payday**: **${cutoffDateStr}** (${daysLeftTagalog})\n` +
+        `💵 **Nakatakdang Salary Income**: **${symbol}${curCutoff.toLocaleString('en-US', { minimumFractionDigits: 2 })}** / cutoff.`
+      : `Your salary cutoff schedule is on the **15th and 30th (or end of month)** of every month.\n\n` +
+        `📅 **Next Salary Cut-off / Payday**: **${cutoffDateStr}** (${daysLeftEnglish})\n` +
+        `💵 **Configured Cut-off Income**: **${symbol}${curCutoff.toLocaleString('en-US', { minimumFractionDigits: 2 })}** / cutoff.`;
 
     const tokens = fullResponse.split(/(?<=\s)/);
     for (const token of tokens) {
@@ -76,22 +121,22 @@ export const generateStream = async (
   // 1. Check if input is a Transaction (e.g. "Kumain ako sa labas 180 gamit gotyme" or "Dagdagan Mo laman ng gcash ko 50") vs a Question
   const isExplicitQuestion =
     lowerUserText.includes('?') ||
-    lowerUserText.includes('magkano') ||
-    lowerUserText.includes('how much') ||
-    lowerUserText.includes('what is') ||
-    lowerUserText.includes('what are') ||
-    lowerUserText.includes('aabot') ||
-    lowerUserText.includes('kaya ba') ||
-    lowerUserText.includes('pila') ||
-    lowerUserText.includes('ilan') ||
-    lowerUserText.includes('ano') ||
-    lowerUserText.includes('cards balance') ||
-    lowerUserText.includes('card balance') ||
-    lowerUserText.includes('wallet balance') ||
-    lowerUserText.includes('list my card') ||
-    lowerUserText.includes('list card') ||
-    lowerUserText.includes('list wallet') ||
-    lowerUserText.includes('show my cards');
+    /\bmagkano\b/i.test(lowerUserText) ||
+    /\bhow much\b/i.test(lowerUserText) ||
+    /\bwhat is\b/i.test(lowerUserText) ||
+    /\bwhat are\b/i.test(lowerUserText) ||
+    /\baabot\b/i.test(lowerUserText) ||
+    /\bkaya ba\b/i.test(lowerUserText) ||
+    /\bpila\b/i.test(lowerUserText) ||
+    /\bilan\b/i.test(lowerUserText) ||
+    /\bano\b/i.test(lowerUserText) ||
+    /\bcards balance\b/i.test(lowerUserText) ||
+    /\bcard balance\b/i.test(lowerUserText) ||
+    /\bwallet balance\b/i.test(lowerUserText) ||
+    /\blist my card\b/i.test(lowerUserText) ||
+    /\blist card\b/i.test(lowerUserText) ||
+    /\blist wallet\b/i.test(lowerUserText) ||
+    /\bshow my cards\b/i.test(lowerUserText);
 
   const candidateTransactions = parseTransactionsFromText(userText);
   const hasValidTransactionIntent =
@@ -173,13 +218,13 @@ export const generateStream = async (
     lowerUserText.includes('whole week');
 
   const isInstallmentQuery =
-    lowerUserText.includes('installment') ||
-    lowerUserText.includes('installments') ||
-    lowerUserText.includes('hulugan') ||
-    lowerUserText.includes('cut-off') ||
-    lowerUserText.includes('cutoff') ||
-    lowerUserText.includes('bnpl') ||
-    lowerUserText.includes('babayaran');
+    (lowerUserText.includes('installment') ||
+      lowerUserText.includes('installments') ||
+      lowerUserText.includes('hulugan') ||
+      lowerUserText.includes('bnpl') ||
+      lowerUserText.includes('babayaran') ||
+      ((lowerUserText.includes('cut-off') || lowerUserText.includes('cutoff')) && !isSalaryKeyword)) &&
+    !isGetCutoffQuery;
 
   const isInstallmentDeductAction =
     isInstallmentQuery &&
@@ -196,18 +241,19 @@ export const generateStream = async (
   });
 
   const isFollowUpQuery =
-    lowerUserText.includes('how about') ||
-    lowerUserText.includes('what about') ||
-    lowerUserText.includes('how bout') ||
-    lowerUserText.includes('eh sa') ||
-    lowerUserText.includes('eh ang') ||
-    lowerUserText.includes('pano sa') ||
-    lowerUserText.includes('paano sa') ||
-    lowerUserText.includes('paano naman') ||
-    lowerUserText.includes('kamusta sa') ||
-    lowerUserText.includes('musta sa') ||
-    lowerUserText.includes('kumusta sa') ||
-    isBankMentioned;
+    !hasValidTransactionIntent &&
+    (lowerUserText.includes('how about') ||
+      lowerUserText.includes('what about') ||
+      lowerUserText.includes('how bout') ||
+      lowerUserText.includes('eh sa') ||
+      lowerUserText.includes('eh ang') ||
+      lowerUserText.includes('pano sa') ||
+      lowerUserText.includes('paano sa') ||
+      lowerUserText.includes('paano naman') ||
+      lowerUserText.includes('kamusta sa') ||
+      lowerUserText.includes('musta sa') ||
+      lowerUserText.includes('kumusta sa') ||
+      (isBankMentioned && (isExplicitQuestion || lowerUserText.includes('bal') || lowerUserText.includes('per') || lowerUserText.includes('laman'))));
 
   const isFinancialQuery =
     !hasValidTransactionIntent &&
@@ -217,19 +263,19 @@ export const generateStream = async (
       isWeekSpendQuery ||
       isInstallmentQuery ||
       isFollowUpQuery ||
-      lowerUserText.includes('magkano') ||
-      lowerUserText.includes('how much') ||
-      lowerUserText.includes('what is') ||
-      lowerUserText.includes('what are') ||
-      lowerUserText.includes('balance') ||
-      lowerUserText.includes('balances') ||
-      lowerUserText.includes('saan ako') ||
-      lowerUserText.includes('ano ang') ||
-      lowerUserText.includes('ilan') ||
-      lowerUserText.includes('laman') ||
-      lowerUserText.includes('pila') ||
-      lowerUserText.includes('aabot') ||
-      lowerUserText.includes('net worth'));
+      /\bmagkano\b/i.test(lowerUserText) ||
+      /\bhow much\b/i.test(lowerUserText) ||
+      /\bwhat is\b/i.test(lowerUserText) ||
+      /\bwhat are\b/i.test(lowerUserText) ||
+      /\bbalance\b/i.test(lowerUserText) ||
+      /\bbalances\b/i.test(lowerUserText) ||
+      /\bsaan ako\b/i.test(lowerUserText) ||
+      /\bano ang\b/i.test(lowerUserText) ||
+      /\bilan\b/i.test(lowerUserText) ||
+      /\blaman\b/i.test(lowerUserText) ||
+      /\bpila\b/i.test(lowerUserText) ||
+      /\baabot\b/i.test(lowerUserText) ||
+      /\bnet worth\b/i.test(lowerUserText));
 
   // A. Process Transaction Intent FIRST if user is stating a transaction (e.g. "Kumain ako sa labas 180 gamit gotyme")
   if (hasValidTransactionIntent) {

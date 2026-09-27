@@ -13,7 +13,7 @@ export const BANK_THEMES: Record<string, BankTheme> = {
   gcash: { bg1: '#0026B3', bg2: '#0055FF', textColor: '#FFFFFF', isDark: true, network: 'VISA', logoText: 'GCash' },
   gotyme: { bg1: '#0F172A', bg2: '#00D2C8', textColor: '#FFFFFF', isDark: true, network: 'VISA', logoText: 'GoTyme Bank' },
   bpi: { bg1: '#8B0000', bg2: '#C8102E', textColor: '#FFFFFF', isDark: true, network: 'MASTERCARD', logoText: 'BPI' },
-  maya: { bg1: '#0B0E14', bg2: '#00E676', textColor: '#FFFFFF', isDark: true, network: 'VISA', logoText: 'maya' },
+  maya: { bg1: '#AD1457', bg2: '#D81B60', textColor: '#FFFFFF', isDark: true, network: 'VISA', logoText: 'maya' },
   unionbank: { bg1: '#C2410C', bg2: '#EA580C', textColor: '#FFFFFF', isDark: true, network: 'VISA', logoText: 'UnionBank' },
   ub: { bg1: '#C2410C', bg2: '#EA580C', textColor: '#FFFFFF', isDark: true, network: 'VISA', logoText: 'UnionBank' },
   rcbc: { bg1: '#1E3A8A', bg2: '#3B82F6', textColor: '#FFFFFF', isDark: true, network: 'MASTERCARD', logoText: 'RCBC' },

@@ -73,18 +73,22 @@ const styles = StyleSheet.create({
   container: {
     marginTop: 10,
     marginBottom: 4,
+    alignSelf: 'flex-start',
+    width: '100%',
   },
   sectionTitle: {
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.8,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   scrollContent: {
     gap: 10,
+    alignItems: 'flex-start',
   },
   card: {
-    width: 220,
+    width: 205,
+    alignSelf: 'flex-start',
     borderRadius: 16,
     borderWidth: 1.2,
     overflow: 'hidden',
@@ -95,7 +99,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   imageHeaderWrapper: {
-    height: 105,
+    height: 110,
     width: '100%',
     position: 'relative',
     backgroundColor: '#1E293B',
@@ -138,6 +142,7 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     padding: 10,
+    backgroundColor: '#0B0F19',
   },
   goalTitle: {
     color: '#FFFFFF',
@@ -162,7 +167,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   progressBarTrack: {
-    height: 5,
+    height: 6,
     width: '100%',
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 3,

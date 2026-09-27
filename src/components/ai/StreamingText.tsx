@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withRepeat, Easing } from 'react-native-reanimated';
 import { useTheme } from '../../hooks/useTheme';
-import { Bot } from 'lucide-react-native';
 
 interface StreamingTextProps {
   text: string;
@@ -33,9 +32,6 @@ export const StreamingText: React.FC<StreamingTextProps> = ({ text, isGenerating
 
   return (
     <View style={styles.container}>
-      <View style={[styles.avatar, { backgroundColor: colors.surfaceHighlight }]}>
-        <Bot size={16} color={colors.primary} />
-      </View>
       <View style={[styles.bubble, { backgroundColor: colors.surfaceHighlight }]}>
         <Text style={[styles.text, { color: colors.text }]}>
           {text}
@@ -50,23 +46,15 @@ export const StreamingText: React.FC<StreamingTextProps> = ({ text, isGenerating
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    marginVertical: 8,
-    maxWidth: '90%',
+    marginVertical: 6,
+    maxWidth: '96%',
     alignSelf: 'flex-start',
   },
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-    marginRight: 8,
-  },
   bubble: {
-    padding: 12,
-    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 18,
+    maxWidth: '100%',
   },
   text: {
     fontSize: 15,
