@@ -1202,7 +1202,7 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 12,
   },
 
@@ -1210,10 +1210,10 @@ const styles = StyleSheet.create({
   cardsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
   },
   cardItem3D: {
-    width: (SCREEN_WIDTH - 40 - 12) / 2,
+    width: (SCREEN_WIDTH - 32 - 10) / 2,
     height: GRID_CARD_HEIGHT,
     borderRadius: 14,
     overflow: 'hidden',

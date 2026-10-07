@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Trash2 } from 'lucide-react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { useCards } from '../../hooks/useCards';
 import { useGoals } from '../../hooks/useGoals';
@@ -14,9 +15,10 @@ import { ChatInstallmentBadgeList } from './ChatInstallmentBadge';
 
 interface ChatBubbleProps {
   message: ChatMessage;
+  onDelete?: (id: string) => void;
 }
 
-export const ChatBubble: React.FC<ChatBubbleProps> = ({ message }) => {
+export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onDelete }) => {
   const { colors } = useTheme();
   const { cards: userCards } = useCards();
   const { goals: userGoals } = useGoals();
@@ -49,6 +51,17 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message }) => {
 
   return (
     <View style={[styles.container, isUser ? styles.userContainer : styles.botContainer]}>
+      {isUser && onDelete && (
+        <TouchableOpacity
+          style={styles.deleteSideBtn}
+          onPress={() => onDelete(message.id)}
+          activeOpacity={0.6}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Trash2 size={14} color={colors.textMuted} />
+        </TouchableOpacity>
+      )}
+
       <View style={[
         styles.bubble, 
         isUser ? { backgroundColor: colors.primary } : { backgroundColor: colors.surfaceHighlight }
@@ -69,6 +82,17 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message }) => {
           <ChatInstallmentBadgeList installments={extractedInstallments} />
         )}
       </View>
+
+      {!isUser && onDelete && (
+        <TouchableOpacity
+          style={styles.deleteSideBtn}
+          onPress={() => onDelete(message.id)}
+          activeOpacity={0.6}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Trash2 size={14} color={colors.textMuted} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -78,20 +102,29 @@ const styles = StyleSheet.create({
     marginVertical: 6,
     maxWidth: '100%',
     width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   userContainer: {
-    alignSelf: 'flex-end',
-    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
   },
   botContainer: {
-    alignSelf: 'flex-start',
-    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
   },
   bubble: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 18,
-    maxWidth: '96%',
+    maxWidth: '85%',
+  },
+  deleteSideBtn: {
+    padding: 6,
+    marginHorizontal: 2,
+    opacity: 0.7,
+  },
+  actionColumn: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   text: {
     fontSize: 15,
@@ -105,3 +138,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
   }
 });
+

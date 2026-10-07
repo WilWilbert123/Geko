@@ -7,7 +7,13 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { initDb } from './src/database/sqlite';
 import { initUserStore } from './src/store/userStore';
 import { useTheme } from './src/hooks/useTheme';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, LogBox } from 'react-native';
+
+LogBox.ignoreLogs([
+  '`new NativeEventEmitter()` was called with a non-null argument',
+  'new NativeEventEmitter',
+  'EXGL: gl.pixelStorei',
+]);
 
 // Error boundary to catch silent render crashes that cause blank screens
 class ErrorBoundary extends Component<

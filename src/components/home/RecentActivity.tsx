@@ -1,5 +1,8 @@
 import React from 'react';
-import { View, StyleSheet, Text, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../navigation/types';
 import { useTheme } from '../../hooks/useTheme';
 import { useTransactions } from '../../hooks/useTransactions';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
@@ -14,10 +17,11 @@ import {
   Tag,
   Wallet,
   Banknote,
+  ChevronRight,
 } from 'lucide-react-native';
 import { isToday, isYesterday } from 'date-fns';
 
-const CATEGORY_STYLE_MAP: Record<string, { bg: string; color: string; icon: any }> = {
+export const CATEGORY_STYLE_MAP: Record<string, { bg: string; color: string; icon: any }> = {
   food: { bg: 'rgba(245, 158, 11, 0.15)', color: '#D97706', icon: Utensils },
   dining: { bg: 'rgba(245, 158, 11, 0.15)', color: '#D97706', icon: Utensils },
   lunch: { bg: 'rgba(245, 158, 11, 0.15)', color: '#D97706', icon: Utensils },
@@ -34,7 +38,7 @@ const CATEGORY_STYLE_MAP: Record<string, { bg: string; color: string; icon: any 
   health: { bg: 'rgba(236, 72, 153, 0.15)', color: '#DB2777', icon: HeartPulse },
 };
 
-const getCategoryConfig = (categoryName?: string) => {
+export const getCategoryConfig = (categoryName?: string) => {
   if (!categoryName) return { bg: 'rgba(100, 116, 139, 0.15)', color: '#475569', icon: Tag };
   const key = categoryName.toLowerCase();
   for (const [k, val] of Object.entries(CATEGORY_STYLE_MAP)) {
@@ -43,7 +47,7 @@ const getCategoryConfig = (categoryName?: string) => {
   return { bg: 'rgba(100, 116, 139, 0.15)', color: '#475569', icon: Tag };
 };
 
-const BANK_COLOR_SCHEMES: Record<string, { text: string; cardBg: string; name: string; isCash?: boolean }> = {
+export const BANK_COLOR_SCHEMES: Record<string, { text: string; cardBg: string; name: string; isCash?: boolean }> = {
   gotyme: { text: '#00D2C8', cardBg: '#00D2C8', name: 'GoTyme' },
   bpi: { text: '#991B1B', cardBg: '#6B0A14', name: 'BPI' },
   pnb: { text: '#B8860B', cardBg: '#D4AF37', name: 'PNB' },
@@ -60,7 +64,7 @@ const BANK_COLOR_SCHEMES: Record<string, { text: string; cardBg: string; name: s
   cash: { text: '#059669', cardBg: '#059669', name: 'Physical Cash', isCash: true },
 };
 
-const getBankScheme = (bankName?: string) => {
+export const getBankScheme = (bankName?: string) => {
   if (!bankName) return BANK_COLOR_SCHEMES.gcash;
   const lower = bankName.toLowerCase();
   if (lower.includes('gotyme')) return BANK_COLOR_SCHEMES.gotyme;
@@ -84,7 +88,7 @@ const getBankScheme = (bankName?: string) => {
   };
 };
 
-const CardMiniBadge = ({ bankName }: { bankName?: string }) => {
+export const CardMiniBadge = ({ bankName }: { bankName?: string }) => {
   const scheme = getBankScheme(bankName);
   
   return (
@@ -103,7 +107,7 @@ const CardMiniBadge = ({ bankName }: { bankName?: string }) => {
   );
 };
 
-const formatCleanTitle = (categoryId?: string, note?: string) => {
+export const formatCleanTitle = (categoryId?: string, note?: string) => {
   const cat = (categoryId || '').trim();
   const n = (note || '').trim();
   const combined = `${cat} ${n}`.toLowerCase();
@@ -144,7 +148,7 @@ const formatCleanTitle = (categoryId?: string, note?: string) => {
   return 'Deposit';
 };
 
-const TransactionItem = ({ item, index }: { item: any; index: number }) => {
+export const TransactionItem = ({ item, index }: { item: any; index: number }) => {
   const { colors } = useTheme();
   const isIncome = item.type === 'income';
   const targetBank = item.bankName || 'GCash';
@@ -155,7 +159,7 @@ const TransactionItem = ({ item, index }: { item: any; index: number }) => {
 
   return (
     <Animated.View 
-      entering={FadeInDown.delay(index * 100).springify()} 
+      entering={FadeInDown.delay(index * 60).springify()} 
       layout={Layout.springify()}
       style={[styles.itemContainer, { borderBottomColor: colors.border }]}
     >
@@ -180,14 +184,18 @@ const TransactionItem = ({ item, index }: { item: any; index: number }) => {
 };
 
 export const RecentActivity = () => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { transactions } = useTransactions();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  // Sort newest-first, then group
+  // Sort newest-first
   const sorted = [...transactions].sort((a, b) => Number(b.date) - Number(a.date));
+  
+  // Show only top 5 records on home screen
+  const limited = sorted.slice(0, 5);
 
   const grouped: Record<string, any[]> = {};
-  for (const t of sorted) {
+  for (const t of limited) {
     let group = 'Earlier';
     if (isToday(t.date)) group = 'Today';
     else if (isYesterday(t.date)) group = 'Yesterday';
@@ -196,7 +204,11 @@ export const RecentActivity = () => {
   }
 
   const GROUP_ORDER = ['Today', 'Yesterday', 'Earlier'];
-  const orderedGroups = GROUP_ORDER.filter(g => grouped[g]);
+  const orderedGroups = GROUP_ORDER.filter(g => grouped[g] && grouped[g].length > 0);
+
+  const handleShowAll = () => {
+    navigation.navigate('History');
+  };
 
   return (
     <View style={styles.container}>
@@ -217,6 +229,22 @@ export const RecentActivity = () => {
               ))}
             </View>
           ))}
+
+          {/* Clean touchable "Show All Records" button at the bottom */}
+          <TouchableOpacity
+            style={[
+              styles.showAllButton,
+              {
+                backgroundColor: isDark ? 'rgba(51, 65, 85, 0.4)' : '#F1F5F9',
+                borderColor: colors.border,
+              },
+            ]}
+            onPress={handleShowAll}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.showAllText, { color: colors.primary }]}>Show All Records</Text>
+            <ChevronRight size={18} color={colors.primary} />
+          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -328,5 +356,21 @@ const styles = StyleSheet.create({
   emptyText: {
     marginTop: 12,
     fontSize: 14,
+  },
+  showAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 8,
+    marginBottom: 8,
+    gap: 6,
+  },
+  showAllText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

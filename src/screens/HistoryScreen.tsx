@@ -1,27 +1,55 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useTheme } from '../hooks/useTheme';
 import { useTransactions } from '../hooks/useTransactions';
-import { formatCurrency, formatRelativeTime } from '../utils/formatters';
-import { PieChart } from 'lucide-react-native';
+import { PieChart, Search, X } from 'lucide-react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { TransactionItem } from '../components/home/RecentActivity';
+import { subDays, subMonths } from 'date-fns';
 
-const SEGMENTS = ['Weekly', 'Monthly', 'Custom'];
+const SEGMENTS = ['All', 'Weekly', 'Monthly'];
 
 export const HistoryScreen = () => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { transactions } = useTransactions();
-  const [segment, setSegment] = useState('Weekly');
+  const [segment, setSegment] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredTransactions = useMemo(() => {
+    let list = [...transactions].sort((a, b) => Number(b.date) - Number(a.date));
+
+    // Filter by date segment
+    const now = new Date();
+    if (segment === 'Weekly') {
+      const oneWeekAgo = subDays(now, 7).getTime();
+      list = list.filter(t => t.date >= oneWeekAgo);
+    } else if (segment === 'Monthly') {
+      const oneMonthAgo = subMonths(now, 30).getTime();
+      list = list.filter(t => t.date >= oneMonthAgo);
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(t => 
+        (t.categoryId && t.categoryId.toLowerCase().includes(q)) ||
+        (t.note && t.note.toLowerCase().includes(q)) ||
+        (t.bankName && t.bankName.toLowerCase().includes(q))
+      );
+    }
+
+    return list;
+  }, [transactions, segment, searchQuery]);
 
   const emptyState = (
     <Animated.View entering={FadeIn} style={styles.empty}>
       <View style={[styles.emptyIconBg, { backgroundColor: colors.surfaceHighlight }]}>
         <PieChart size={48} color={colors.primary} />
       </View>
-      <Text style={[styles.emptyTitle, { color: colors.text }]}>No Data Available</Text>
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>No History Found</Text>
       <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-        Add some transactions to see your {segment.toLowerCase()} analytics and breakdowns.
+        {searchQuery ? 'No transactions match your search filter.' : 'No transactions recorded for this period.'}
       </Text>
     </Animated.View>
   );
@@ -29,6 +57,24 @@ export const HistoryScreen = () => {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
+        {/* Search Input Bar */}
+        <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(51, 65, 85, 0.4)' : '#F1F5F9', borderColor: colors.border }]}>
+          <Search size={18} color={colors.textMuted} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.text }]}
+            placeholder="Search activity, bank, note..."
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <X size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {/* Segment Filter Controls */}
         <View style={[styles.segmentControl, { backgroundColor: colors.surfaceHighlight }]}>
           {SEGMENTS.map(s => (
             <TouchableOpacity 
@@ -51,24 +97,12 @@ export const HistoryScreen = () => {
       </View>
 
       <FlashList
-        data={transactions}
+        data={filteredTransactions}
         estimatedItemSize={76}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 100 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 100 }}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={[styles.item, { borderBottomColor: colors.border }]}>
-            <View style={styles.left}>
-              <Text style={[styles.category, { color: colors.text }]}>{item.categoryId}</Text>
-              <Text style={[styles.date, { color: colors.textMuted }]}>{formatRelativeTime(item.date)}</Text>
-              {item.note ? <Text style={[styles.note, { color: colors.textMuted }]}>{item.note}</Text> : null}
-            </View>
-            <Text style={[
-              styles.amount, 
-              { color: item.type === 'income' ? colors.income : colors.text }
-            ]}>
-              {item.type === 'income' ? '+' : '-'}{formatCurrency(item.amount)}
-            </Text>
-          </View>
+        renderItem={({ item, index }) => (
+          <TransactionItem item={item} index={index} />
         )}
         ListEmptyComponent={emptyState}
       />
@@ -80,8 +114,23 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingTop: 12,
+    paddingBottom: 12,
+    gap: 12,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    padding: 0,
   },
   segmentControl: {
     flexDirection: 'row',
@@ -98,18 +147,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  item: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  left: { flex: 1 },
-  category: { fontSize: 16, fontWeight: '600', marginBottom: 4 },
-  date: { fontSize: 12 },
-  note: { fontSize: 12, marginTop: 4, fontStyle: 'italic' },
-  amount: { fontSize: 16, fontWeight: '700' },
   empty: { 
     padding: 40, 
     alignItems: 'center',

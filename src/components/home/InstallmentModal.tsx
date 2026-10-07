@@ -49,16 +49,10 @@ const PRESET_INSTALLMENT_IMAGES = [
   { label: '🚗 Vehicle', uri: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=800' },
 ];
 
+import { getInstallmentImageUri } from '../../utils/installmentExtractor';
+
 const getInstallmentImage = (inst: Installment): string | null => {
-  if (inst.imageUrl && inst.imageUrl.trim().length > 0) return inst.imageUrl;
-  const t = (inst.title || '').toLowerCase();
-  if (t.includes('laptop') || t.includes('macbook') || t.includes('pc')) return PRESET_INSTALLMENT_IMAGES[0].uri;
-  if (t.includes('iphone') || t.includes('phone') || t.includes('samsung')) return PRESET_INSTALLMENT_IMAGES[1].uri;
-  if (t.includes('tv') || t.includes('appliance') || t.includes('refrigerator')) return PRESET_INSTALLMENT_IMAGES[2].uri;
-  if (t.includes('ps5') || t.includes('console') || t.includes('game') || t.includes('onexplayer')) return PRESET_INSTALLMENT_IMAGES[3].uri;
-  if (t.includes('camera') || t.includes('canon') || t.includes('sony')) return PRESET_INSTALLMENT_IMAGES[4].uri;
-  if (t.includes('car') || t.includes('motor') || t.includes('vehicle')) return PRESET_INSTALLMENT_IMAGES[5].uri;
-  return null;
+  return getInstallmentImageUri(inst);
 };
 
 interface Props {

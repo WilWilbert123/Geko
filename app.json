@@ -15,7 +15,11 @@
       "android"
     ],
     "android": {
-      "package": "com.me.geko"
+      "package": "com.me.geko",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "plugins": [
       "./withGekoNativeConfig.js",
@@ -23,7 +27,7 @@
         "expo-build-properties",
         {
           "android": {
-            "newArchEnabled": true
+            "newArchEnabled": false
           }
         }
       ]

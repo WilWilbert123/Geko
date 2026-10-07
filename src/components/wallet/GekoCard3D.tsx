@@ -23,8 +23,8 @@ if (typeof (global as any).document === 'undefined') {
   (global as any).document = {
     createElement: (tag: string) => ({
       style: {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
+      addEventListener: () => { },
+      removeEventListener: () => { },
     }),
     createElementNS: (_ns: string, tag: string) => (global as any).document.createElement(tag),
   };
