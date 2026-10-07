@@ -2,6 +2,8 @@ import { Goal } from '../hooks/useGoals';
 
 export const PRESET_GOAL_FALLBACKS: Record<string, string> = {
   drone: 'https://images.unsplash.com/photo-1527977966376-1c8408f9f108?q=80&w=800',
+  dji: 'https://images.unsplash.com/photo-1527977966376-1c8408f9f108?q=80&w=800',
+  neo: 'https://images.unsplash.com/photo-1527977966376-1c8408f9f108?q=80&w=800',
   onexplayer: 'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?q=80&w=800',
   gaming: 'https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?q=80&w=800',
   console: 'https://images.unsplash.com/photo-1606813907291-d86efa9b94db?q=80&w=800',

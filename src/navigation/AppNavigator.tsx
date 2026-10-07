@@ -47,7 +47,14 @@ export const AppNavigator = () => {
       <Stack.Screen 
         name="History" 
         component={HistoryScreen} 
-        options={{ presentation: 'card', headerShown: true, title: 'History', headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} 
+        options={{ 
+          presentation: 'card', 
+          headerShown: true, 
+          title: 'History', 
+          headerStyle: { backgroundColor: colors.background }, 
+          headerTintColor: colors.text,
+          headerShadowVisible: false
+        }} 
       />
       <Stack.Screen 
         name="AddTransaction" 

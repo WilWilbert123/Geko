@@ -101,7 +101,7 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
         onPress={dismiss} 
       />
       <PanGestureHandler
-        activeOffsetY={[10, 100]}
+        activeOffsetY={[-10, 100]}
         failOffsetX={[-15, 15]}
         onGestureEvent={(e: any) => {
           if (e.nativeEvent.translationY > 0) {

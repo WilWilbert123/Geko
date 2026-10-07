@@ -110,56 +110,21 @@ export const initDb = async () => {
       // Column already exists
     }
 
-    // Ensure clean blank slate for cards: start with 0 cards as requested.
-    // The user connects their own cards in the Wallet/Accounts tab.
+    // Ensure clean blank slate: start with 0 cards, goals, transactions, installments as requested.
     try {
       await db.execute('CREATE TABLE IF NOT EXISTS __app_meta__ (key TEXT PRIMARY KEY, value TEXT)');
-      const metaRes = await db.execute("SELECT value FROM __app_meta__ WHERE key = 'cards_blank_slate_reset_v4'");
+      const metaRes = await db.execute("SELECT value FROM __app_meta__ WHERE key = 'fresh_slate_reset_v5'");
       const alreadyReset = metaRes.rows && metaRes.rows.length > 0;
       if (!alreadyReset) {
         await db.execute('DELETE FROM cards');
-        await db.execute("INSERT OR REPLACE INTO __app_meta__ (key, value) VALUES ('cards_blank_slate_reset_v4', '1')");
+        await db.execute('DELETE FROM transactions');
+        await db.execute('DELETE FROM goals');
+        await db.execute('DELETE FROM installments');
+        await db.execute('DELETE FROM budgets');
+        await db.execute("INSERT OR REPLACE INTO __app_meta__ (key, value) VALUES ('fresh_slate_reset_v5', '1')");
       }
     } catch (e) {
       console.log('[SQLite] Blank slate check error:', e);
-    }
-
-    // Seed Budgets
-    const resBudgets = await db.execute('SELECT count(*) as count FROM budgets');
-    const countBudgets = (resBudgets.rows?._array[0] as any).count;
-    if (countBudgets === 0) {
-      const defaultBudgets = [
-        { id: uuidv4(), categoryName: 'Food & Dining', limitAmount: 500 },
-        { id: uuidv4(), categoryName: 'Transport', limitAmount: 150 },
-      ];
-      await db.transaction(async (tx) => {
-        for (const b of defaultBudgets) {
-          await tx.execute(
-            'INSERT INTO budgets (id, categoryName, limitAmount) VALUES (?, ?, ?)',
-            [b.id, b.categoryName, b.limitAmount]
-          );
-        }
-      });
-    }
-
-    // Seed Goals
-    const resGoals = await db.execute('SELECT count(*) as count FROM goals');
-    const countGoals = (resGoals.rows?._array[0] as any).count;
-    if (countGoals === 0) {
-      const defaultGoals = [
-        { id: uuidv4(), title: 'Car Downpayment', current: 4500, target: 10000, targetDate: 'Mar 2027', iconName: 'Car' },
-        { id: uuidv4(), title: 'Emergency Fund', current: 8000, target: 12000, targetDate: 'Dec 2026', iconName: 'ShieldAlert' },
-        { id: uuidv4(), title: 'New MacBook Pro', current: 500, target: 2400, targetDate: 'Nov 2026', iconName: 'Laptop' },
-        { id: uuidv4(), title: 'Japan Trip', current: 2100, target: 5000, targetDate: 'Apr 2027', iconName: 'Plane' },
-      ];
-      await db.transaction(async (tx) => {
-        for (const g of defaultGoals) {
-          await tx.execute(
-            'INSERT INTO goals (id, title, current, target, targetDate, iconName) VALUES (?, ?, ?, ?, ?, ?)',
-            [g.id, g.title, g.current, g.target, g.targetDate, g.iconName]
-          );
-        }
-      });
     }
 
     // Ensure Installments Table Exists

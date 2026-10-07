@@ -5,9 +5,10 @@ import { useTheme } from '../hooks/useTheme';
 import { useRAGChat } from '../hooks/useRAGChat';
 import { ChatBubble } from '../components/ai/ChatBubble';
 import { StreamingText } from '../components/ai/StreamingText';
-import { Send, Target, BarChart3, CreditCard, Utensils, Calendar } from 'lucide-react-native';
+import { Send, Target, BarChart3, CreditCard, Utensils, Calendar, Trash2, Mic, MicOff } from 'lucide-react-native';
 import { loadModel } from '../services/ai/engine/llamaService';
 import { getModelPath } from '../utils/fileSystem';
+import { useSpeechToText } from '../hooks/useSpeechToText';
 
 const PROMPT_CHIPS = [
   { icon: Target, title: 'What is my current financial goal?', query: 'What is my current financial goal?', color: '#EF4444' },
@@ -21,9 +22,10 @@ export const AIChatScreen = () => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [input, setInput] = useState('');
-  const { messages, isGenerating, currentStream, sendMessage } = useRAGChat();
+  const [inputHeight, setInputHeight] = useState(48);
+  const { messages, isGenerating, currentStream, sendMessage, clearHistory, deleteMessage } = useRAGChat();
   const scrollViewRef = useRef<ScrollView>(null);
-  
+
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,15 +42,21 @@ export const AIChatScreen = () => {
     initLLM();
   }, []);
 
+  const { isListening, toggleListening, stopListening } = useSpeechToText((transcript) => {
+    setInput(transcript);
+  });
+
   const handleSend = (text: string = input) => {
     if (text.trim()) {
+      stopListening();
       sendMessage(text.trim());
       setInput('');
+      setInputHeight(48);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
@@ -57,16 +65,25 @@ export const AIChatScreen = () => {
           <Text style={[styles.headerTitle, { color: colors.text }]}>Geko</Text>
           <View style={[styles.activeDot, { backgroundColor: colors.primary }]} />
         </View>
-        <Text style={[styles.headerSub, { color: colors.textMuted }]}>Offline AI Assistant</Text>
+
+        {messages.length > 0 && (
+          <TouchableOpacity
+            style={[styles.clearButton, { backgroundColor: colors.surfaceHighlight }]}
+            onPress={clearHistory}
+            activeOpacity={0.7}
+          >
+            <Trash2 size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
-      
+
       {error && (
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
         </View>
       )}
 
-      <ScrollView 
+      <ScrollView
         ref={scrollViewRef}
         contentContainerStyle={styles.scrollContent}
         onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
@@ -78,8 +95,8 @@ export const AIChatScreen = () => {
               {PROMPT_CHIPS.map(chip => {
                 const IconComponent = chip.icon;
                 return (
-                  <TouchableOpacity 
-                    key={chip.title} 
+                  <TouchableOpacity
+                    key={chip.title}
                     style={[styles.chip, { backgroundColor: colors.surfaceHighlight || 'rgba(255,255,255,0.06)', borderColor: colors.border }]}
                     onPress={() => handleSend(chip.query)}
                     activeOpacity={0.8}
@@ -92,30 +109,75 @@ export const AIChatScreen = () => {
             </View>
           </View>
         )}
-        
+
         {messages.map((msg) => (
-          <ChatBubble key={msg.id} message={msg} />
+          <ChatBubble key={msg.id} message={msg} onDelete={deleteMessage} />
         ))}
         {isGenerating && currentStream !== '' && (
           <StreamingText text={currentStream} isGenerating={isGenerating} />
         )}
       </ScrollView>
 
+      {isListening && (
+        <View style={[styles.listeningBanner, { backgroundColor: colors.surfaceHighlight || 'rgba(255,255,255,0.06)' }]}>
+          <View style={[styles.recordingDot, { backgroundColor: colors.danger }]} />
+          <Text style={[styles.listeningText, { color: colors.text }]}>
+            Listening... Speak your prompt now
+          </Text>
+        </View>
+      )}
+
       <View style={[styles.inputContainer, { paddingBottom: 12, borderTopColor: colors.border, backgroundColor: colors.background }]}>
+        <TouchableOpacity
+          onPress={toggleListening}
+          style={[
+            styles.micButton,
+            { backgroundColor: isListening ? colors.danger : colors.surfaceHighlight }
+          ]}
+          activeOpacity={0.7}
+        >
+          {isListening ? (
+            <MicOff color="#FFF" size={20} />
+          ) : (
+            <Mic color={colors.textMuted} size={20} />
+          )}
+        </TouchableOpacity>
+
         <TextInput
-          style={[styles.input, { color: colors.text, backgroundColor: colors.surfaceHighlight }]}
-          placeholder="Ask Geko about your budget..."
+          style={[
+            styles.input,
+            {
+              color: colors.text,
+              backgroundColor: colors.surfaceHighlight,
+              height: !input ? 48 : Math.min(105, Math.max(48, inputHeight)),
+            }
+          ]}
+          multiline={true}
+          maxLength={500}
+          placeholder={isListening ? "Listening... Speak now" : "Ask Geko about your budget..."}
           placeholderTextColor={colors.textMuted}
           value={input}
-          onChangeText={setInput}
-          onSubmitEditing={() => handleSend()}
-          returnKeyType="send"
+          onChangeText={(val) => {
+            setInput(val);
+            if (!val) setInputHeight(48);
+          }}
+          onContentSizeChange={(e) => {
+            if (!input) {
+              setInputHeight(48);
+              return;
+            }
+            const contentH = e.nativeEvent.contentSize.height;
+            if (contentH > 24) {
+              setInputHeight(contentH + 16);
+            }
+          }}
+          returnKeyType="default"
         />
-        <TouchableOpacity 
-          onPress={() => handleSend()} 
+        <TouchableOpacity
+          onPress={() => handleSend()}
           disabled={isGenerating || !input.trim()}
           style={[
-            styles.sendButton, 
+            styles.sendButton,
             { backgroundColor: isGenerating || !input.trim() ? colors.border : colors.primary }
           ]}
         >
@@ -196,27 +258,58 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    padding: 16,
-    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 12,
     borderTopWidth: 1,
-    alignItems: 'center',
+    alignItems: 'flex-end',
   },
   input: {
     flex: 1,
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: Platform.OS === 'ios' ? 12 : 11,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 11,
+    fontSize: 15.5,
+    lineHeight: 20,
+    marginRight: 10,
+    minHeight: 48,
+    maxHeight: 105,
+  },
+  micButton: {
+    width: 48,
     height: 48,
     borderRadius: 24,
-    paddingHorizontal: 20,
-    fontSize: 16,
-    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    marginBottom: 1,
+  },
+  listeningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  listeningText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   sendButton: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 0,
   },
   errorContainer: {
     padding: 20,
@@ -228,5 +321,11 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 14,
     textAlign: 'center',
-  }
+  },
+  clearButton: {
+    padding: 8,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
