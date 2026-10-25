@@ -8,6 +8,7 @@ import { uuidv4 } from '../utils/uuid';
 export const useTransactions = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [balance, setBalance] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   const load = useCallback(async () => {
     const db = getDb();
@@ -19,13 +20,15 @@ export const useTransactions = () => {
         date: Number(row.date),
       })) as Transaction[];
       setTransactions(data);
-      
-      const sum = data.reduce((acc, t) => 
+
+      const sum = data.reduce((acc, t) =>
         t.type === 'income' ? acc + t.amount : acc - t.amount
-      , 0);
+        , 0);
       setBalance(sum);
     } catch (error) {
       console.error('Failed to load transactions', error);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -39,7 +42,7 @@ export const useTransactions = () => {
     const db = getDb();
     const id = uuidv4();
     const bankName = t.bankName || 'GCash';
-    
+
     try {
       // 1. Insert into relational DB
       const res = await db.execute(
@@ -64,7 +67,7 @@ export const useTransactions = () => {
       } catch (e) {
         console.warn('Failed to update card balance', e);
       }
-      
+
       // 3. Generate vector embedding asynchronously so UI doesn't block
       setTimeout(async () => {
         try {
@@ -86,5 +89,5 @@ export const useTransactions = () => {
     }
   };
 
-  return { transactions, balance, addTransaction, refresh: load };
+  return { transactions, balance, isLoading, addTransaction, refresh: load };
 };

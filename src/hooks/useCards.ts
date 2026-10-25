@@ -23,6 +23,7 @@ export interface Card {
 
 export const useCards = () => {
   const [cards, setCards] = useState<Card[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const load = useCallback(async () => {
     const db = getDb();
@@ -32,6 +33,7 @@ export const useCards = () => {
         await db.execute("UPDATE cards SET bankName = 'GCash' WHERE LOWER(bankName) = 'gcash e-wallet' OR LOWER(bankName) = 'gcash ewallet'");
         await db.execute("UPDATE transactions SET bankName = 'GCash' WHERE LOWER(bankName) = 'gcash e-wallet' OR LOWER(bankName) = 'gcash ewallet'");
         await db.execute("UPDATE transactions SET categoryId = 'Deposit', note = 'Deposit' WHERE LOWER(note) LIKE '%starting balance%' OR LOWER(note) LIKE '%cash-in%' OR LOWER(categoryId) LIKE '%cash-in%' OR LOWER(categoryId) LIKE '%cash in%'");
+        await db.execute("UPDATE transactions SET categoryId = 'Housing', note = 'Utang' WHERE LOWER(note) LIKE '%nag ay utang%' OR LOWER(note) = 'nag ay utang'");
       } catch (e) {
         // Ignore if tables don't exist yet
       }
@@ -50,6 +52,8 @@ export const useCards = () => {
       setCards(data);
     } catch (error) {
       console.error('Failed to load cards', error);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -248,6 +252,7 @@ export const useCards = () => {
 
   return {
     cards,
+    isLoading,
     totalAssets,
     creditDebt,
     netWorth,

@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../hooks/useTheme';
 import { formatCurrency } from '../../utils/formatters';
 import { GekoCard3D } from '../wallet/GekoCard3D';
+import { SkeletonCard3D } from '../common/Skeleton';
 import { TrendingDown, ArrowDown, PieChart, Edit3, X, Check, Wifi, Plus, ChevronRight } from 'lucide-react-native';
 import { useCards, Card } from '../../hooks/useCards';
 import { getBankTheme } from '../../utils/bankThemes';
@@ -30,7 +31,7 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
 }) => {
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
-  const { cards, totalAssets, updateCardBudget, updateCardDetails, resetAllCardBalances } = useCards();
+  const { cards, isLoading, totalAssets, updateCardBudget, updateCardDetails, resetAllCardBalances } = useCards();
 
   const [selectedBankId, setSelectedBankId] = useState<string>('ALL');
 
@@ -176,23 +177,27 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
         </View>
       )}
 
-      {/* ── Dynamic 3D GEKO Bank Card ── */}
-      <GekoCard3D
-        balance={cardBalance}
-        cardholderName="GEKO MEMBER"
-        accountType={accountType}
-        bankName={activeCard ? activeCard.bankName : 'GEKO'}
-        cardNumber={cardNumber}
-        color1={cardColor1}
-        color2={cardColor2}
-        expiryDate="10/29"
-        height={260}
-        cornerRadius={0.20}
-        paymentNetwork={activeCard ? (activeCard.paymentNetwork || getBankTheme(activeCard.bankName).network) : 'OTHER'}
-      />
+      {/* ── Dynamic 3D GEKO Bank Card or Skeleton Loader ── */}
+      {isLoading ? (
+        <SkeletonCard3D />
+      ) : (
+        <GekoCard3D
+          balance={cardBalance}
+          cardholderName="GEKO MEMBER"
+          accountType={accountType}
+          bankName={activeCard ? activeCard.bankName : 'GEKO'}
+          cardNumber={cardNumber}
+          color1={cardColor1}
+          color2={cardColor2}
+          expiryDate="10/29"
+          height={260}
+          cornerRadius={0.20}
+          paymentNetwork={activeCard ? (activeCard.paymentNetwork || getBankTheme(activeCard.bankName).network) : 'OTHER'}
+        />
+      )}
 
       {/* ── Hint when no accounts are connected ── */}
-      {cards.length === 0 && (
+      {!isLoading && cards.length === 0 && (
         <TouchableOpacity
           style={[styles.connectFirstCardHint, { backgroundColor: colors.surfaceHighlight || 'rgba(16, 185, 129, 0.06)' }]}
           activeOpacity={0.8}

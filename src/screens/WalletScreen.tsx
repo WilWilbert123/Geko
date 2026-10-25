@@ -37,8 +37,11 @@ import {
   Gem,
   Landmark,
   Globe,
+  ChevronRight,
 } from 'lucide-react-native';
 import { GekoCard3D } from '../components/wallet/GekoCard3D';
+import { MiniRealCard } from '../components/wallet/MiniRealCard';
+import { SkeletonCardListItem, SkeletonCard3D } from '../components/common/Skeleton';
 import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -69,7 +72,7 @@ const POPULAR_QUICK_PRESETS: CardPreset[] = [
 export const WalletScreen = () => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { cards, addCard, updateCardDetails, deleteCard, clearAllCards, refresh: refreshCards } = useCards();
+  const { cards, isLoading, addCard, updateCardDetails, deleteCard, clearAllCards, refresh: refreshCards } = useCards();
 
   const [refreshing, setRefreshing] = useState(false);
   const [filterCategory, setFilterCategory] = useState<'ALL' | 'CREDIT' | 'DIGITAL' | 'EWALLET' | 'PREPAID' | 'MEMBERSHIP' | 'BANK' | 'VISA'>('ALL');
@@ -543,8 +546,27 @@ export const WalletScreen = () => {
           contentContainerStyle={styles.scrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         >
+          {/* ── Skeleton Loading State ── */}
+          {isLoading && (
+            <View style={{ gap: 12 }}>
+              {viewMode === 'list' ? (
+                <>
+                  <SkeletonCardListItem />
+                  <SkeletonCardListItem />
+                  <SkeletonCardListItem />
+                  <SkeletonCardListItem />
+                </>
+              ) : (
+                <>
+                  <SkeletonCard3D />
+                  <SkeletonCard3D />
+                </>
+              )}
+            </View>
+          )}
+
           {/* ── Blank Slate Empty State (When no cards connected) ── */}
-          {cards.length === 0 && (
+          {!isLoading && cards.length === 0 && (
             <View style={styles.blankSlateContainer}>
               {/* Sleek card silhouette preview */}
               <View style={[styles.blankCardFrame, { borderColor: `${colors.primary}44`, backgroundColor: colors.surfaceHighlight || '#111827' }]}>
@@ -700,38 +722,177 @@ export const WalletScreen = () => {
           {/* 3. List Mode View */}
           {cards.length > 0 && viewMode === 'list' && (
             <View style={styles.listViewContainer}>
+              {/* Summary Stats Strip for List View */}
+              {filteredCards.length > 0 && (
+                <View style={[styles.listStatsBar, { backgroundColor: colors.surfaceHighlight || '#1E293B', borderColor: colors.border }]}>
+                  <View style={styles.listStatsLeft}>
+                    <Text style={[styles.listStatsLabel, { color: colors.textMuted }]}>
+                      {filterCategory === 'ALL'
+                        ? 'TOTAL ASSETS'
+                        : `${filterCategory} ACCOUNTS`}
+                    </Text>
+                    <Text style={[styles.listStatsValue, { color: colors.text }]}>
+                      {formatCurrency(
+                        filteredCards.reduce((acc, c) => acc + (c.type === 'CREDIT_CARD' ? 0 : c.balance), 0)
+                      )}
+                    </Text>
+                  </View>
+
+                  <View style={styles.listStatsRight}>
+                    {filteredCards.some((c) => c.type === 'CREDIT_CARD' && (c.outstandingBalance || 0) > 0) ? (
+                      <View style={styles.listStatsDebtBadge}>
+                        <Text style={styles.listStatsDebtLabel}>DEBT</Text>
+                        <Text style={styles.listStatsDebtValue}>
+                          {formatCurrency(
+                            filteredCards.reduce((acc, c) => acc + (c.type === 'CREDIT_CARD' ? (c.outstandingBalance || 0) : 0), 0)
+                          )}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.listCountPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <Text style={[styles.listCountPillText, { color: colors.textMuted }]}>
+                          {filteredCards.length} {filteredCards.length === 1 ? 'account' : 'accounts'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {/* Empty state when category filter returns 0 cards */}
+              {filteredCards.length === 0 && (
+                <View style={[styles.listEmptyFilterState, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <CreditCard size={28} color={colors.textMuted} />
+                  <Text style={[styles.listEmptyFilterTitle, { color: colors.text }]}>
+                    No {filterCategory.toLowerCase()} accounts
+                  </Text>
+                  <Text style={[styles.listEmptyFilterSub, { color: colors.textMuted }]}>
+                    You don't have any accounts registered under this category yet.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.listEmptyFilterBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => setFilterCategory('ALL')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.listEmptyFilterBtnText}>View All Accounts</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Cards List */}
               {filteredCards.map((card, idx) => {
                 const theme = getBankTheme(card.bankName, card.color1, card.color2);
                 const isCredit = card.type === 'CREDIT_CARD';
                 const displayBal = isCredit ? (card.outstandingBalance || 0) : card.balance;
+                const isCash = card.type === 'CASH' || card.bankName.toLowerCase().includes('cash');
+                const isDigital = card.bankName.toLowerCase().includes('gotyme') || card.bankName.toLowerCase().includes('cimb') || card.bankName.toLowerCase().includes('tonik') || card.bankName.toLowerCase().includes('seabank') || card.bankName.toLowerCase().includes('maribank');
+                const isEwallet = !isCredit && !isCash && (card.type === 'EWALLET' || card.bankName.toLowerCase().includes('gcash') || card.bankName.toLowerCase().includes('maya') || card.bankName.toLowerCase().includes('wallet'));
+
+                const categoryLabel = isCredit
+                  ? 'Credit'
+                  : isCash
+                    ? 'Cash'
+                    : isDigital
+                      ? 'Digital Bank'
+                      : isEwallet
+                        ? 'E-Wallet'
+                        : 'Bank';
+
+                const badgeBg = isCredit
+                  ? 'rgba(239, 68, 68, 0.12)'
+                  : isCash
+                    ? 'rgba(16, 185, 129, 0.12)'
+                    : isDigital
+                      ? 'rgba(168, 85, 247, 0.12)'
+                      : isEwallet
+                        ? 'rgba(59, 130, 246, 0.12)'
+                        : 'rgba(245, 158, 11, 0.12)';
+
+                const badgeTextColor = isCredit
+                  ? '#F87171'
+                  : isCash
+                    ? '#34D399'
+                    : isDigital
+                      ? '#C084FC'
+                      : isEwallet
+                        ? '#60A5FA'
+                        : '#FBBF24';
+
+                const networkLabel = (card.paymentNetwork || theme.network) === 'OTHER'
+                  ? (card.type === 'CASH' ? 'Cash Wallet' : theme.network !== 'OTHER' ? theme.network : 'Account')
+                  : (card.paymentNetwork || theme.network);
 
                 return (
                   <TouchableOpacity
                     key={`card-list-${card.id}-${idx}`}
-                    style={[styles.listItemRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                    activeOpacity={0.8}
-                    onPress={() => handleOpenEditModal(card)}
+                    style={[
+                      styles.listItemRow,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      handleOpenEditModal(card);
+                    }}
                   >
-                    <View style={[styles.listIconBadge, { backgroundColor: card.color1 || theme.bg1 }]}>
-                      <Text style={styles.listIconText}>{card.bankName.charAt(0).toUpperCase()}</Text>
+                    {/* Realistic Miniature Credit/Bank Card */}
+                    <View style={styles.miniCardWrapper}>
+                      <MiniRealCard
+                        bankName={card.bankName}
+                        color1={card.color1 || theme.bg1}
+                        color2={card.color2 || theme.bg2}
+                        type={card.type}
+                        paymentNetwork={card.paymentNetwork || theme.network}
+                        cardNumber={card.cardNumber}
+                        balance={card.balance}
+                        width={74}
+                        height={46}
+                      />
                     </View>
 
+                    {/* Middle Info Column */}
                     <View style={styles.listMidInfo}>
                       <Text style={[styles.listBankTitle, { color: colors.text }]} numberOfLines={1}>
                         {card.bankName}
                       </Text>
-                      <Text style={[styles.listAccountType, { color: colors.textMuted }]}>
-                        {isCredit ? 'Credit Card' : card.type === 'EWALLET' ? 'E-Wallet' : card.type === 'CASH' ? 'Cash Wallet' : 'Bank Account'} • {card.paymentNetwork || theme.network}
-                      </Text>
+
+                      <View style={styles.listBadgesRow}>
+                        <View style={[styles.listCategoryBadge, { backgroundColor: badgeBg }]}>
+                          <Text style={[styles.listCategoryBadgeText, { color: badgeTextColor }]}>
+                            {categoryLabel}
+                          </Text>
+                        </View>
+                        <Text style={[styles.listNetworkText, { color: colors.textMuted }]}>
+                          • {networkLabel}
+                        </Text>
+                      </View>
                     </View>
 
+                    {/* Right Balance Column with Chevron */}
                     <View style={styles.listRightBal}>
-                      <Text style={[styles.listBalText, { color: colors.text }]}>
+                      <Text
+                        style={[
+                          styles.listBalText,
+                          { color: isCredit && displayBal > 0 ? '#F87171' : colors.text },
+                        ]}
+                      >
                         {formatCurrency(displayBal)}
                       </Text>
-                      {isCredit && (
-                        <Text style={[styles.listSubBal, { color: colors.textMuted }]}>Outstanding Debt</Text>
-                      )}
+
+                      <View style={styles.listSubBalRow}>
+                        {isCredit ? (
+                          <View style={styles.debtIndicatorRow}>
+                            <View style={styles.debtDot} />
+                            <Text style={styles.debtLabelText}>Debt</Text>
+                          </View>
+                        ) : (
+                          <Text style={[styles.listSubBal, { color: colors.textMuted }]}>Available</Text>
+                        )}
+                        <ChevronRight size={13} color={colors.textMuted} style={{ marginLeft: 4 }} />
+                      </View>
                     </View>
                   </TouchableOpacity>
                 );
@@ -1272,49 +1433,174 @@ const styles = StyleSheet.create({
   listViewContainer: {
     gap: 10,
   },
+  listStatsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 4,
+  },
+  listStatsLeft: {
+    gap: 2,
+  },
+  listStatsLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  listStatsValue: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  listStatsRight: {
+    alignItems: 'flex-end',
+  },
+  listStatsDebtBadge: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+    alignItems: 'flex-end',
+  },
+  listStatsDebtLabel: {
+    color: '#F87171',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  listStatsDebtValue: {
+    color: '#F87171',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  listCountPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  listCountPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
   listItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderRadius: 18,
     borderWidth: 1,
     gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  listIconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  listIconText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '800',
+  miniCardWrapper: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
   },
   listMidInfo: {
     flex: 1,
+    justifyContent: 'center',
   },
   listBankTitle: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '700',
+    letterSpacing: -0.2,
   },
-  listAccountType: {
+  listBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  listCategoryBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  listCategoryBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  listNetworkText: {
     fontSize: 11,
     fontWeight: '500',
-    marginTop: 2,
   },
   listRightBal: {
     alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   listBalText: {
     fontSize: 15,
     fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  listSubBalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
   },
   listSubBal: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '500',
-    marginTop: 2,
+  },
+  debtIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  debtDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#F87171',
+  },
+  debtLabelText: {
+    color: '#F87171',
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  listEmptyFilterState: {
+    padding: 32,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 12,
+  },
+  listEmptyFilterTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  listEmptyFilterSub: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 240,
+  },
+  listEmptyFilterBtn: {
+    marginTop: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 12,
+  },
+  listEmptyFilterBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 
   /* Modal Styles */

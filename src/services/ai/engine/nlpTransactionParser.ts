@@ -157,6 +157,12 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     'utilities',
     'bill',
     'bills',
+    'utang',
+    'debt',
+    'loan',
+    'pautang',
+    'hulugan',
+    'bayad utang',
   ],
   Shopping: [
     'shopee',
@@ -300,7 +306,33 @@ const FILLER_WORDS = [
   'din',
   'rin',
   'lang',
-  'muna',
+  'nag',
+  'ay',
+  'na',
+  'pa',
+  'eto',
+  'etong',
+  'itong',
+  'nitong',
+  'neto',
+  'netong',
+  'ung',
+  'kay',
+  'kina',
+  'ba',
+  'eh',
+  'kasi',
+  'dahil',
+  'pala',
+  'daw',
+  'raw',
+  'naman',
+  'nila',
+  'niya',
+  'natin',
+  'bayaran',
+  'worth',
+  'halaga',
   'gcash',
   'bpi',
   'gotyme',
@@ -386,6 +418,24 @@ const PREPOSITIONS = ['to', 'into', 'in', 'sa', 'papunta', 'dito', 'para', 'for'
 const cleanNote = (rawText: string, isIncome: boolean = false): string => {
   const lower = rawText.toLowerCase();
   const isLost = ['nawala', 'nawalan', 'lost', 'missing', 'stolen', 'nanakaw', 'nahulog'].some(w => lower.includes(w));
+
+  // Special handling for Utang / Debt payment
+  if (lower.includes('utang') || lower.includes('debt') || lower.includes('loan')) {
+    const stripped = lower
+      .replace(/\b(nag|ay|ito|eto|itong|etong|nito|neto|ang|yung|ung|bayad|nagbayad|pambayad|pambili|ng|nang|sa|kay|para|at|na|gamit|gamitan|gotyme|gcash|maya|bpi|bdo|cash)\b/g, ' ')
+      .replace(/\d+(?:\.\d+)?(?:k)?/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!stripped || stripped === 'utang' || stripped === 'debt' || stripped === 'loan') {
+      return 'Utang';
+    } else {
+      return stripped
+        .split(' ')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+    }
+  }
 
   let words = lower.split(/\s+/);
   words = words.filter((w) => !FILLER_WORDS.includes(w) && !PREPOSITIONS.includes(w) && !/^\d+$/.test(w) && !/^\d+k$/i.test(w));

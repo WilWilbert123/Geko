@@ -6,13 +6,14 @@ import { useTransactions } from '../hooks/useTransactions';
 import { PieChart, Search, X } from 'lucide-react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { TransactionItem } from '../components/home/RecentActivity';
+import { SkeletonTransactionItem } from '../components/common/Skeleton';
 import { subDays, subMonths } from 'date-fns';
 
 const SEGMENTS = ['All', 'Weekly', 'Monthly'];
 
 export const HistoryScreen = () => {
   const { colors, isDark } = useTheme();
-  const { transactions } = useTransactions();
+  const { transactions, isLoading } = useTransactions();
   const [segment, setSegment] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -32,7 +33,7 @@ export const HistoryScreen = () => {
     // Filter by search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      list = list.filter(t => 
+      list = list.filter(t =>
         (t.categoryId && t.categoryId.toLowerCase().includes(q)) ||
         (t.note && t.note.toLowerCase().includes(q)) ||
         (t.bankName && t.bankName.toLowerCase().includes(q))
@@ -77,16 +78,16 @@ export const HistoryScreen = () => {
         {/* Segment Filter Controls */}
         <View style={[styles.segmentControl, { backgroundColor: colors.surfaceHighlight }]}>
           {SEGMENTS.map(s => (
-            <TouchableOpacity 
+            <TouchableOpacity
               key={s}
               style={[
-                styles.segmentBtn, 
+                styles.segmentBtn,
                 segment === s && { backgroundColor: colors.surface, shadowColor: '#000', elevation: 2 }
               ]}
               onPress={() => setSegment(s)}
             >
               <Text style={[
-                styles.segmentText, 
+                styles.segmentText,
                 { color: segment === s ? colors.text : colors.textMuted }
               ]}>
                 {s}
@@ -96,16 +97,27 @@ export const HistoryScreen = () => {
         </View>
       </View>
 
-      <FlashList
-        data={filteredTransactions}
-        estimatedItemSize={76}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 100 }}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
-          <TransactionItem item={item} index={index} />
-        )}
-        ListEmptyComponent={emptyState}
-      />
+      {isLoading ? (
+        <View style={{ paddingHorizontal: 20, paddingTop: 10 }}>
+          <SkeletonTransactionItem />
+          <SkeletonTransactionItem />
+          <SkeletonTransactionItem />
+          <SkeletonTransactionItem />
+          <SkeletonTransactionItem />
+          <SkeletonTransactionItem />
+        </View>
+      ) : (
+        <FlashList
+          data={filteredTransactions}
+          estimatedItemSize={76}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 100 }}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item, index }) => (
+            <TransactionItem item={item} index={index} />
+          )}
+          ListEmptyComponent={emptyState}
+        />
+      )}
     </View>
   );
 };
@@ -147,8 +159,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  empty: { 
-    padding: 40, 
+  empty: {
+    padding: 40,
     alignItems: 'center',
     marginTop: 60,
   },
