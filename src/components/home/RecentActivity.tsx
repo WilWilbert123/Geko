@@ -20,6 +20,7 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 import { isToday, isYesterday } from 'date-fns';
+import { SkeletonTransactionItem } from '../common/Skeleton';
 
 export const CATEGORY_STYLE_MAP: Record<string, { bg: string; color: string; icon: any }> = {
   food: { bg: 'rgba(245, 158, 11, 0.15)', color: '#D97706', icon: Utensils },
@@ -29,6 +30,10 @@ export const CATEGORY_STYLE_MAP: Record<string, { bg: string; color: string; ico
   utilities: { bg: 'rgba(99, 102, 241, 0.15)', color: '#4F46E5', icon: Zap },
   electricity: { bg: 'rgba(99, 102, 241, 0.15)', color: '#4F46E5', icon: Zap },
   bills: { bg: 'rgba(99, 102, 241, 0.15)', color: '#4F46E5', icon: Zap },
+  housing: { bg: 'rgba(139, 92, 246, 0.15)', color: '#7C3AED', icon: Zap },
+  debt: { bg: 'rgba(239, 68, 68, 0.15)', color: '#DC2626', icon: Banknote },
+  utang: { bg: 'rgba(239, 68, 68, 0.15)', color: '#DC2626', icon: Banknote },
+  loan: { bg: 'rgba(239, 68, 68, 0.15)', color: '#DC2626', icon: Banknote },
   'cash in': { bg: 'rgba(16, 185, 129, 0.15)', color: '#059669', icon: DollarSign },
   cashin: { bg: 'rgba(16, 185, 129, 0.15)', color: '#059669', icon: DollarSign },
   deposit: { bg: 'rgba(16, 185, 129, 0.15)', color: '#059669', icon: DollarSign },
@@ -123,6 +128,11 @@ export const formatCleanTitle = (categoryId?: string, note?: string) => {
     return 'Deposit';
   }
 
+  // 1.5 Utang / Debt payment -> display clean "Utang"
+  if (combined.includes('utang') || combined.includes('bayad utang')) {
+    return 'Utang';
+  }
+
   // 2. If note is specific (e.g. "Coffee", "Pabango"), display short clean note
   if (n && n.toLowerCase() !== cat.toLowerCase()) {
     let cleanNote = n;
@@ -152,7 +162,8 @@ export const TransactionItem = ({ item, index }: { item: any; index: number }) =
   const { colors } = useTheme();
   const isIncome = item.type === 'income';
   const targetBank = item.bankName || 'GCash';
-  const catConfig = getCategoryConfig(item.categoryId);
+  const isUtang = (item.note || '').toLowerCase().includes('utang') || (item.categoryId || '').toLowerCase().includes('utang');
+  const catConfig = isUtang ? CATEGORY_STYLE_MAP.utang : getCategoryConfig(item.categoryId);
   const IconComp = catConfig.icon;
 
   const titleStr = formatCleanTitle(item.categoryId, item.note);
@@ -185,7 +196,7 @@ export const TransactionItem = ({ item, index }: { item: any; index: number }) =
 
 export const RecentActivity = () => {
   const { colors, isDark } = useTheme();
-  const { transactions } = useTransactions();
+  const { transactions, isLoading } = useTransactions();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   // Sort newest-first
@@ -214,7 +225,14 @@ export const RecentActivity = () => {
     <View style={styles.container}>
       <Text style={[styles.title, { color: colors.text }]}>Recent Activity</Text>
 
-      {orderedGroups.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.activityList}>
+          <SkeletonTransactionItem />
+          <SkeletonTransactionItem />
+          <SkeletonTransactionItem />
+          <SkeletonTransactionItem />
+        </View>
+      ) : orderedGroups.length === 0 ? (
         <View style={styles.emptyState}>
           <Wallet size={48} color={colors.border} />
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>No recent activity</Text>

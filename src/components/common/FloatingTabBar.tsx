@@ -3,14 +3,14 @@ import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../hooks/useTheme';
-import { Home, CreditCard, Plus, MessageSquare, BarChart3 } from 'lucide-react-native';
+import { Home, CreditCard, Plus, MessageSquare, LayoutDashboard } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 export const FloatingTabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const currentRoute = state.routes[state.index].name;
+  const currentRoute = state?.routes?.[state?.index]?.name || 'Home';
 
   const tabs = [
     {
@@ -45,8 +45,8 @@ export const FloatingTabBar = ({ state, descriptors, navigation }: BottomTabBarP
     },
     {
       id: 'Plan',
-      label: 'More',
-      icon: BarChart3,
+      label: 'Dashboard',
+      icon: LayoutDashboard,
       routeName: 'Plan',
       isFocused: currentRoute === 'Plan',
     },

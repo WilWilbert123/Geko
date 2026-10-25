@@ -15,6 +15,7 @@ export interface Goal {
 
 export const useGoals = () => {
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const load = useCallback(async () => {
     const db = getDb();
@@ -29,6 +30,8 @@ export const useGoals = () => {
       setGoals(data);
     } catch (error) {
       console.error('Failed to load goals', error);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -135,6 +138,7 @@ export const useGoals = () => {
 
   return {
     goals,
+    isLoading,
     addGoal,
     updateGoalProgress,
     updateGoalImage,
