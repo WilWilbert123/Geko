@@ -6,9 +6,9 @@
     "sdkVersion": "51.0.0",
     "icon": "./assets/images/Geko.png",
     "splash": {
-      "image": "./assets/images/Geko.png",
+      "image": "./assets/images/splash_blank.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1FA971"
     },
     "platforms": [
       "ios",

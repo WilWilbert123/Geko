@@ -425,6 +425,15 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
 
   // Three.js context initialization
   const onContextCreate = useCallback((gl: any) => {
+    // expo-gl only supports UNPACK_FLIP_Y_WEBGL (0x9240) and UNPACK_ALIGNMENT (0x0CF5).
+    // Other params are ignored natively anyway, but each call spams "EXGL: gl.pixelStorei()..." logs.
+    if (gl.pixelStorei && !gl.__gekoPixelStoreiPatched) {
+      const origPixelStorei = gl.pixelStorei.bind(gl);
+      gl.pixelStorei = (pname: number, param: any) => {
+        if (pname === 0x9240 || pname === 0x0cf5) origPixelStorei(pname, param);
+      };
+      gl.__gekoPixelStoreiPatched = true;
+    }
     // Polyfill getShaderPrecisionFormat to avoid Hermes crash when expo-gl returns null
     const origGetShaderPrecisionFormat = gl.getShaderPrecisionFormat ? gl.getShaderPrecisionFormat.bind(gl) : null;
     gl.getShaderPrecisionFormat = (shaderType: number, precisionType: number) => {

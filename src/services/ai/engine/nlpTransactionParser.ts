@@ -188,6 +188,43 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     'makeup',
     'make-up',
     'beauty',
+    'cleanser',
+    'facial wash',
+    'facewash',
+    'face wash',
+    'facial',
+    'hilamos',
+    'panghilamos',
+    'skincare',
+    'skin care',
+    'sunscreen',
+    'sunblock',
+    'moisturizer',
+    'serum',
+    'toner',
+    'acne',
+    'soap',
+    'sabon',
+    'shampoo',
+    'conditioner',
+    'body wash',
+    'deodorant',
+    'deo',
+    'toothpaste',
+    'toothbrush',
+    'floss',
+    'mouthwash',
+    'cotton',
+    'wipes',
+    'tissue',
+    'napkin',
+    'cosmetics',
+    'lipstick',
+    'powder',
+    'lip balm',
+    'watsons',
+    'personal care',
+    'toiletries',
   ],
   Salary: [
     'sweldo',
@@ -416,7 +453,7 @@ const detectCategory = (text: string, isIncome: boolean): string => {
 const PREPOSITIONS = ['to', 'into', 'in', 'sa', 'papunta', 'dito', 'para', 'for', 'on', 'at', 'with', 'from', 'by'];
 
 const cleanNote = (rawText: string, isIncome: boolean = false): string => {
-  const lower = rawText.toLowerCase();
+  let lower = rawText.toLowerCase();
   const isLost = ['nawala', 'nawalan', 'lost', 'missing', 'stolen', 'nanakaw', 'nahulog'].some(w => lower.includes(w));
 
   // Special handling for Utang / Debt payment
@@ -437,9 +474,20 @@ const cleanNote = (rawText: string, isIncome: boolean = false): string => {
     }
   }
 
-  let words = lower.split(/\s+/);
-  words = words.filter((w) => !FILLER_WORDS.includes(w) && !PREPOSITIONS.includes(w) && !/^\d+$/.test(w) && !/^\d+k$/i.test(w));
-  let result = words.join(' ').trim();
+  // 1. Strip payment method phrases and bank references so they never pollute the note
+  // e.g. "gamit ko cash", "gamit ang cash", "gamit gcash", "via maya", "using bpi", "thru cash", "gamit gotyme"
+  lower = lower
+    .replace(/\b(?:gamit(?:\s+(?:ko|ang|namin|ng|mo))?|via|thru|through|using|paid\s+with|bayad\s+sa|bayad\s+gamit)\s+(?:cash|gcash|maya|gotyme|bpi|bdo|unionbank|landbank|pnb|metrobank|seabank|maribank|visa|card|credit\s*card)\b/gi, ' ')
+    .replace(/\b(?:gamit|gamitan|gamitin|using|via|thru|through)\b/gi, ' ')
+    .replace(/\b(?:cash|gcash|maya|gotyme|bpi|bdo|unionbank|landbank|pnb|metrobank|seabank|maribank|visa)\b/gi, ' ');
+
+  // 2. Strip transaction verbs & filler words
+  lower = lower
+    .replace(/\b(?:bumili|bili|nagbayad|pambili|pambayad|nagastos|gastos|naglabas|binili|order|nag-order)\b/gi, ' ')
+    .replace(/\b(?:ako|kami|tayo|siya|sila|ko|namin|mo|niya|ng|nang|sa|kay|para|mga|worth|pesos|peso|php|[p₱])\b/gi, ' ')
+    .replace(/\b\d+(?:,\d{3})*(?:\.\d{1,2})?(?:k)?\b/gi, ' ');
+
+  let result = lower.replace(/\s+/g, ' ').trim();
 
   // Normalize coffee typos
   if (result === 'coffe' || result === 'coffie' || result === 'kape' || result === 'coffee') {
@@ -454,10 +502,13 @@ const cleanNote = (rawText: string, isIncome: boolean = false): string => {
     return isIncome ? 'Deposit' : '';
   }
 
-  // Capitalize title case nicely
+  // Capitalize title case nicely, preserving 'at' / 'and' / '&' between words
   return result
     .split(' ')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .map((w, idx) => {
+      if ((w === 'at' || w === 'and' || w === '&') && idx > 0) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
     .join(' ');
 };
 
@@ -554,11 +605,18 @@ export const parseTransactionsFromText = (input: string): ParsedTransaction[] =>
   const results: ParsedTransaction[] = [];
   const defaultBank = detectBank(trimmed);
 
-  // Split by explicit connectors (comma, 'at', 'and', 'tapos', 'saka', '&', newline)
-  const segments = trimmed
-    .split(/(?:,|\bat\b|\band\b|\btapos\b|\bsaka\b|&|\n)/i)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // Check if text has multiple separate numeric amounts
+  const amountMatches = trimmed.match(/(?:[p₱]\s*)?\b\d+(?:,\d{3})*(?:\.\d{1,2})?(?:k)?\b/gi) || [];
+
+  // If there's only 1 amount, treat the whole sentence as a single transaction!
+  // This ensures compound item phrases like "cleanser at facial wash" are not split.
+  const segments =
+    amountMatches.length <= 1
+      ? [trimmed]
+      : trimmed
+          .split(/(?:,|\btapos\b|\bsaka\b|\n)/i)
+          .map((s) => s.trim())
+          .filter(Boolean);
 
   for (const segment of segments) {
     const segmentBank = detectBank(segment) || defaultBank || 'GCash';

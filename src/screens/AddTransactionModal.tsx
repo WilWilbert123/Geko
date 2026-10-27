@@ -8,7 +8,9 @@ import { RootStackParamList } from '../navigation/types';
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, runOnJS } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Coffee, ShoppingCart, Train, DollarSign, ArrowRightLeft, Zap, Gift } from 'lucide-react-native';
+import { Coffee, ShoppingCart, Train, DollarSign, ArrowRightLeft, Zap, Gift, ScanLine } from 'lucide-react-native';
+import { ReceiptScannerModal } from '../components/receipt/ReceiptScannerModal';
+import { ParsedReceipt } from '../services/receipt/receiptParser';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddTransaction'>;
 
@@ -46,6 +48,20 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
   const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
   const [category, setCategory] = useState('Food');
   const [selectedBank, setSelectedBank] = useState('GCash');
+  const [scannerOpen, setScannerOpen] = useState(false);
+
+  const handleReceiptScanned = (parsed: ParsedReceipt) => {
+    setAmount(parsed.total > 0 ? parsed.total.toString() : '');
+    let itemNote = parsed.merchant;
+    if (parsed.items && parsed.items.length > 0) {
+      itemNote += `: ${parsed.items.map((it) => `${it.qty}x ${it.name}`).slice(0, 3).join(', ')}`;
+    }
+    setNote(itemNote);
+    setType('expense');
+    if (parsed.category) setCategory(parsed.category);
+    if (parsed.suggestedBank) setSelectedBank(parsed.suggestedBank);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
 
   const translateY = useSharedValue(0);
 
@@ -135,6 +151,19 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* Quick Receipt Auto-Fill Bar */}
+          <TouchableOpacity
+            style={styles.scanReceiptBar}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setScannerOpen(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <ScanLine size={15} color="#D97706" />
+            <Text style={styles.scanReceiptBarText}>Scan Receipt / Bill to Auto-Fill</Text>
+          </TouchableOpacity>
 
           <TextInput
             style={[styles.input, { color: activeColor, borderBottomColor: colors.border }]}
@@ -231,6 +260,12 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
           </TouchableOpacity>
         </Animated.View>
       </PanGestureHandler>
+
+      <ReceiptScannerModal
+        visible={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onSuccess={handleReceiptScanned}
+      />
     </View>
   );
 };
@@ -336,5 +371,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 16,
+  },
+  scanReceiptBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    gap: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  scanReceiptBarText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
   },
 });

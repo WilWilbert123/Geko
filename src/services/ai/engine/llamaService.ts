@@ -287,6 +287,16 @@ export const generateStream = async (
         const date = Date.now();
         const bankName = item.bankName || 'GCash';
 
+        if (bankName.toLowerCase() === 'cash') {
+          const cashCardCheck = await db.execute("SELECT id FROM cards WHERE LOWER(bankName) = 'cash'");
+          if (!cashCardCheck.rows?._array?.length) {
+            await db.execute(
+              "INSERT INTO cards (id, bankName, color1, color2, balance, monthlyBudget, type, paymentNetwork, creditLimit, outstandingBalance, availableCredit) VALUES ('card-physical-cash', 'Cash', '#0B0D12', '#10B981', 0, 5000, 'CASH', 'OTHER', 0, 0, 0)"
+            );
+            DeviceEventEmitter.emit('cards_updated');
+          }
+        }
+
         await db.execute(
           'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
           [newId, item.amount, date, item.categoryId, item.type, item.note, bankName]
@@ -325,6 +335,8 @@ export const generateStream = async (
         const targetBank = single.bankName || 'GCash';
         const cardRes = await db.execute('SELECT balance, outstandingBalance, type FROM cards WHERE LOWER(bankName) = LOWER(?)', [targetBank]);
         const cardRow = cardRes.rows?._array[0];
+        const isCash = targetBank.toLowerCase() === 'cash';
+        const walletLabel = isCash ? 'Physical Cash wallet' : `${targetBank} card`;
         const newBalStr = cardRow
           ? (cardRow.type === 'CREDIT_CARD'
               ? ` (Kasalukuyang utang: ${symbol}${Number(cardRow.outstandingBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })})`
@@ -347,17 +359,17 @@ export const generateStream = async (
           const isLost = single.categoryId === 'Adjustment' || single.note.toLowerCase().includes('lost') || single.note.toLowerCase().includes('nawala');
           if (isLost) {
             fullResponse = isTagalog
-              ? `✓ Na-record na ang nawalang ${symbol}${single.amount.toFixed(2)} (${single.note}). Nabawas na ito sa ${single.bankName} balance mo!${newBalStr}`
-              : `✓ Recorded ${symbol}${single.amount.toFixed(2)} lost money (${single.note}). Deducted from your ${single.bankName} balance!${newBalStr}`;
+              ? `✓ Na-record na ang nawalang ${symbol}${single.amount.toFixed(2)} (${single.note}). Nabawas na ito sa ${walletLabel} mo!${newBalStr}`
+              : `✓ Recorded ${symbol}${single.amount.toFixed(2)} lost money (${single.note}). Deducted from your ${walletLabel}!${newBalStr}`;
           } else {
             fullResponse = isTagalog
-              ? `✓ Na-record na ang ${single.note} worth ${symbol}${single.amount.toFixed(2)} (${single.categoryId}). Nabawas na ito sa ${single.bankName} card mo!${newBalStr}`
-              : `✓ Logged ${symbol}${single.amount.toFixed(2)} expense for "${single.note}" under ${single.categoryId} on ${single.bankName}.${newBalStr}`;
+              ? `✓ Na-record na ang ${single.note} worth ${symbol}${single.amount.toFixed(2)} (${single.categoryId}). Nabawas na ito sa ${walletLabel} mo!${newBalStr}`
+              : `✓ Logged ${symbol}${single.amount.toFixed(2)} expense for "${single.note}" under ${single.categoryId} on ${targetBank}.${newBalStr}`;
           }
         } else {
           fullResponse = isTagalog
-            ? `✓ Na-record na ang natanggap mong ${single.note} worth +${symbol}${single.amount.toFixed(2)}. Nadagdag na ito sa ${single.bankName} card mo!${newBalStr}`
-            : `✓ Logged +${symbol}${single.amount.toFixed(2)} income to ${single.bankName}.${newBalStr}`;
+            ? `✓ Na-record na ang natanggap mong ${single.note} worth +${symbol}${single.amount.toFixed(2)}. Nadagdag na ito sa ${walletLabel} mo!${newBalStr}`
+            : `✓ Logged +${symbol}${single.amount.toFixed(2)} income to ${targetBank}.${newBalStr}`;
         }
       } else {
         const listStr = savedItems

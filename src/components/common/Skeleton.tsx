@@ -204,7 +204,31 @@ export const SkeletonCalendar = () => {
   );
 };
 
+/**
+ * Skeleton for Card Presets in the Add Card Modal
+ */
+export const SkeletonPresetCard = () => {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.presetCardItemSkeleton, { backgroundColor: colors.surfaceHighlight || colors.background, borderColor: colors.border }]}>
+      <Skeleton width="100%" height={78} borderRadius={10} style={{ marginBottom: 8 }} />
+      <Skeleton width={90} height={13} borderRadius={4} style={{ marginBottom: 6 }} />
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Skeleton width={50} height={14} borderRadius={6} />
+        <Skeleton width={36} height={12} borderRadius={4} />
+      </View>
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
+  presetCardItemSkeleton: {
+    width: 148,
+    borderRadius: 16,
+    padding: 8,
+    borderWidth: 1,
+    marginRight: 10,
+  },
   card3dContainer: {
     width: SCREEN_WIDTH - 40,
     height: 205,

@@ -19,6 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { InstallmentModal } from './InstallmentModal';
 import { BudgetModal } from './BudgetModal';
+import { ReceiptScannerModal } from '../receipt/ReceiptScannerModal';
 
 export const ActionRow = () => {
   const { colors } = useTheme();
@@ -26,6 +27,7 @@ export const ActionRow = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [installmentModalVisible, setInstallmentModalVisible] = useState(false);
   const [budgetModalVisible, setBudgetModalVisible] = useState(false);
+  const [receiptScannerVisible, setReceiptScannerVisible] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
 
   const handlePress = (id: string, actionFn?: () => void) => {
@@ -112,6 +114,7 @@ export const ActionRow = () => {
       color: '#F59E0B',
       onPress: () => {
         setModalVisible(false);
+        setReceiptScannerVisible(true);
       },
     },
     {
@@ -263,6 +266,12 @@ export const ActionRow = () => {
       <BudgetModal
         visible={budgetModalVisible}
         onClose={() => setBudgetModalVisible(false)}
+      />
+
+      {/* Real Smart Receipt Scanner Modal */}
+      <ReceiptScannerModal
+        visible={receiptScannerVisible}
+        onClose={() => setReceiptScannerVisible(false)}
       />
     </>
   );
