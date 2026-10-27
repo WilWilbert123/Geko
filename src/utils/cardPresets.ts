@@ -452,6 +452,18 @@ export const CREDIT_CARD_PRESETS: CardPreset[] = [
 
 export const EWALLET_PRESETS: CardPreset[] = [
   {
+    id: 'physical-cash',
+    name: 'Physical Cash',
+    shortName: 'Cash',
+    category: 'EWALLET',
+    type: 'CASH',
+    network: 'OTHER',
+    color1: '#0B0D12',
+    color2: '#10B981',
+    badgeText: 'Cash Wallet',
+    tag: 'Paper bills & coins in your wallet',
+  },
+  {
     id: 'gcash-ewallet',
     name: 'GCash',
     shortName: 'GCash',

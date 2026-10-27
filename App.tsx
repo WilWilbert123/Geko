@@ -1,3 +1,4 @@
+import './src/utils/silenceLogs';
 import React, { useEffect, useState, Component } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -8,6 +9,7 @@ import { initDb } from './src/database/sqlite';
 import { initUserStore } from './src/store/userStore';
 import { useTheme } from './src/hooks/useTheme';
 import { View, Text, StyleSheet, ScrollView, LogBox } from 'react-native';
+import { IntroSplash, INTRO_BG_BOTTOM } from './src/components/intro/IntroSplash';
 
 LogBox.ignoreLogs([
   '`new NativeEventEmitter()` was called with a non-null argument',
@@ -44,6 +46,7 @@ export default function App() {
   const { theme, colors } = useTheme();
   const [dbReady, setDbReady] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
+  const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
     const setup = async () => {
@@ -67,22 +70,17 @@ export default function App() {
     );
   }
 
-  if (!dbReady) {
-    return (
-      <View style={[styles.splash, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.text }}>Loading Geko...</Text>
-      </View>
-    );
-  }
-
   return (
     <ErrorBoundary>
-      <GestureHandlerRootView style={{ flex: 1 }}>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: showIntro ? INTRO_BG_BOTTOM : colors.background }}>
         <SafeAreaProvider>
-          <NavigationContainer>
-            <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-            <AppNavigator />
-          </NavigationContainer>
+          {dbReady && (
+            <NavigationContainer>
+              <StatusBar style={showIntro ? 'light' : theme === 'dark' ? 'light' : 'dark'} />
+              <AppNavigator />
+            </NavigationContainer>
+          )}
+          {showIntro && <IntroSplash ready={dbReady} onFinish={() => setShowIntro(false)} />}
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>

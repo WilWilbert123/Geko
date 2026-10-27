@@ -41,7 +41,7 @@ import {
 } from 'lucide-react-native';
 import { GekoCard3D } from '../components/wallet/GekoCard3D';
 import { MiniRealCard } from '../components/wallet/MiniRealCard';
-import { SkeletonCardListItem, SkeletonCard3D } from '../components/common/Skeleton';
+import { SkeletonCardListItem, SkeletonCard3D, SkeletonPresetCard } from '../components/common/Skeleton';
 import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -59,14 +59,15 @@ import {
 } from '../utils/cardPresets';
 
 const POPULAR_QUICK_PRESETS: CardPreset[] = [
-  ALL_CARD_PRESETS.find((p) => p.id === 'gcash-ewallet') || ALL_CARD_PRESETS[0],
-  ALL_CARD_PRESETS.find((p) => p.id === 'maya-visa-card') || ALL_CARD_PRESETS[1],
-  ALL_CARD_PRESETS.find((p) => p.id === 'gotyme-bank') || ALL_CARD_PRESETS[2],
-  ALL_CARD_PRESETS.find((p) => p.id === 'bpi-rewards') || ALL_CARD_PRESETS[3],
-  ALL_CARD_PRESETS.find((p) => p.id === 'bdo-shopmore-mastercard') || ALL_CARD_PRESETS[4],
-  ALL_CARD_PRESETS.find((p) => p.id === 'unionbank-rewards-visa') || ALL_CARD_PRESETS[5],
-  ALL_CARD_PRESETS.find((p) => p.id === 'maribank-ph') || ALL_CARD_PRESETS[6],
-  ALL_CARD_PRESETS.find((p) => p.id === 'beep-card') || ALL_CARD_PRESETS[7],
+  ALL_CARD_PRESETS.find((p) => p.id === 'physical-cash') || ALL_CARD_PRESETS[0],
+  ALL_CARD_PRESETS.find((p) => p.id === 'gcash-ewallet') || ALL_CARD_PRESETS[1],
+  ALL_CARD_PRESETS.find((p) => p.id === 'maya-visa-card') || ALL_CARD_PRESETS[2],
+  ALL_CARD_PRESETS.find((p) => p.id === 'gotyme-bank') || ALL_CARD_PRESETS[3],
+  ALL_CARD_PRESETS.find((p) => p.id === 'bpi-rewards') || ALL_CARD_PRESETS[4],
+  ALL_CARD_PRESETS.find((p) => p.id === 'bdo-shopmore-mastercard') || ALL_CARD_PRESETS[5],
+  ALL_CARD_PRESETS.find((p) => p.id === 'unionbank-rewards-visa') || ALL_CARD_PRESETS[6],
+  ALL_CARD_PRESETS.find((p) => p.id === 'maribank-ph') || ALL_CARD_PRESETS[7],
+  ALL_CARD_PRESETS.find((p) => p.id === 'beep-card') || ALL_CARD_PRESETS[8],
 ].filter(Boolean);
 
 export const WalletScreen = () => {
@@ -95,6 +96,7 @@ export const WalletScreen = () => {
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [presetCategory, setPresetCategory] = useState<PresetCategory | 'CUSTOM'>('ALL');
   const [presetSearch, setPresetSearch] = useState('');
+  const [isPresetLoading, setIsPresetLoading] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<CardPreset | null>(null);
 
   const [newBankName, setNewBankName] = useState('');
@@ -993,7 +995,13 @@ export const WalletScreen = () => {
                         ]}
                         onPress={() => {
                           Haptics.selectionAsync();
-                          setPresetCategory(tab.key as any);
+                          if (presetCategory !== tab.key) {
+                            setIsPresetLoading(true);
+                            setPresetCategory(tab.key as any);
+                            setTimeout(() => {
+                              setIsPresetLoading(false);
+                            }, 80);
+                          }
                         }}
                       >
                         <IconComp size={13} color={isTabActive ? colors.primary : colors.textMuted} />
@@ -1059,53 +1067,61 @@ export const WalletScreen = () => {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.presetsListHorizontal}
                   >
-                    {modalPresets.map((preset, idx) => {
-                      const isSelected = selectedPreset?.id === preset.id || newBankName === preset.name;
-                      return (
-                        <TouchableOpacity
-                          key={`modal-preset-${preset.id}-${idx}`}
-                          style={[
-                            styles.presetCardItem,
-                            {
-                              backgroundColor: colors.background,
-                              borderColor: isSelected ? colors.primary : colors.border,
-                              borderWidth: isSelected ? 2 : 1,
-                            },
-                          ]}
-                          activeOpacity={0.82}
-                          onPress={() => handleSelectPreset(preset)}
-                        >
-                          <View style={{ width: '100%', height: 78, borderRadius: 10, overflow: 'hidden', marginBottom: 4 }} pointerEvents="none">
-                            <GekoCard3D
-                              balance={0}
-                              bankName={preset.name}
-                              accountType={preset.type}
-                              color1={preset.color1}
-                              color2={preset.color2}
-                              height={78}
-                              cornerRadius={0.06}
-                              interactive={false}
-                              paymentNetwork={preset.network}
-                            />
-                          </View>
+                    {isPresetLoading ? (
+                      <>
+                        <SkeletonPresetCard />
+                        <SkeletonPresetCard />
+                        <SkeletonPresetCard />
+                        <SkeletonPresetCard />
+                        <SkeletonPresetCard />
+                      </>
+                    ) : (
+                      modalPresets.map((preset, idx) => {
+                        const isSelected = selectedPreset?.id === preset.id || newBankName === preset.name;
+                        return (
+                          <TouchableOpacity
+                            key={`modal-preset-${preset.id}-${idx}`}
+                            style={[
+                              styles.presetCardItem,
+                              {
+                                backgroundColor: colors.background,
+                                borderColor: isSelected ? colors.primary : colors.border,
+                                borderWidth: isSelected ? 2 : 1,
+                              },
+                            ]}
+                            activeOpacity={0.82}
+                            onPress={() => handleSelectPreset(preset)}
+                          >
+                            <View style={{ width: '100%', height: 78, borderRadius: 10, overflow: 'hidden', marginBottom: 4 }} pointerEvents="none">
+                              <MiniRealCard
+                                bankName={preset.name}
+                                color1={preset.color1}
+                                color2={preset.color2}
+                                type={preset.type}
+                                paymentNetwork={preset.network}
+                                height={78}
+                                width={132}
+                              />
+                            </View>
 
-                          <Text style={[styles.presetItemName, { color: colors.text }]} numberOfLines={2}>
-                            {preset.name}
-                          </Text>
+                            <Text style={[styles.presetItemName, { color: colors.text }]} numberOfLines={2}>
+                              {preset.name}
+                            </Text>
 
-                          <View style={styles.presetItemMetaRow}>
-                            <View style={[styles.presetBadgePill, { backgroundColor: `${colors.primary}18` }]}>
-                              <Text style={[styles.presetBadgeText, { color: colors.primary }]}>
-                                {preset.badgeText || (preset.category === 'CREDIT' ? 'Credit' : preset.category === 'EWALLET' ? 'E-Wallet' : 'Bank')}
+                            <View style={styles.presetItemMetaRow}>
+                              <View style={[styles.presetBadgePill, { backgroundColor: `${colors.primary}18` }]}>
+                                <Text style={[styles.presetBadgeText, { color: colors.primary }]}>
+                                  {preset.badgeText || (preset.category === 'CREDIT' ? 'Credit' : preset.category === 'EWALLET' ? 'E-Wallet' : 'Bank')}
+                                </Text>
+                              </View>
+                              <Text style={[styles.presetNetworkTag, { color: colors.textMuted }]}>
+                                {preset.network}
                               </Text>
                             </View>
-                            <Text style={[styles.presetNetworkTag, { color: colors.textMuted }]}>
-                              {preset.network}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })}
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
                   </ScrollView>
                 </View>
               )}

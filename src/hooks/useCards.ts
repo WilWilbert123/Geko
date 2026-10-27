@@ -34,6 +34,28 @@ export const useCards = () => {
         await db.execute("UPDATE transactions SET bankName = 'GCash' WHERE LOWER(bankName) = 'gcash e-wallet' OR LOWER(bankName) = 'gcash ewallet'");
         await db.execute("UPDATE transactions SET categoryId = 'Deposit', note = 'Deposit' WHERE LOWER(note) LIKE '%starting balance%' OR LOWER(note) LIKE '%cash-in%' OR LOWER(categoryId) LIKE '%cash-in%' OR LOWER(categoryId) LIKE '%cash in%'");
         await db.execute("UPDATE transactions SET categoryId = 'Housing', note = 'Utang' WHERE LOWER(note) LIKE '%nag ay utang%' OR LOWER(note) = 'nag ay utang'");
+        await db.execute(`
+          UPDATE transactions 
+          SET categoryId = 'Shopping', note = 'Cleanser at Facial Wash' 
+          WHERE (LOWER(note) LIKE '%facial wash%' OR LOWER(note) LIKE '%cleanser%')
+            AND (categoryId = 'Food' OR LOWER(note) LIKE '%facial wash cash%')
+        `);
+
+        // Ensure Physical Cash card exists if Cash transactions exist
+        const cashCardCheck = await db.execute("SELECT id FROM cards WHERE LOWER(bankName) = 'cash' OR LOWER(bankName) = 'physical cash'");
+        const cashRows = cashCardCheck.rows?._array || [];
+        if (cashRows.length === 0) {
+          const cashTx = await db.execute("SELECT id FROM transactions WHERE LOWER(bankName) = 'cash'");
+          const cashTxRows = cashTx.rows?._array || [];
+          if (cashTxRows.length > 0) {
+            const sumRes = await db.execute("SELECT SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END) as netBal FROM transactions WHERE LOWER(bankName) = 'cash'");
+            const netBal = Number(sumRes.rows?._array?.[0]?.netBal || 0);
+            await db.execute(
+              "INSERT INTO cards (id, bankName, balance, color1, color2, cardNumber, budget, type) VALUES (?, 'Cash', ?, '#0B0D12', '#10B981', 'CASH', 0, 'CASH')",
+              [uuidv4(), netBal]
+            );
+          }
+        }
       } catch (e) {
         // Ignore if tables don't exist yet
       }

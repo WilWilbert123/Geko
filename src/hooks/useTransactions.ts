@@ -13,6 +13,16 @@ export const useTransactions = () => {
   const load = useCallback(async () => {
     const db = getDb();
     try {
+      // Auto-heal facial wash & cleanser transactions miscategorized as Food
+      try {
+        await db.execute(`
+          UPDATE transactions 
+          SET categoryId = 'Shopping', note = 'Cleanser at Facial Wash' 
+          WHERE (LOWER(note) LIKE '%facial wash%' OR LOWER(note) LIKE '%cleanser%')
+            AND (categoryId = 'Food' OR LOWER(note) LIKE '%facial wash cash%')
+        `);
+      } catch (e) {}
+
       const res = await db.execute('SELECT * FROM transactions ORDER BY CAST(date AS INTEGER) DESC');
       // Coerce date to number — SQLite may return INTEGER columns as strings
       const data = ((res.rows?._array || []) as any[]).map(row => ({
@@ -44,6 +54,18 @@ export const useTransactions = () => {
     const bankName = t.bankName || 'GCash';
 
     try {
+      if (bankName.toLowerCase() === 'cash') {
+        try {
+          const cashCheck = await db.execute("SELECT id FROM cards WHERE LOWER(bankName) = 'cash'");
+          if (!cashCheck.rows?._array?.length) {
+            await db.execute(
+              "INSERT INTO cards (id, bankName, color1, color2, balance, monthlyBudget, type, paymentNetwork, creditLimit, outstandingBalance, availableCredit) VALUES ('card-physical-cash', 'Cash', '#0B0D12', '#10B981', 0, 5000, 'CASH', 'OTHER', 0, 0, 0)"
+            );
+            require('react-native').DeviceEventEmitter.emit('cards_updated');
+          }
+        } catch (err) {}
+      }
+
       // 1. Insert into relational DB
       const res = await db.execute(
         'INSERT INTO transactions (id, amount, type, categoryId, date, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
