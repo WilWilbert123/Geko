@@ -38,6 +38,11 @@
     ],
     "ios": {
       "bundleIdentifier": "com.me.geko"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "601a56f1-65f0-4d56-8516-6cf74bd957e1"
+      }
     }
   }
 }
