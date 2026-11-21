@@ -189,9 +189,10 @@ export const extractCardsFromText = (
       if (isBankInText(kBank, text) && !foundMap.has(key)) {
         resolveAndSetCard(userCard.bankName, undefined, userCard);
       }
-    } else if (userCards.length === 0) {
-      // Only inject unowned dummy cards if user has 0 cards registered in their entire wallet
-      if (isBankInText(kBank, text) && !foundMap.has(key)) {
+    } else {
+      // Also render the card badge when the bot response explicitly confirms a transaction on a known bank/cash card
+      const explicitlyUsedInReply = new RegExp(`(?:nabawas|nadagdag|recorded|deducted|added).*\\b${kBank}\\b`, 'i').test(text);
+      if ((userCards.length === 0 || explicitlyUsedInReply) && isBankInText(kBank, text) && !foundMap.has(key)) {
         resolveAndSetCard(kBank);
       }
     }

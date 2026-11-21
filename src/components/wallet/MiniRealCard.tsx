@@ -22,6 +22,7 @@ export interface MiniRealCardProps {
   paymentNetwork?: 'VISA' | 'MASTERCARD' | 'OTHER';
   cardNumber?: string;
   balance?: number;
+  hideBalance?: boolean;
   width?: number;
   height?: number;
 }
@@ -77,6 +78,7 @@ export const MiniRealCard: React.FC<MiniRealCardProps> = ({
   paymentNetwork,
   cardNumber,
   balance,
+  hideBalance = false,
   width = 58,
   height = 36,
 }) => {

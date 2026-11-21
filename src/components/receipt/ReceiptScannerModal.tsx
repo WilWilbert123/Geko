@@ -65,6 +65,8 @@ interface ReceiptScannerModalProps {
   visible: boolean;
   onClose: () => void;
   onSuccess?: (parsed: ParsedReceipt) => void;
+  /** When false, tapping the primary button passes parsed data to onSuccess without writing to SQLite directly (prevents double-saving from AddTransactionModal). Defaults to true. */
+  autoSave?: boolean;
 }
 
 const CATEGORY_MAP: Record<string, { name: string; icon: any; color: string }> = {
@@ -88,7 +90,12 @@ const POPULAR_STORES = [
   'Grab',
 ];
 
-export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({ visible, onClose, onSuccess }) => {
+export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
+  visible,
+  onClose,
+  onSuccess,
+  autoSave = true,
+}) => {
   const { colors, isDark } = useTheme();
   const { addTransaction } = useTransactions();
   const { cards } = useCards();
@@ -97,6 +104,15 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({ visibl
   const [pastedText, setPastedText] = useState('');
   const [parsedData, setParsedData] = useState<ParsedReceipt | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [showRawOCR, setShowRawOCR] = useState(false);
+  const [editableRawOCR, setEditableRawOCR] = useState('');
+
+  // Merge user's connected wallet cards with standard Philippine accounts
+  const availableBanks = React.useMemo(() => {
+    const names = cards.map((c) => c.bankName).filter(Boolean);
+    const defaults = ['GCash', 'Maya', 'GoTyme', 'BPI', 'BDO', 'Cash'];
+    return Array.from(new Set([...names, ...defaults]));
+  }, [cards]);
 
   // Scanning state
   const [isScanning, setIsScanning] = useState(false);
@@ -277,13 +293,36 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({ visibl
   const handleLoadParsedText = (text: string, imageUri?: string) => {
     const parsed = parseReceiptText(text);
     setParsedData(parsed);
+    setEditableRawOCR(text);
+    setShowRawOCR(false);
     setEditTotal(parsed.total > 0 ? parsed.total.toString() : '');
     setEditStore(parsed.merchant || 'Store Receipt');
     setEditItems(parsed.items || []);
     setSelectedCategory(parsed.category || 'Food');
-    setSelectedBank(parsed.suggestedBank || 'GCash');
+    setSelectedBank(parsed.suggestedBank || availableBanks[0] || 'GCash');
     if (imageUri) setPhotoUri(imageUri);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  // Adjust item quantity (+/-) and recalculate line & receipt totals
+  const handleAdjustItemQty = (index: number, delta: number) => {
+    Haptics.selectionAsync();
+    const updated = [...editItems];
+    const current = updated[index];
+    if (!current) return;
+    const newQty = Math.max(1, (current.qty || 1) + delta);
+    const unitPrice = current.price > 0 ? current.price : current.total / Math.max(1, current.qty || 1);
+    updated[index] = {
+      ...current,
+      qty: newQty,
+      price: Math.round(unitPrice * 100) / 100,
+      total: Math.round(unitPrice * newQty * 100) / 100,
+    };
+    setEditItems(updated);
+    const newSum = updated.reduce((s, it) => s + it.total, 0);
+    if (newSum > 0) {
+      setEditTotal(newSum.toFixed(2));
+    }
   };
 
   // Delete a line item
@@ -335,14 +374,16 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({ visibl
         }
       }
 
-      await addTransaction({
-        amount: amountVal,
-        type: 'expense',
-        categoryId: selectedCategory,
-        note: itemNote,
-        bankName: selectedBank,
-        date: parsedData?.date ? parsedData.date.getTime() : Date.now(),
-      });
+      if (autoSave) {
+        await addTransaction({
+          amount: amountVal,
+          type: 'expense',
+          categoryId: selectedCategory,
+          note: itemNote,
+          bankName: selectedBank,
+          date: parsedData?.date ? parsedData.date.getTime() : Date.now(),
+        });
+      }
 
       if (onSuccess && parsedData) {
         onSuccess({
@@ -485,7 +526,12 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({ visibl
                           setEditItems(updated);
                         }}
                       />
-                      <Text style={styles.itemQty}>{item.qty}x</Text>
+                      <TouchableOpacity
+                        onPress={() => handleAdjustItemQty(index, 1)}
+                        onLongPress={() => handleAdjustItemQty(index, -1)}
+                      >
+                        <Text style={styles.itemQty}>{item.qty}x</Text>
+                      </TouchableOpacity>
                       <TextInput
                         style={styles.itemPriceInput}
                         keyboardType="decimal-pad"
@@ -596,7 +642,7 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({ visibl
               <View style={styles.configSection}>
                 <Text style={[styles.configSectionTitle, { color: colors.text }]}>Payment Account</Text>
                 <View style={styles.bankChipsRow}>
-                  {['GCash', 'Maya', 'GoTyme', 'BPI', 'Cash'].map((bank) => {
+                  {availableBanks.map((bank) => {
                     const isSelected = selectedBank === bank;
                     return (
                       <TouchableOpacity
@@ -622,6 +668,47 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({ visibl
                 </View>
               </View>
 
+              {/* Raw OCR Text Inspector Toggle */}
+              <View style={styles.configSection}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setShowRawOCR((prev) => !prev);
+                  }}
+                >
+                  <Eye size={14} color={colors.primary} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
+                    {showRawOCR ? 'Hide Extracted OCR Text' : 'Inspect / Edit Raw OCR Text'}
+                  </Text>
+                </TouchableOpacity>
+                {showRawOCR && (
+                  <View style={{ marginTop: 8, gap: 8 }}>
+                    <TextInput
+                      style={[
+                        styles.pasteTextInput,
+                        {
+                          height: 130,
+                          backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+                          color: colors.text,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      multiline
+                      value={editableRawOCR}
+                      onChangeText={setEditableRawOCR}
+                    />
+                    <TouchableOpacity
+                      style={[styles.retakeBtn, { alignSelf: 'flex-end', backgroundColor: '#10B981', paddingHorizontal: 14, paddingVertical: 8 }]}
+                      onPress={() => handleLoadParsedText(editableRawOCR, photoUri || undefined)}
+                    >
+                      <RefreshCw size={13} color="#FFFFFF" />
+                      <Text style={[styles.retakeBtnText, { color: '#FFFFFF' }]}>Re-Parse Text</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
               {/* Save Action Button */}
               <TouchableOpacity
                 style={[styles.saveBtn, isSaving && { opacity: 0.7 }]}
@@ -629,9 +716,13 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({ visibl
                 onPress={handleSaveToBudget}
                 activeOpacity={0.85}
               >
-                <Sparkles size={18} color="#FFFFFF" />
+                <CheckCircle2 size={18} color="#FFFFFF" />
                 <Text style={styles.saveBtnText}>
-                  {isSaving ? 'Recording Transaction…' : `Save ₱${editTotal || '0.00'} to Geko Budget`}
+                  {isSaving
+                    ? 'Recording Transaction…'
+                    : autoSave
+                      ? `Save ₱${editTotal || '0.00'} to Geko Budget`
+                      : `Apply ₱${editTotal || '0.00'} to Transaction Form`}
                 </Text>
               </TouchableOpacity>
             </ScrollView>
@@ -673,7 +764,7 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({ visibl
                     setActiveTab('samples');
                   }}
                 >
-                  <Sparkles size={16} color={activeTab === 'samples' ? '#059669' : colors.textMuted} />
+                  <Receipt size={16} color={activeTab === 'samples' ? '#059669' : colors.textMuted} />
                   <Text style={[styles.tabBtnText, activeTab === 'samples' && styles.tabBtnTextActive]}>
                     Presets
                   </Text>
@@ -763,7 +854,7 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({ visibl
                     disabled={!pastedText.trim()}
                     onPress={() => handleLoadParsedText(pastedText)}
                   >
-                    <Sparkles size={18} color="#FFFFFF" />
+                    <ScanLine size={18} color="#FFFFFF" />
                     <Text style={styles.parseBtnText}>Parse & Auto-Categorize</Text>
                   </TouchableOpacity>
                 </ScrollView>

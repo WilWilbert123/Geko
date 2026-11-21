@@ -2,7 +2,7 @@
  * High-Accuracy Receipt Parser for Geko Budget Tracker
  * Supports POS thermal receipts, e-receipts, supermarket/grocery bills,
  * dining slips, convenience stores, gas stations, pharmacies,
- * utility bills, and Philippine payment slips (GCash, Maya, Grab).
+ * utility bills, and Philippine payment slips (GCash, Maya, BPI, GoTyme, InstaPay, Grab).
  */
 
 export interface ReceiptItem {
@@ -28,7 +28,6 @@ export interface ParsedReceipt {
   rawText: string;
 }
 
-// Known merchants mapped to their default budget category & bank
 interface MerchantProfile {
   name: string;
   category: string;
@@ -170,7 +169,36 @@ function normalizeOCRArtifacts(str: string): string {
   return str
     .replace(/\b([P|p][H|h][P|p]|[P|p][H|h]|Php|PHP)\b/g, '₱')
     .replace(/[—–]/g, '-')
-    .replace(/[""]/g, '"');
+    .replace(/[""]/g, '"')
+    // Fix OCR 'O' or 'o' inside decimals like 15O.OO -> 150.00
+    .replace(/(\d)[Oo](\d)/g, '$10$2')
+    .replace(/(\d)[Oo]\.([Oo\d]{2})\b/g, (_, d, dec) => `${d}0.${dec.replace(/[Oo]/g, '0')}`)
+    .replace(/(\d)\.([Oo]{2})\b/g, '$1.00')
+    // Fix spaces around decimal dots in amounts e.g. 248 . 00 -> 248.00
+    .replace(/(\d)\s+\.\s+(\d{2})\b/g, '$1.$2');
+}
+
+/**
+ * Infers budget category from item names and full receipt text when merchant is unknown
+ */
+function inferCategoryFromContent(text: string): string | null {
+  const lower = text.toLowerCase();
+  if (/\b(unleaded|diesel|v-power|gasoline|fuel|liters|l\s*@\s*\d|toll|rfid|autosweep|easytrip|parking|fare)\b/.test(lower)) {
+    return 'Transport';
+  }
+  if (/\b(mg\b|tablet|capsule|syrup|biogesic|neozep|vitamins|pharmacy|drugstore|rx|medical|clinic|hospital)\b/.test(lower)) {
+    return 'Health';
+  }
+  if (/\b(kwh|electric|water bill|internet|fiber|postpaid|broadband|utility|due date|billing)\b/.test(lower)) {
+    return 'Utilities';
+  }
+  if (/\b(chicken|burger|fries|rice|spaghetti|coffee|latte|americano|tea|shake|pizza|pasta|meal|dine|combo|drink|soda|coke)\b/.test(lower)) {
+    return 'Food';
+  }
+  if (/\b(grocery|supermarket|detergent|shampoo|soap|lotion|tissue|shirt|pants|shoes|hardware|mall|pack)\b/.test(lower)) {
+    return 'Shopping';
+  }
+  return null;
 }
 
 /**
@@ -184,7 +212,7 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
     .filter((l) => l.length > 0);
 
   let detectedMerchant = '';
-  let detectedCategory = 'Food';
+  let detectedCategory = '';
   let suggestedBank: string | undefined;
   let subtotal: number | undefined;
   let tax: number | undefined;
@@ -195,10 +223,9 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
 
   const items: ReceiptItem[] = [];
 
-  // 1. Detect Merchant Name
-  // Check the first 8 lines against known merchants
+  // 1. Detect Known Merchant Name (scan all lines, prioritizing header lines)
   const headerBlock = lines
-    .slice(0, 8)
+    .slice(0, 10)
     .join(' ')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
@@ -212,15 +239,28 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
     }
   }
 
+  // 1b. Check for Philippine E-Wallet / Bank Transfer Screenshot patterns (GCash, Maya, BPI, GoTyme, InstaPay)
+  if (!detectedMerchant) {
+    for (const line of lines) {
+      const paidToMatch = line.match(/(?:paid\s+to|sent\s+to|recipient|merchant|biller|pay\s+to|transfer\s+to)\s*[:\-]?\s*([A-Za-z0-9\s&.,'-]{3,40})/i);
+      if (paidToMatch && paidToMatch[1]) {
+        const candidate = paidToMatch[1].trim();
+        if (!/^(gcash|maya|bpi|bdo|gotyme|instapay)$/i.test(candidate)) {
+          detectedMerchant = candidate;
+          break;
+        }
+      }
+    }
+  }
+
   // Fallback: examine early non-metadata lines
   if (!detectedMerchant && lines.length > 0) {
-    for (let i = 0; i < Math.min(5, lines.length); i++) {
+    for (let i = 0; i < Math.min(6, lines.length); i++) {
       const candidate = lines[i].replace(/[^a-zA-Z0-9\s&'-]/g, '').trim();
       const lowerCandidate = candidate.toLowerCase();
-      // Skip lines that look like TIN, receipt header, phone, or date
       if (
         candidate.length >= 3 &&
-        !/\b(receipt|invoice|tax|tin|terminal|machine|or#|reg|branch|welcome|official|tel|date|time)\b/i.test(
+        !/\b(receipt|invoice|tax|tin|terminal|machine|or#|reg|branch|welcome|official|tel|date|time|successfully|sent|express|ref|reference|transaction|payment|approved)\b/i.test(
           lowerCandidate
         ) &&
         !/^\d+$/.test(candidate)
@@ -239,7 +279,8 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
     /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b/,
     /\b(\d{4}[/-]\d{1,2}[/-]\d{1,2})\b/,
     /\b(\d{1,2}-(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*-\d{2,4})\b/i,
-    /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2},? \d{4})\b/i,
+    /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b/i,
+    /\b(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4})\b/i,
   ];
 
   for (const line of lines) {
@@ -260,7 +301,7 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
 
   // 3. Detect Payment Method / Bank tender
   const paymentRegex =
-    /\b(cash|gcash|maya|paymaya|visa|mastercard|bpi|bdo|gotyme|unionbank|metrobank|landbank|security\s*bank|debit|credit|amex|shopeepay|grabpay)\b/i;
+    /\b(cash|gcash|maya|paymaya|visa|mastercard|bpi|bdo|gotyme|unionbank|metrobank|landbank|security\s*bank|rcbc|pnb|chinabank|maribank|seabank|cimb|debit|credit|amex|shopeepay|grabpay)\b/i;
 
   for (const line of lines) {
     const m = line.match(paymentRegex);
@@ -284,21 +325,31 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
       } else if (tender === 'bdo') {
         paymentMethod = 'BDO';
         suggestedBank = 'BDO';
+      } else if (tender === 'unionbank') {
+        paymentMethod = 'UnionBank';
+        suggestedBank = 'UnionBank';
+      } else if (tender === 'metrobank') {
+        paymentMethod = 'Metrobank';
+        suggestedBank = 'Metrobank';
+      } else if (tender === 'landbank') {
+        paymentMethod = 'Landbank';
+        suggestedBank = 'Landbank';
+      } else if (tender === 'maribank' || tender === 'seabank') {
+        paymentMethod = 'MariBank';
+        suggestedBank = 'MariBank';
       } else if (tender === 'visa' || tender === 'mastercard' || tender.includes('credit')) {
         paymentMethod = m[1].toUpperCase();
-        if (!suggestedBank) suggestedBank = 'Visa / Card';
+        if (!suggestedBank) suggestedBank = 'Visa';
       }
       break;
     }
   }
 
   // 4. Financial totals (Total Amount, Subtotal, VAT, Discounts, Cash Tendered)
-  // Walk backwards from bottom of receipt
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i];
     const lower = line.toLowerCase();
 
-    // Check for tender or change lines first to avoid confusing with total
     const isTenderLine =
       lower.includes('tender') ||
       lower.includes('cash received') ||
@@ -312,16 +363,20 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
     const lastAmount = amounts[amounts.length - 1];
 
     if (!isTenderLine) {
-      // Grand Total keywords
       const isTotalKeyword =
         lower.includes('grand total') ||
         lower.includes('total amount') ||
+        lower.includes('total sent') ||
+        lower.includes('amount sent') ||
+        lower.includes('amount paid') ||
+        lower.includes('total payment') ||
         lower.includes('amount due') ||
         lower.includes('total due') ||
         lower.includes('net total') ||
         lower.includes('total sales') ||
         /\btotal\s*[:=]?\s*[p₱]?\s*[\d,.]+/i.test(line) ||
-        /^total\b/i.test(line.trim());
+        /^total\b/i.test(line.trim()) ||
+        /^amount\s*[:=]\s*[p₱]?\s*[\d,.]+/i.test(line.trim());
 
       if (
         !explicitTotal &&
@@ -335,7 +390,6 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
         explicitTotal = lastAmount;
       }
 
-      // Subtotal
       if (
         !subtotal &&
         (lower.includes('subtotal') || lower.includes('sub-total') || lower.includes('gross total'))
@@ -343,12 +397,10 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
         subtotal = lastAmount;
       }
 
-      // VAT / Tax
       if (!tax && (lower.includes('12% vat') || lower.includes('vat amount') || lower.includes('evat') || lower.includes('tax:'))) {
         tax = lastAmount;
       }
 
-      // Discounts (SC, PWD, Promo)
       if (
         !discount &&
         (lower.includes('discount') || lower.includes('pwd') || lower.includes('senior') || lower.includes('promo'))
@@ -389,35 +441,40 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
     'branch',
     'sukli',
     'trans#',
+    'ref#',
+    'ref no',
+    'reference',
     'mastercard',
     'visa',
     'debit',
     'credit',
     'amex',
     'bank',
+    'gcash',
+    'maya',
+    'gotyme',
+    'instapay',
   ];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const lower = line.toLowerCase();
 
-    // Skip financial summary and header lines
     if (ignoredKeywords.some((k) => lower.includes(k))) continue;
+    // Skip lines that contain timestamps like 13:42 or dates like 10/27/2026
+    if (/\b\d{1,2}:\d{2}\b/.test(line) || /\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/.test(line)) continue;
 
-    // Check if current line contains a price
     const amounts = extractAmountsFromLine(line);
 
     if (amounts.length > 0) {
       const linePrice = amounts[amounts.length - 1];
 
-      // Extract quantity (e.g. "2x", "2 *", "1PC", "3 PCS")
       let qty = 1;
       const qtyMatch = line.match(/^(\d{1,2})\s*(?:x|\*|pc|pcs)\b/i);
       if (qtyMatch) {
         qty = parseInt(qtyMatch[1], 10);
       }
 
-      // Check if current line is a POS unit-price subline (e.g. "1 @ 265.00  265.00", "10 PCS @ 9.50", "21.42 L @ 65.35")
       const isUnitPriceSubline = /^\s*(\d{1,4}(?:\.\d{1,3})?)?\s*(?:pcs|pc|liters?|l|kg|g|x|\*)?\s*[@]\s*[\d.]+/i.test(line.trim());
 
       let itemName = '';
@@ -434,16 +491,14 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
             .trim();
         }
       } else {
-        // Clean item name on same line
         itemName = line
-          .replace(/[p₱]?\s*[\d,.]+\s*$/i, '') // remove price at end
-          .replace(/^(\d{1,2})\s*(?:x|\*|pc|pcs)\s*/i, '') // remove quantity prefix
-          .replace(/^\d{6,14}\s+/, '') // remove barcode prefixes (e.g. 4800016644...)
+          .replace(/[p₱]?\s*[\d,.]+\s*$/i, '')
+          .replace(/^(\d{1,2})\s*(?:x|\*|pc|pcs)\s*/i, '')
+          .replace(/^\d{6,14}\s+/, '')
           .replace(/[^a-zA-Z0-9\s/&.'-]/g, ' ')
           .replace(/\s{2,}/g, ' ')
           .trim();
 
-        // Check if item name is empty but previous line had an item description (2-line POS format)
         if (itemName.length < 2 && i > 0) {
           const prevLine = lines[i - 1];
           const prevLower = prevLine.toLowerCase();
@@ -456,9 +511,9 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
         }
       }
 
-      // Validate price reasonableness (exclude years, barcodes, serials)
       if (
         itemName.length >= 2 &&
+        !/^\d+$/.test(itemName) &&
         linePrice > 0 &&
         linePrice < 100000 &&
         linePrice !== 2024 &&
@@ -482,7 +537,6 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
     if (items.length > 0) {
       finalTotal = items.reduce((sum, it) => sum + it.total, 0);
     } else {
-      // Find all valid candidate amounts
       const allAmounts: number[] = [];
       for (const line of lines) {
         const lower = line.toLowerCase();
@@ -497,11 +551,15 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
     }
   }
 
-  // Confidence rating based on completeness of recognized data
-  let confidence = 50;
+  // 7. Category inference fallback if merchant was unknown
+  if (!detectedCategory) {
+    detectedCategory = inferCategoryFromContent(normalizedText) || 'Food';
+  }
+
+  let confidence = 55;
   if (detectedMerchant && detectedMerchant !== 'Store Receipt') confidence += 20;
   if (finalTotal > 0) confidence += 15;
-  if (items.length > 0) confidence += 15;
+  if (items.length > 0) confidence += 10;
 
   const dateString = date.toLocaleDateString('en-US', {
     month: 'short',
@@ -520,7 +578,7 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
     dateString,
     category: detectedCategory,
     paymentMethod: paymentMethod || 'Cash',
-    suggestedBank: suggestedBank || 'Cash',
+    suggestedBank: suggestedBank || 'GCash',
     confidence: Math.min(100, confidence),
     rawText,
   };
@@ -530,21 +588,25 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
  * Extracts numeric prices from a single line of text with OCR cleanup
  */
 function extractAmountsFromLine(line: string): number[] {
-  // Guard against TIN numbers (e.g. 000-123-456-000)
   if (/\btin\b/i.test(line) || /^\d{3}-\d{3}-\d{3}/.test(line.trim())) {
     return [];
   }
+  // Ignore phone numbers (+639... or 0917...) and long reference IDs
+  const cleanedLine = line
+    .replace(/\b(?:\+?63|0)9\d{9}\b/g, '')
+    .replace(/\b\d{8,20}\b/g, '');
 
-  // Match currency expressions like ₱120.00, P99, 1,450.50, 45.00
-  const matches = line.match(/(?:[p₱]\s*)?(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})|\d+(?:\.\d{1,2}))\b/g);
+  const matches = cleanedLine.match(/(?:[p₱]\s*)?(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})|\d+(?:\.\d{1,2}))\b/g);
   if (!matches) return [];
 
   const results: number[] = [];
   for (const m of matches) {
+    const hasCurrencyPrefix = /[p₱]/i.test(m);
+    const hasDecimal = m.includes('.');
     const cleanNum = m.replace(/[p₱,\s]/gi, '');
     const val = parseFloat(cleanNum);
-    // Ignore pure 4-digit years like 2025 or 2026 without decimals
-    if (!isNaN(val) && (m.includes('.') || val < 1900 || val > 2100)) {
+    // Require either a decimal point or a ₱/P prefix so bare store numbers (#1842) aren't treated as prices
+    if (!isNaN(val) && (hasDecimal || hasCurrencyPrefix) && (hasDecimal || val < 1900 || val > 2100)) {
       results.push(val);
     }
   }

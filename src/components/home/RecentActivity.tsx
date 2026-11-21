@@ -1,10 +1,21 @@
-import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  Alert,
+  Pressable,
+  ScrollView,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useTheme } from '../../hooks/useTheme';
 import { useTransactions } from '../../hooks/useTransactions';
+import { useCards } from '../../hooks/useCards';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
 import { formatCurrency } from '../../utils/formatters';
 import {
@@ -18,9 +29,14 @@ import {
   Wallet,
   Banknote,
   ChevronRight,
+  ArrowRightLeft,
+  Trash2,
+  Check,
+  X,
 } from 'lucide-react-native';
-import { isToday, isYesterday } from 'date-fns';
+import { isToday, isYesterday, format } from 'date-fns';
 import { SkeletonTransactionItem } from '../common/Skeleton';
+import * as Haptics from 'expo-haptics';
 
 export const CATEGORY_STYLE_MAP: Record<string, { bg: string; color: string; icon: any }> = {
   food: { bg: 'rgba(245, 158, 11, 0.15)', color: '#D97706', icon: Utensils },
@@ -34,6 +50,7 @@ export const CATEGORY_STYLE_MAP: Record<string, { bg: string; color: string; ico
   debt: { bg: 'rgba(239, 68, 68, 0.15)', color: '#DC2626', icon: Banknote },
   utang: { bg: 'rgba(239, 68, 68, 0.15)', color: '#DC2626', icon: Banknote },
   loan: { bg: 'rgba(239, 68, 68, 0.15)', color: '#DC2626', icon: Banknote },
+  transfer: { bg: 'rgba(59, 130, 246, 0.15)', color: '#2563EB', icon: ArrowRightLeft },
   'cash in': { bg: 'rgba(16, 185, 129, 0.15)', color: '#059669', icon: DollarSign },
   cashin: { bg: 'rgba(16, 185, 129, 0.15)', color: '#059669', icon: DollarSign },
   deposit: { bg: 'rgba(16, 185, 129, 0.15)', color: '#059669', icon: DollarSign },
@@ -84,7 +101,7 @@ export const getBankScheme = (bankName?: string) => {
   if (lower.includes('maribank') || lower.includes('seabank')) return BANK_COLOR_SCHEMES.maribank;
   if (lower.includes('wise')) return BANK_COLOR_SCHEMES.wise;
   if (lower.includes('cash') || lower.includes('peso') || lower.includes('money')) return BANK_COLOR_SCHEMES.cash;
-  
+
   return {
     text: '#64748B',
     cardBg: '#475569',
@@ -95,7 +112,7 @@ export const getBankScheme = (bankName?: string) => {
 
 export const CardMiniBadge = ({ bankName }: { bankName?: string }) => {
   const scheme = getBankScheme(bankName);
-  
+
   return (
     <View style={styles.cardBadgePill}>
       {scheme.isCash ? (
@@ -117,7 +134,6 @@ export const formatCleanTitle = (categoryId?: string, note?: string) => {
   const n = (note || '').trim();
   const combined = `${cat} ${n}`.toLowerCase();
 
-  // 1. Starting balance / Deposit / Cash In variations -> display clean "Deposit"
   if (
     combined.includes('starting balance') ||
     combined.includes('cash-in') ||
@@ -128,12 +144,10 @@ export const formatCleanTitle = (categoryId?: string, note?: string) => {
     return 'Deposit';
   }
 
-  // 1.5 Utang / Debt payment -> display clean "Utang"
   if (combined.includes('utang') || combined.includes('bayad utang')) {
     return 'Utang';
   }
 
-  // 2. If note is specific (e.g. "Coffee", "Pabango"), display short clean note
   if (n && n.toLowerCase() !== cat.toLowerCase()) {
     let cleanNote = n;
     if (cleanNote.includes('-')) {
@@ -145,7 +159,6 @@ export const formatCleanTitle = (categoryId?: string, note?: string) => {
     }
   }
 
-  // 3. Fallback to clean short category name (e.g. "Food", "Shopping")
   if (cat) {
     let cleanCat = cat;
     if (cleanCat.includes('-')) {
@@ -158,8 +171,21 @@ export const formatCleanTitle = (categoryId?: string, note?: string) => {
   return 'Deposit';
 };
 
+const EDIT_CATEGORIES = ['Food', 'Shopping', 'Transport', 'Utilities', 'Health', 'Housing', 'Deposit', 'Salary', 'Transfer'];
+const DEFAULT_ACCOUNT_NAMES = ['GCash', 'Maya', 'GoTyme', 'BPI', 'BDO', 'Cash'];
+
 export const TransactionItem = ({ item, index }: { item: any; index: number }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const { updateTransaction, deleteTransaction } = useTransactions();
+  const { cards } = useCards();
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editAmount, setEditAmount] = useState(String(item.amount || ''));
+  const [editNote, setEditNote] = useState(item.note || '');
+  const [editCategory, setEditCategory] = useState(item.categoryId || 'Food');
+  const [editBank, setEditBank] = useState(item.bankName || 'GCash');
+  const [editType, setEditType] = useState<'expense' | 'income'>(item.type === 'income' ? 'income' : 'expense');
+
   const isIncome = item.type === 'income';
   const targetBank = item.bankName || 'GCash';
   const isUtang = (item.note || '').toLowerCase().includes('utang') || (item.categoryId || '').toLowerCase().includes('utang');
@@ -168,29 +194,243 @@ export const TransactionItem = ({ item, index }: { item: any; index: number }) =
 
   const titleStr = formatCleanTitle(item.categoryId, item.note);
 
+  const bankChoices = React.useMemo(() => {
+    const fromCards = cards.map((c) => c.bankName).filter(Boolean);
+    return Array.from(new Set([...fromCards, ...DEFAULT_ACCOUNT_NAMES]));
+  }, [cards]);
+
+  const handleOpenEdit = () => {
+    Haptics.selectionAsync();
+    setEditAmount(String(item.amount || ''));
+    setEditNote(item.note || '');
+    setEditCategory(item.categoryId || 'Food');
+    setEditBank(item.bankName || 'GCash');
+    setEditType(item.type === 'income' ? 'income' : 'expense');
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    const val = parseFloat(editAmount.replace(/,/g, ''));
+    if (isNaN(val) || val <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid transaction amount.');
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    await updateTransaction(item.id, {
+      amount: val,
+      type: editType,
+      categoryId: editCategory,
+      note: editNote.trim(),
+      bankName: editBank,
+    });
+    setEditOpen(false);
+  };
+
+  const handleConfirmDelete = () => {
+    Alert.alert(
+      'Delete Transaction?',
+      `Remove "${titleStr}" (${formatCurrency(item.amount)}) and restore the balance on ${targetBank}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete & Refund',
+          style: 'destructive',
+          onPress: async () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            await deleteTransaction(item.id);
+            setEditOpen(false);
+          },
+        },
+      ]
+    );
+  };
+
   return (
-    <Animated.View 
-      entering={FadeInDown.delay(index * 60).springify()} 
-      layout={Layout.springify()}
-      style={[styles.itemContainer, { borderBottomColor: colors.border }]}
-    >
-      {/* Category Pastel Rounded Icon Container */}
-      <View style={[styles.categoryIconBadge, { backgroundColor: catConfig.bg }]}>
-        <IconComp size={20} color={catConfig.color} strokeWidth={2} />
-      </View>
+    <>
+      <Animated.View
+        entering={FadeInDown.delay(Math.min(index, 8) * 50).springify()}
+        layout={Layout.springify()}
+      >
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={handleOpenEdit}
+          style={[styles.itemContainer, { borderBottomColor: colors.border }]}
+        >
+          <View style={[styles.categoryIconBadge, { backgroundColor: catConfig.bg }]}>
+            <IconComp size={20} color={catConfig.color} strokeWidth={2} />
+          </View>
 
-      <View style={styles.itemDetails}>
-        <Text style={[styles.itemCategory, { color: colors.text }]} numberOfLines={1}>
-          {titleStr}
-        </Text>
-        <CardMiniBadge bankName={targetBank} />
-      </View>
+          <View style={styles.itemDetails}>
+            <Text style={[styles.itemCategory, { color: colors.text }]} numberOfLines={1}>
+              {titleStr}
+            </Text>
+            <CardMiniBadge bankName={targetBank} />
+          </View>
 
-      {/* Red text for deductions (-), Green text for added balance (+) */}
-      <Text style={[styles.itemAmount, { color: isIncome ? '#10B981' : '#EF4444' }]}>
-        {isIncome ? '+' : '-'}{formatCurrency(item.amount)}
-      </Text>
-    </Animated.View>
+          <Text style={[styles.itemAmount, { color: isIncome ? '#10B981' : '#EF4444' }]}>
+            {isIncome ? '+' : '-'}{formatCurrency(item.amount)}
+          </Text>
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* Interactive Edit / Delete Transaction Modal */}
+      <Modal visible={editOpen} transparent animationType="fade" onRequestClose={() => setEditOpen(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setEditOpen(false)}>
+          <Pressable
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Transaction Details</Text>
+                <Text style={[styles.modalDateText, { color: colors.textMuted }]}>
+                  {item.date ? format(new Date(Number(item.date)), 'MMM d, yyyy • h:mm a') : ''}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.closeCircle, { backgroundColor: colors.surfaceHighlight }]}
+                onPress={() => setEditOpen(false)}
+              >
+                <X size={18} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Type Switcher */}
+            <View style={[styles.typeRow, { backgroundColor: colors.surfaceHighlight }]}>
+              {(['expense', 'income'] as const).map((t) => (
+                <TouchableOpacity
+                  key={t}
+                  style={[
+                    styles.typePill,
+                    editType === t && {
+                      backgroundColor: t === 'income' ? '#10B981' : '#EF4444',
+                    },
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setEditType(t);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.typePillText,
+                      { color: editType === t ? '#FFFFFF' : colors.textMuted },
+                    ]}
+                  >
+                    {t === 'income' ? 'Income (+)' : 'Expense (-)'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Amount & Note */}
+            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>AMOUNT (₱)</Text>
+            <TextInput
+              style={[
+                styles.fieldInput,
+                {
+                  color: editType === 'income' ? '#10B981' : '#EF4444',
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                  fontSize: 22,
+                  fontWeight: '800',
+                },
+              ]}
+              keyboardType="decimal-pad"
+              value={editAmount}
+              onChangeText={setEditAmount}
+            />
+
+            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>DESCRIPTION / NOTE</Text>
+            <TextInput
+              style={[
+                styles.fieldInput,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.background,
+                },
+              ]}
+              placeholder="Transaction note..."
+              placeholderTextColor={colors.textMuted}
+              value={editNote}
+              onChangeText={setEditNote}
+            />
+
+            {/* Account Picker */}
+            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>ACCOUNT</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+              {bankChoices.map((b) => {
+                const active = editBank.toLowerCase() === b.toLowerCase();
+                return (
+                  <TouchableOpacity
+                    key={b}
+                    style={[
+                      styles.chipBtn,
+                      {
+                        backgroundColor: active ? colors.primary : isDark ? '#1E293B' : '#F1F5F9',
+                      },
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setEditBank(b);
+                    }}
+                  >
+                    <Text style={[styles.chipBtnText, { color: active ? '#FFFFFF' : colors.text }]}>{b}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Category Picker */}
+            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>CATEGORY</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+              {EDIT_CATEGORIES.map((c) => {
+                const active = editCategory.toLowerCase() === c.toLowerCase();
+                return (
+                  <TouchableOpacity
+                    key={c}
+                    style={[
+                      styles.chipBtn,
+                      {
+                        backgroundColor: active ? colors.primary : isDark ? '#1E293B' : '#F1F5F9',
+                      },
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setEditCategory(c);
+                    }}
+                  >
+                    <Text style={[styles.chipBtnText, { color: active ? '#FFFFFF' : colors.text }]}>{c}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Actions */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={handleConfirmDelete}
+              >
+                <Trash2 size={16} color="#EF4444" />
+                <Text style={styles.deleteBtnText}>Delete</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.saveEditBtn, { backgroundColor: colors.primary }]}
+                onPress={handleSaveEdit}
+              >
+                <Check size={16} color="#FFFFFF" />
+                <Text style={styles.saveEditBtnText}>Save Changes</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 };
 
@@ -199,10 +439,7 @@ export const RecentActivity = () => {
   const { transactions, isLoading } = useTransactions();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  // Sort newest-first
   const sorted = [...transactions].sort((a, b) => Number(b.date) - Number(a.date));
-  
-  // Show only top 5 records on home screen
   const limited = sorted.slice(0, 5);
 
   const grouped: Record<string, any[]> = {};
@@ -223,7 +460,12 @@ export const RecentActivity = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.title, { color: colors.text }]}>Recent Activity</Text>
+      <View style={styles.headerRow}>
+        <Text style={[styles.title, { color: colors.text }]}>Recent Activity</Text>
+        {orderedGroups.length > 0 && (
+          <Text style={[styles.tapHint, { color: colors.textMuted }]}>Tap item to edit</Text>
+        )}
+      </View>
 
       {isLoading ? (
         <View style={styles.activityList}>
@@ -248,7 +490,6 @@ export const RecentActivity = () => {
             </View>
           ))}
 
-          {/* Clean touchable "Show All Records" button at the bottom */}
           <TouchableOpacity
             style={[
               styles.showAllButton,
@@ -273,10 +514,19 @@ const styles = StyleSheet.create({
   container: {
     marginVertical: 16,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
   title: {
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 16,
+  },
+  tapHint: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   activityList: {},
   groupContainer: {
@@ -303,27 +553,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  miniChip: {
-    width: 7,
-    height: 5,
-    borderRadius: 1.5,
-    backgroundColor: '#FFD700',
-  },
-  miniBankText: {
-    color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-    alignSelf: 'flex-end',
-    marginBottom: 1,
-  },
   itemDetails: {
     flex: 1,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
   },
   itemCategory: {
     fontSize: 15,
@@ -351,16 +582,9 @@ const styles = StyleSheet.create({
     borderRadius: 0.5,
     backgroundColor: '#FFD700',
   },
-  cashIconText: {
-    fontSize: 11,
-    marginRight: 4,
-  },
   cardBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-  },
-  itemNote: {
-    fontSize: 13,
   },
   itemAmount: {
     fontSize: 16,
@@ -390,5 +614,115 @@ const styles = StyleSheet.create({
   showAllText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  modalDateText: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  closeCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeRow: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 14,
+  },
+  typePill: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  typePillText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  fieldLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 6,
+    marginTop: 6,
+  },
+  fieldInput: {
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    marginBottom: 6,
+  },
+  chipScroll: {
+    marginBottom: 8,
+  },
+  chipBtn: {
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 14,
+    marginRight: 8,
+  },
+  chipBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    gap: 6,
+  },
+  deleteBtnText: {
+    color: '#EF4444',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  saveEditBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 46,
+    borderRadius: 14,
+    gap: 6,
+  },
+  saveEditBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

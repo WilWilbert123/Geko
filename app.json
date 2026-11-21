@@ -8,7 +8,7 @@
     "splash": {
       "image": "./assets/images/splash_blank.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1FA971"
+      "backgroundColor": "#16A06B"
     },
     "platforms": [
       "ios",
@@ -16,6 +16,10 @@
     ],
     "android": {
       "package": "com.me.geko",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/geko_adaptive_foreground.png",
+        "backgroundColor": "#16A06B"
+      },
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"

@@ -92,14 +92,26 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const handleResetData = () => {
     Alert.alert(
       'Reset All Financial Data?',
-      'This will permanently delete your local accounts, transactions, budgets, and financial history. This action cannot be undone.',
+      'This will permanently delete your local accounts, transactions, budgets, goals, installments, and financial history. This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete Everything',
           style: 'destructive',
           onPress: async () => {
-            await resetAllCardBalances(0);
+            try {
+              const { getDb } = require('../database/sqlite');
+              const db = getDb();
+              await db.execute('DELETE FROM transactions');
+              await db.execute('DELETE FROM cards');
+              await db.execute('DELETE FROM budgets');
+              await db.execute('DELETE FROM goals');
+              await db.execute('DELETE FROM installments');
+              require('react-native').DeviceEventEmitter.emit('transactions_updated');
+              require('react-native').DeviceEventEmitter.emit('cards_updated');
+            } catch (e) {
+              await resetAllCardBalances(0);
+            }
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             setProfileModalVisible(false);
           },

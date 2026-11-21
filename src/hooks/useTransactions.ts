@@ -4,6 +4,83 @@ import { generateEmbedding } from '../services/ai/engine/embeddingService';
 import { insertVector } from '../database/vectorStore';
 import { Transaction } from '../types/transaction';
 import { uuidv4 } from '../utils/uuid';
+import { getBankTheme } from '../utils/bankThemes';
+
+/**
+ * Ensures the target bank/card exists in the `cards` table and applies a balance delta
+ * (+delta for income/refund, -delta for expense). Accurately handles CREDIT_CARD accounts.
+ */
+async function applyCardBalanceDelta(bankNameInput: string, delta: number) {
+  const db = getDb();
+  const bankName = (bankNameInput || 'GCash').trim();
+  const lower = bankName.toLowerCase();
+
+  try {
+    // Find matching card
+    const cardRes = await db.execute(
+      `SELECT * FROM cards WHERE LOWER(bankName) = LOWER(?) 
+       OR (LOWER(?) = 'gcash' AND (LOWER(bankName) LIKE '%gcash%'))
+       OR (LOWER(?) = 'maya' AND (LOWER(bankName) LIKE '%maya%'))
+       OR (LOWER(?) = 'cash' AND (LOWER(bankName) = 'physical cash' OR type = 'CASH'))
+       LIMIT 1`,
+      [bankName, bankName, bankName, bankName]
+    );
+    const existing = cardRes.rows?._array?.[0];
+
+    if (!existing) {
+      // Auto-create the card so totalAssets & Wallet stay 100% synchronized with transactions
+      const theme = getBankTheme(bankName);
+      const isCash = lower.includes('cash');
+      const isCredit = lower.includes('credit') || lower === 'visa' || lower === 'mastercard';
+      const cardType = isCash ? 'CASH' : isCredit ? 'CREDIT_CARD' : 'EWALLET';
+      const cardId = isCash ? 'card-physical-cash' : uuidv4();
+      const cardNum = isCash ? 'CASH' : `•••• ${Math.floor(1000 + Math.random() * 9000)}`;
+      const creditLimit = isCredit ? 50000 : 0;
+      const initialDebt = isCredit ? Math.max(0, -delta) : 0;
+      const initialAvail = isCredit ? Math.max(0, creditLimit - initialDebt) : 0;
+      const initialBal = isCredit ? 0 : delta;
+
+      await db.execute(
+        `INSERT INTO cards (id, bankName, balance, color1, color2, cardNumber, budget, type, paymentNetwork, creditLimit, availableCredit, outstandingBalance)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          cardId,
+          isCash ? 'Cash' : bankName,
+          initialBal,
+          theme.bg1,
+          theme.bg2,
+          cardNum,
+          0,
+          cardType,
+          theme.network || 'OTHER',
+          creditLimit,
+          initialAvail,
+          initialDebt,
+        ]
+      );
+      require('react-native').DeviceEventEmitter.emit('cards_updated');
+      return;
+    }
+
+    if (existing.type === 'CREDIT_CARD') {
+      // For credit cards: expense (delta < 0) increases outstandingBalance; income/payment (delta > 0) reduces outstandingBalance
+      const oldDebt = Number(existing.outstandingBalance || 0);
+      const limit = Number(existing.creditLimit || 50000);
+      const newDebt = Math.max(0, oldDebt - delta);
+      const newAvail = Math.max(0, limit - newDebt);
+      await db.execute(
+        'UPDATE cards SET outstandingBalance = ?, availableCredit = ? WHERE id = ?',
+        [newDebt, newAvail, existing.id]
+      );
+    } else {
+      const oldBal = Number(existing.balance || 0);
+      const newBal = oldBal + delta;
+      await db.execute('UPDATE cards SET balance = ? WHERE id = ?', [newBal, existing.id]);
+    }
+  } catch (e) {
+    console.warn('Failed to synchronize card balance:', e);
+  }
+}
 
 export const useTransactions = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -13,7 +90,6 @@ export const useTransactions = () => {
   const load = useCallback(async () => {
     const db = getDb();
     try {
-      // Auto-heal facial wash & cleanser transactions miscategorized as Food
       try {
         await db.execute(`
           UPDATE transactions 
@@ -24,9 +100,9 @@ export const useTransactions = () => {
       } catch (e) {}
 
       const res = await db.execute('SELECT * FROM transactions ORDER BY CAST(date AS INTEGER) DESC');
-      // Coerce date to number — SQLite may return INTEGER columns as strings
       const data = ((res.rows?._array || []) as any[]).map(row => ({
         ...row,
+        amount: Number(row.amount || 0),
         date: Number(row.date),
       })) as Transaction[];
       setTransactions(data);
@@ -54,18 +130,6 @@ export const useTransactions = () => {
     const bankName = t.bankName || 'GCash';
 
     try {
-      if (bankName.toLowerCase() === 'cash') {
-        try {
-          const cashCheck = await db.execute("SELECT id FROM cards WHERE LOWER(bankName) = 'cash'");
-          if (!cashCheck.rows?._array?.length) {
-            await db.execute(
-              "INSERT INTO cards (id, bankName, color1, color2, balance, monthlyBudget, type, paymentNetwork, creditLimit, outstandingBalance, availableCredit) VALUES ('card-physical-cash', 'Cash', '#0B0D12', '#10B981', 0, 5000, 'CASH', 'OTHER', 0, 0, 0)"
-            );
-            require('react-native').DeviceEventEmitter.emit('cards_updated');
-          }
-        } catch (err) {}
-      }
-
       // 1. Insert into relational DB
       const res = await db.execute(
         'INSERT INTO transactions (id, amount, type, categoryId, date, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -73,22 +137,9 @@ export const useTransactions = () => {
       );
       const rowId = res.insertId;
 
-      // 2. Update card balance
-      try {
-        if (t.type === 'expense') {
-          await db.execute(
-            'UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?) OR (LOWER(?) = "gcash" AND (LOWER(bankName) = "gcash e-wallet" OR LOWER(bankName) = "gcash ewallet"))',
-            [t.amount, bankName, bankName]
-          );
-        } else if (t.type === 'income') {
-          await db.execute(
-            'UPDATE cards SET balance = balance + ? WHERE LOWER(bankName) = LOWER(?) OR (LOWER(?) = "gcash" AND (LOWER(bankName) = "gcash e-wallet" OR LOWER(bankName) = "gcash ewallet"))',
-            [t.amount, bankName, bankName]
-          );
-        }
-      } catch (e) {
-        console.warn('Failed to update card balance', e);
-      }
+      // 2. Synchronize card balance (+amount for income, -amount for expense)
+      const delta = t.type === 'income' ? t.amount : -t.amount;
+      await applyCardBalanceDelta(bankName, delta);
 
       // 3. Generate vector embedding asynchronously so UI doesn't block
       setTimeout(async () => {
@@ -103,7 +154,7 @@ export const useTransactions = () => {
         }
       }, 0);
 
-      load();
+      await load();
       require('react-native').DeviceEventEmitter.emit('transactions_updated');
     } catch (error) {
       console.error('Failed to add transaction', error);
@@ -111,5 +162,115 @@ export const useTransactions = () => {
     }
   };
 
-  return { transactions, balance, isLoading, addTransaction, refresh: load };
+  /**
+   * Deletes a transaction and accurately reverses its balance impact on the associated card/account
+   */
+  const deleteTransaction = async (transactionId: string) => {
+    const db = getDb();
+    try {
+      const existingRes = await db.execute('SELECT * FROM transactions WHERE id = ?', [transactionId]);
+      const tx = existingRes.rows?._array?.[0];
+      if (tx) {
+        const amt = Number(tx.amount || 0);
+        const reverseDelta = tx.type === 'income' ? -amt : amt;
+        await applyCardBalanceDelta(tx.bankName || 'GCash', reverseDelta);
+      }
+
+      await db.execute('DELETE FROM transactions WHERE id = ?', [transactionId]);
+      await load();
+      require('react-native').DeviceEventEmitter.emit('transactions_updated');
+    } catch (error) {
+      console.error('Failed to delete transaction', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Updates an existing transaction and reconciles card balances for old vs new values
+   */
+  const updateTransaction = async (
+    transactionId: string,
+    updates: {
+      amount: number;
+      type: 'income' | 'expense';
+      categoryId: string;
+      note?: string;
+      bankName: string;
+    }
+  ) => {
+    const db = getDb();
+    try {
+      const existingRes = await db.execute('SELECT * FROM transactions WHERE id = ?', [transactionId]);
+      const oldTx = existingRes.rows?._array?.[0];
+      if (oldTx) {
+        const oldAmt = Number(oldTx.amount || 0);
+        const reverseOld = oldTx.type === 'income' ? -oldAmt : oldAmt;
+        await applyCardBalanceDelta(oldTx.bankName || 'GCash', reverseOld);
+      }
+
+      await db.execute(
+        'UPDATE transactions SET amount = ?, type = ?, categoryId = ?, note = ?, bankName = ? WHERE id = ?',
+        [updates.amount, updates.type, updates.categoryId, updates.note || '', updates.bankName, transactionId]
+      );
+
+      const newDelta = updates.type === 'income' ? updates.amount : -updates.amount;
+      await applyCardBalanceDelta(updates.bankName, newDelta);
+
+      await load();
+      require('react-native').DeviceEventEmitter.emit('transactions_updated');
+    } catch (error) {
+      console.error('Failed to update transaction', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Transfers funds between two accounts (deducts from source account, credits destination account)
+   */
+  const transferBetweenAccounts = async (params: {
+    fromBank: string;
+    toBank: string;
+    amount: number;
+    note?: string;
+    date?: number;
+  }) => {
+    const db = getDb();
+    const timestamp = params.date || Date.now();
+    const cleanNote = params.note?.trim()
+      ? `${params.note.trim()} (${params.fromBank} → ${params.toBank})`
+      : `Transfer: ${params.fromBank} → ${params.toBank}`;
+
+    try {
+      // 1. Outflow from source account
+      await db.execute(
+        'INSERT INTO transactions (id, amount, type, categoryId, date, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [uuidv4(), params.amount, 'expense', 'Transfer', timestamp, cleanNote, params.fromBank]
+      );
+      await applyCardBalanceDelta(params.fromBank, -params.amount);
+
+      // 2. Inflow to destination account
+      await db.execute(
+        'INSERT INTO transactions (id, amount, type, categoryId, date, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [uuidv4(), params.amount, 'income', 'Transfer', timestamp + 1, cleanNote, params.toBank]
+      );
+      await applyCardBalanceDelta(params.toBank, params.amount);
+
+      await load();
+      require('react-native').DeviceEventEmitter.emit('transactions_updated');
+    } catch (error) {
+      console.error('Failed to transfer between accounts', error);
+      throw error;
+    }
+  };
+
+  return {
+    transactions,
+    balance,
+    isLoading,
+    addTransaction,
+    deleteTransaction,
+    updateTransaction,
+    transferBetweenAccounts,
+    refresh: load,
+  };
 };
