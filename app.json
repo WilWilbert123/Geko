@@ -15,7 +15,8 @@
       "android"
     ],
     "android": {
-      "package": "com.me.geko",
+      "package": "com.gekobudgettracker.app",
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/geko_adaptive_foreground.png",
         "backgroundColor": "#16A06B"
@@ -31,13 +32,14 @@
         "expo-build-properties",
         {
           "android": {
-            "newArchEnabled": false
+            "newArchEnabled": false,
+            "minSdkVersion": 24
           }
         }
       ]
     ],
     "ios": {
-      "bundleIdentifier": "com.me.geko"
+      "bundleIdentifier": "com.gekobudgettracker.app"
     },
     "extra": {
       "eas": {

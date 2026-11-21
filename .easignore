@@ -1,0 +1,29 @@
+# Dependencies & caches
+node_modules/
+.expo/
+.git/
+
+# Local build outputs & heavy binaries (prevents 171MB upload timeout!)
+*.apk
+*.aab
+build/
+android/app/build/
+android/app/.cxx/
+android/build/
+android/.gradle/
+android/.cxx/
+ios/build/
+ios/Pods/
+
+# Store listing & documentation assets not needed inside app bundle
+storelisting/
+docs/
+privacy-policy.html
+assets/images/geko_logo_minimal_geometric.png
+assets/images/geko_logo_tactile_3d_craft.png
+
+# OS & logs
+.DS_Store
+npm-debug.*
+yarn-debug.*
+yarn-error.*

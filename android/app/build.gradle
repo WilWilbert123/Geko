@@ -117,10 +117,10 @@ android {
 
     namespace 'com.me.geko'
     defaultConfig {
-        applicationId 'com.me.geko'
+        applicationId 'com.gekobudgettracker.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        versionCode 3
         versionName "1.0.0"
     }
     signingConfigs {
