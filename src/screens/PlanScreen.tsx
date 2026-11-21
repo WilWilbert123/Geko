@@ -620,7 +620,7 @@ export const PlanScreen = () => {
             setActiveTab('data');
           }}
         >
-          <Sparkles size={16} color={activeTab === 'data' ? colors.primary : colors.textMuted} />
+          <Layers size={16} color={activeTab === 'data' ? colors.primary : colors.textMuted} />
           <Text
             style={[
               styles.segmentText,
@@ -739,12 +739,24 @@ export const PlanScreen = () => {
 
                     const hasExpense = dayInfo && dayInfo.expenses > 0;
                     const hasIncome = dayInfo && dayInfo.income > 0;
+                    const hasTransaction = Boolean(hasExpense || hasIncome);
+                    const ringColor =
+                      hasExpense && hasIncome
+                        ? '#F59E0B'
+                        : hasExpense
+                          ? '#F43F5E'
+                          : '#10B981';
 
                     return (
                       <TouchableOpacity
                         key={dayKey + idx}
                         style={[
                           styles.calendarCell,
+                          hasTransaction && !isSelected && {
+                            backgroundColor: hasExpense
+                              ? 'rgba(244, 63, 94, 0.06)'
+                              : 'rgba(16, 185, 129, 0.08)',
+                          },
                           isSelected && [
                             styles.calendarCellSelected,
                             {
@@ -769,32 +781,41 @@ export const PlanScreen = () => {
                                   : inCurrentMonth
                                     ? colors.text
                                     : `${colors.textMuted}60`,
-                                fontWeight: isSelected || isDayToday ? '800' : '500',
+                                fontWeight: isSelected || isDayToday || hasTransaction ? '800' : '500',
                               },
                             ]}
                           >
                             {format(day, 'd')}
                           </Text>
-                          {isDayToday && !isSelected && <View style={[styles.todayDot, { backgroundColor: colors.primary }]} />}
+                          {isDayToday && !isSelected && !hasTransaction && (
+                            <View style={[styles.todayDot, { backgroundColor: colors.primary }]} />
+                          )}
                         </View>
 
-                        {/* Spend / Income indicator dots */}
+                        {/* Mini Geko Picture Stamp on Dates with Transactions */}
                         <View style={styles.dayIndicatorsRow}>
-                          {hasExpense && (
+                          {hasTransaction && (
                             <View
                               style={[
-                                styles.indicatorDot,
-                                { backgroundColor: '#F43F5E' },
+                                styles.gekoDayBadge,
+                                {
+                                  borderColor: ringColor,
+                                  shadowColor: ringColor,
+                                },
                               ]}
-                            />
-                          )}
-                          {hasIncome && (
-                            <View
-                              style={[
-                                styles.indicatorDot,
-                                { backgroundColor: '#10B981' },
-                              ]}
-                            />
+                            >
+                              <Image
+                                source={require('../../assets/images/geko_mascot.png')}
+                                style={styles.gekoDayAvatar}
+                                resizeMode="cover"
+                              />
+                              <View
+                                style={[
+                                  styles.gekoDayStatusDot,
+                                  { backgroundColor: ringColor },
+                                ]}
+                              />
+                            </View>
                           )}
                         </View>
                       </TouchableOpacity>
@@ -1766,10 +1787,11 @@ const styles = StyleSheet.create({
   },
   calendarCell: {
     width: '14.28%',
-    height: 48,
+    height: 56,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10,
+    justifyContent: 'flex-start',
+    paddingTop: 6,
+    borderRadius: 12,
     marginVertical: 2,
   },
   calendarCellSelected: {
@@ -1786,15 +1808,43 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    marginTop: 1,
+    marginTop: 2,
   },
   dayIndicatorsRow: {
     flexDirection: 'row',
-    gap: 3,
-    height: 5,
-    marginTop: 2,
+    height: 24,
+    marginTop: 3,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  gekoDayBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    backgroundColor: '#16A06B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  gekoDayAvatar: {
+    width: 19,
+    height: 19,
+    borderRadius: 9.5,
+  },
+  gekoDayStatusDot: {
+    position: 'absolute',
+    bottom: -1.5,
+    right: -1.5,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
   },
   indicatorDot: {
     width: 4.5,

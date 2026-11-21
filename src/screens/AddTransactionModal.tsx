@@ -1,16 +1,28 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Keyboard, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, TextInput, StyleSheet, Keyboard, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
 import { useTransactions } from '../hooks/useTransactions';
-import { Button } from '../components/common/Button';
+import { useCards } from '../hooks/useCards';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, runOnJS } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Coffee, ShoppingCart, Train, DollarSign, ArrowRightLeft, Zap, Gift, ScanLine } from 'lucide-react-native';
+import {
+  Coffee,
+  ShoppingCart,
+  Train,
+  DollarSign,
+  ArrowRightLeft,
+  Zap,
+  Gift,
+  ScanLine,
+  HeartPulse,
+  Home,
+} from 'lucide-react-native';
 import { ReceiptScannerModal } from '../components/receipt/ReceiptScannerModal';
 import { ParsedReceipt } from '../services/receipt/receiptParser';
+import { getBankTheme } from '../utils/bankThemes';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AddTransaction'>;
 
@@ -19,11 +31,14 @@ const EXPENSE_CATEGORIES = [
   { id: 'Shopping', icon: ShoppingCart },
   { id: 'Transport', icon: Train },
   { id: 'Utilities', icon: Zap },
+  { id: 'Health', icon: HeartPulse },
+  { id: 'Housing', icon: Home },
 ];
 
 const INCOME_CATEGORIES = [
-  { id: 'Cash In', icon: DollarSign },
   { id: 'Deposit', icon: DollarSign },
+  { id: 'Salary', icon: DollarSign },
+  { id: 'Cash In', icon: DollarSign },
   { id: 'Bonus', icon: Gift },
 ];
 
@@ -31,23 +46,43 @@ const TRANSFER_CATEGORIES = [
   { id: 'Transfer', icon: ArrowRightLeft },
 ];
 
-const BANKS = [
+const DEFAULT_BANKS = [
   { name: 'GCash', color: '#0047FF' },
   { name: 'GoTyme', color: '#0099B8' },
   { name: 'BPI', color: '#B30000' },
   { name: 'Maya', color: '#006B4D' },
+  { name: 'Cash', color: '#10B981' },
   { name: 'Landbank', color: '#004D25' },
 ];
 
 export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
   const { colors } = useTheme();
-  const { addTransaction } = useTransactions();
-  
+  const { addTransaction, transferBetweenAccounts } = useTransactions();
+  const { cards } = useCards();
+
+  // Merge user's connected wallet cards with standard accounts
+  const bankOptions = useMemo(() => {
+    const map = new Map<string, { name: string; color: string }>();
+    for (const c of cards) {
+      if (c.bankName) {
+        const theme = getBankTheme(c.bankName, c.color1, c.color2);
+        map.set(c.bankName.toLowerCase(), { name: c.bankName, color: c.color1 || theme.bg1 });
+      }
+    }
+    for (const b of DEFAULT_BANKS) {
+      if (!map.has(b.name.toLowerCase())) {
+        map.set(b.name.toLowerCase(), b);
+      }
+    }
+    return Array.from(map.values());
+  }, [cards]);
+
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
   const [category, setCategory] = useState('Food');
   const [selectedBank, setSelectedBank] = useState('GCash');
+  const [destinationBank, setDestinationBank] = useState('Maya');
   const [scannerOpen, setScannerOpen] = useState(false);
 
   const handleReceiptScanned = (parsed: ParsedReceipt) => {
@@ -78,43 +113,64 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
     Haptics.selectionAsync();
     setType(newType);
     if (newType === 'income') {
-      setCategory('Cash In');
+      setCategory('Deposit');
     } else if (newType === 'expense') {
       setCategory('Food');
     } else if (newType === 'transfer') {
       setCategory('Transfer');
+      if (destinationBank === selectedBank) {
+        const alt = bankOptions.find((b) => b.name !== selectedBank);
+        if (alt) setDestinationBank(alt.name);
+      }
     }
   };
 
   const handleSave = async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const val = parseFloat(amount);
-    if (!isNaN(val) && val > 0) {
-      let finalCategory = category;
-      if (type === 'income' && !['Cash In', 'Deposit', 'Bonus'].includes(finalCategory)) {
-        finalCategory = 'Cash In';
+    const val = parseFloat(amount.replace(/,/g, ''));
+    if (isNaN(val) || val <= 0) return;
+
+    if (type === 'transfer') {
+      if (selectedBank.toLowerCase() === destinationBank.toLowerCase()) {
+        Alert.alert('Same Account', 'Please choose different source and destination accounts for a transfer.');
+        return;
       }
-      await addTransaction({
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await transferBetweenAccounts({
+        fromBank: selectedBank,
+        toBank: destinationBank,
         amount: val,
-        type: type === 'transfer' ? 'expense' : type,
-        categoryId: finalCategory,
-        date: Date.now(),
         note,
-        bankName: selectedBank,
+        date: Date.now(),
       });
       dismiss();
+      return;
     }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    let finalCategory = category;
+    if (type === 'income' && !['Cash In', 'Deposit', 'Bonus', 'Salary'].includes(finalCategory)) {
+      finalCategory = 'Deposit';
+    }
+    await addTransaction({
+      amount: val,
+      type,
+      categoryId: finalCategory,
+      date: Date.now(),
+      note,
+      bankName: selectedBank,
+    });
+    dismiss();
   };
 
-  const activeColor = type === 'income' ? colors.income : type === 'expense' ? colors.expense : colors.neutral;
+  const activeColor = type === 'income' ? colors.income : type === 'expense' ? colors.expense : colors.primary;
   const categoriesList = type === 'income' ? INCOME_CATEGORIES : type === 'transfer' ? TRANSFER_CATEGORIES : EXPENSE_CATEGORIES;
 
   return (
     <View style={styles.overlay}>
-      <TouchableOpacity 
-        style={styles.backdropTouchable} 
-        activeOpacity={1} 
-        onPress={dismiss} 
+      <TouchableOpacity
+        style={styles.backdropTouchable}
+        activeOpacity={1}
+        onPress={dismiss}
       />
       <PanGestureHandler
         activeOffsetY={[-10, 100]}
@@ -134,18 +190,18 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
       >
         <Animated.View style={[styles.container, { backgroundColor: colors.surface }, animatedStyle]}>
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
-          
+
           <View style={styles.typeSelector}>
             {(['expense', 'income', 'transfer'] as const).map(t => (
               <TouchableOpacity
                 key={t}
                 style={[
                   styles.typeButton,
-                  type === t ? { backgroundColor: t === 'income' ? colors.income : t === 'expense' ? colors.expense : colors.neutral } : { backgroundColor: colors.surfaceHighlight }
+                  type === t ? { backgroundColor: t === 'income' ? colors.income : t === 'expense' ? colors.expense : colors.primary } : { backgroundColor: colors.surfaceHighlight }
                 ]}
                 onPress={() => handleTypeChange(t)}
               >
-                <Text style={[styles.typeText, { color: type === t ? colors.background : colors.text }]}>
+                <Text style={[styles.typeText, { color: type === t ? '#FFFFFF' : colors.text }]}>
                   {t.charAt(0).toUpperCase() + t.slice(1)}
                 </Text>
               </TouchableOpacity>
@@ -153,17 +209,19 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
           </View>
 
           {/* Quick Receipt Auto-Fill Bar */}
-          <TouchableOpacity
-            style={styles.scanReceiptBar}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setScannerOpen(true);
-            }}
-            activeOpacity={0.8}
-          >
-            <ScanLine size={15} color="#D97706" />
-            <Text style={styles.scanReceiptBarText}>Scan Receipt / Bill to Auto-Fill</Text>
-          </TouchableOpacity>
+          {type === 'expense' && (
+            <TouchableOpacity
+              style={styles.scanReceiptBar}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setScannerOpen(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <ScanLine size={15} color="#D97706" />
+              <Text style={styles.scanReceiptBarText}>Scan Receipt / Bill to Auto-Fill</Text>
+            </TouchableOpacity>
+          )}
 
           <TextInput
             style={[styles.input, { color: activeColor, borderBottomColor: colors.border }]}
@@ -176,16 +234,18 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
           />
 
           {/* Account / Bank Selector */}
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>ACCOUNT / CARD</Text>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
+            {type === 'transfer' ? 'FROM ACCOUNT' : 'ACCOUNT / CARD'}
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
             nestedScrollEnabled={true}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.scrollContentContainer}
             style={styles.categoriesScroll}
           >
-            {BANKS.map(b => {
+            {bankOptions.map(b => {
               const isSelected = selectedBank === b.name;
               return (
                 <TouchableOpacity
@@ -208,43 +268,81 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
             })}
           </ScrollView>
 
-          {/* Category Selector */}
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>CATEGORY</Text>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
-            nestedScrollEnabled={true}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.scrollContentContainer}
-            style={styles.categoriesScroll}
-          >
-            {categoriesList.map(cat => {
-              const Icon = cat.icon;
-              const isSelected = category === cat.id;
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[
-                    styles.categoryChip,
-                    { backgroundColor: isSelected ? activeColor : colors.surfaceHighlight }
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setCategory(cat.id);
-                  }}
-                >
-                  <Icon size={16} color={isSelected ? '#FFFFFF' : colors.text} />
-                  <Text style={[styles.categoryText, { color: isSelected ? '#FFFFFF' : colors.text }]}>
-                    {cat.id}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          {type === 'transfer' ? (
+            <>
+              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>TO ACCOUNT</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled={true}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.scrollContentContainer}
+                style={styles.categoriesScroll}
+              >
+                {bankOptions.map(b => {
+                  const isSelected = destinationBank === b.name;
+                  return (
+                    <TouchableOpacity
+                      key={`dest-${b.name}`}
+                      style={[
+                        styles.categoryChip,
+                        { backgroundColor: isSelected ? b.color : colors.surfaceHighlight }
+                      ]}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setDestinationBank(b.name);
+                      }}
+                    >
+                      <View style={[styles.bankDot, { backgroundColor: isSelected ? '#fff' : b.color }]} />
+                      <Text style={[styles.categoryText, { color: isSelected ? '#fff' : colors.text }]}>
+                        {b.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </>
+          ) : (
+            <>
+              {/* Category Selector */}
+              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>CATEGORY</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled={true}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.scrollContentContainer}
+                style={styles.categoriesScroll}
+              >
+                {categoriesList.map(cat => {
+                  const Icon = cat.icon;
+                  const isSelected = category === cat.id;
+                  return (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[
+                        styles.categoryChip,
+                        { backgroundColor: isSelected ? activeColor : colors.surfaceHighlight }
+                      ]}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setCategory(cat.id);
+                      }}
+                    >
+                      <Icon size={16} color={isSelected ? '#FFFFFF' : colors.text} />
+                      <Text style={[styles.categoryText, { color: isSelected ? '#FFFFFF' : colors.text }]}>
+                        {cat.id}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
 
           <TextInput
             style={[styles.noteInput, { color: colors.text, backgroundColor: colors.background }]}
-            placeholder="Add a note..."
+            placeholder={type === 'transfer' ? 'Transfer note (optional)...' : 'Add a note...'}
             placeholderTextColor={colors.textMuted}
             value={note}
             onChangeText={setNote}
@@ -256,13 +354,16 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
             onPress={handleSave}
             activeOpacity={0.8}
           >
-            <Text style={styles.saveBtnText}>Save Transaction</Text>
+            <Text style={styles.saveBtnText}>
+              {type === 'transfer' ? `Transfer ${selectedBank} → ${destinationBank}` : 'Save Transaction'}
+            </Text>
           </TouchableOpacity>
         </Animated.View>
       </PanGestureHandler>
 
       <ReceiptScannerModal
         visible={scannerOpen}
+        autoSave={false}
         onClose={() => setScannerOpen(false)}
         onSuccess={handleReceiptScanned}
       />
@@ -300,7 +401,7 @@ const styles = StyleSheet.create({
   },
   typeSelector: {
     flexDirection: 'row',
-    marginBottom: 24,
+    marginBottom: 20,
     gap: 8,
   },
   typeButton: {
@@ -310,19 +411,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   typeText: {
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 14,
   },
   input: {
-    fontSize: 56,
+    fontSize: 52,
     fontWeight: '700',
     borderBottomWidth: 1,
-    paddingBottom: 12,
-    marginBottom: 24,
+    paddingBottom: 10,
+    marginBottom: 20,
     textAlign: 'center',
   },
   categoriesScroll: {
-    marginBottom: 20,
+    marginBottom: 18,
     minHeight: 44,
   },
   scrollContentContainer: {
@@ -339,14 +440,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   categoryText: {
-    fontWeight: '500',
+    fontWeight: '600',
     fontSize: 14,
   },
   noteInput: {
     height: 48,
     borderRadius: 12,
     paddingHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   sectionLabel: {
     fontSize: 10,
@@ -365,7 +466,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 4,
   },
   saveBtnText: {
     color: '#FFFFFF',
@@ -381,7 +482,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 14,
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#FDE68A',
   },

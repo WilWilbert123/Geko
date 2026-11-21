@@ -7,27 +7,39 @@ import { PieChart, Search, X } from 'lucide-react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { TransactionItem } from '../components/home/RecentActivity';
 import { SkeletonTransactionItem } from '../components/common/Skeleton';
-import { subDays, subMonths } from 'date-fns';
+import { subDays } from 'date-fns';
+import { formatCurrency } from '../utils/formatters';
 
 const SEGMENTS = ['All', 'Weekly', 'Monthly'];
+const TYPE_FILTERS = [
+  { key: 'all', label: 'All Types' },
+  { key: 'expense', label: 'Expenses' },
+  { key: 'income', label: 'Income' },
+] as const;
 
 export const HistoryScreen = () => {
   const { colors, isDark } = useTheme();
   const { transactions, isLoading } = useTransactions();
   const [segment, setSegment] = useState('All');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'expense' | 'income'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredTransactions = useMemo(() => {
     let list = [...transactions].sort((a, b) => Number(b.date) - Number(a.date));
 
-    // Filter by date segment
+    // Filter by date segment (Weekly = last 7 days, Monthly = last 30 days)
     const now = new Date();
     if (segment === 'Weekly') {
       const oneWeekAgo = subDays(now, 7).getTime();
       list = list.filter(t => t.date >= oneWeekAgo);
     } else if (segment === 'Monthly') {
-      const oneMonthAgo = subMonths(now, 30).getTime();
+      const oneMonthAgo = subDays(now, 30).getTime();
       list = list.filter(t => t.date >= oneMonthAgo);
+    }
+
+    // Filter by transaction type
+    if (typeFilter !== 'all') {
+      list = list.filter(t => t.type === typeFilter);
     }
 
     // Filter by search query
@@ -36,12 +48,23 @@ export const HistoryScreen = () => {
       list = list.filter(t =>
         (t.categoryId && t.categoryId.toLowerCase().includes(q)) ||
         (t.note && t.note.toLowerCase().includes(q)) ||
-        (t.bankName && t.bankName.toLowerCase().includes(q))
+        (t.bankName && t.bankName.toLowerCase().includes(q)) ||
+        String(t.amount).includes(q)
       );
     }
 
     return list;
-  }, [transactions, segment, searchQuery]);
+  }, [transactions, segment, typeFilter, searchQuery]);
+
+  const periodStats = useMemo(() => {
+    let inflow = 0;
+    let spent = 0;
+    for (const t of filteredTransactions) {
+      if (t.type === 'income') inflow += Number(t.amount || 0);
+      else spent += Number(t.amount || 0);
+    }
+    return { inflow, spent, net: inflow - spent };
+  }, [filteredTransactions]);
 
   const emptyState = (
     <Animated.View entering={FadeIn} style={styles.empty}>
@@ -63,7 +86,7 @@ export const HistoryScreen = () => {
           <Search size={18} color={colors.textMuted} />
           <TextInput
             style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search activity, bank, note..."
+            placeholder="Search activity, bank, note, amount..."
             placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -95,6 +118,47 @@ export const HistoryScreen = () => {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* Type Filter Chips + Live Summary Strip */}
+        <View style={styles.subFilterRow}>
+          <View style={styles.typeChips}>
+            {TYPE_FILTERS.map((tf) => {
+              const active = typeFilter === tf.key;
+              return (
+                <TouchableOpacity
+                  key={tf.key}
+                  style={[
+                    styles.typeChip,
+                    {
+                      backgroundColor: active ? colors.primary : colors.surfaceHighlight,
+                    },
+                  ]}
+                  onPress={() => setTypeFilter(tf.key)}
+                >
+                  <Text
+                    style={[
+                      styles.typeChipText,
+                      { color: active ? '#FFFFFF' : colors.textMuted },
+                    ]}
+                  >
+                    {tf.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {filteredTransactions.length > 0 && (
+            <View style={styles.miniSummary}>
+              <Text style={[styles.miniSummaryText, { color: '#EF4444' }]}>
+                -{formatCurrency(periodStats.spent)}
+              </Text>
+              <Text style={[styles.miniSummaryText, { color: '#10B981' }]}>
+                +{formatCurrency(periodStats.inflow)}
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {isLoading ? (
@@ -110,7 +174,7 @@ export const HistoryScreen = () => {
         <FlashList
           data={filteredTransactions}
           estimatedItemSize={76}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 100 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 100 }}
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => (
             <TransactionItem item={item} index={index} />
@@ -127,8 +191,8 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 12,
-    gap: 12,
+    paddingBottom: 8,
+    gap: 10,
   },
   searchBar: {
     flexDirection: 'row',
@@ -159,6 +223,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  subFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  typeChips: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  typeChip: {
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  typeChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  miniSummary: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  miniSummaryText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   empty: {
     padding: 40,
     alignItems: 'center',
@@ -181,5 +273,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
-  }
+  },
 });

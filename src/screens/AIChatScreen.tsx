@@ -1,10 +1,32 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, TextInput, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity } from 'react-native';
+import {
+  View,
+  TextInput,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../hooks/useTheme';
 import { useRAGChat } from '../hooks/useRAGChat';
 import { ChatBubble } from '../components/ai/ChatBubble';
 import { StreamingText } from '../components/ai/StreamingText';
+import { GekoWalker } from '../components/intro/GekoWalker';
 import { Send, Target, BarChart3, CreditCard, Utensils, Calendar, Trash2, Mic, MicOff } from 'lucide-react-native';
 import { loadModel } from '../services/ai/engine/llamaService';
 import { getModelPath } from '../utils/fileSystem';
@@ -18,6 +40,119 @@ const PROMPT_CHIPS = [
   { icon: Calendar, title: 'When is my salary cutoff?', query: 'When is my salary cutoff?', color: '#EC4899' },
 ];
 
+type PeekEdge = 'right' | 'left' | 'top';
+const PEEK_EDGES: PeekEdge[] = ['right', 'left', 'top'];
+
+/* ─── Full-Body Transparent-Background Peeking & Walking Geko (Right, Left & Top!) ─── */
+const ChatEdgePeeker: React.FC<{ isBusy: boolean }> = ({ isBusy }) => {
+  const [edgeIdx, setEdgeIdx] = useState(0);
+  const edge = PEEK_EDGES[edgeIdx % PEEK_EDGES.length];
+
+  // 1 = tucked outside screen edge, 0.25 = head & hands peeking out, 0 = full body with feet & tail visible!
+  const slideOut = useSharedValue(1);
+  // 1 = legs & hands actively walking while climbing in/out, 0 = settled & looking around
+  const walkGait = useSharedValue(1);
+  const tilt = useSharedValue(0);
+
+  const cycleToNextEdge = () => {
+    setEdgeIdx((prev) => (prev + 1) % PEEK_EDGES.length);
+  };
+
+  useEffect(() => {
+    slideOut.value = 1;
+    walkGait.value = 1;
+    tilt.value = 0;
+
+    // 1. Climb out from edge (with hands, feet & tail walking!) -> pause to look around -> climb out more -> walk back in
+    slideOut.value = withDelay(
+      350,
+      withSequence(
+        withTiming(0.28, { duration: 550, easing: Easing.out(Easing.cubic) }),
+        withTiming(0.25, { duration: 950, easing: Easing.inOut(Easing.quad) }),
+        withSpring(0.02, { damping: 12, stiffness: 110 }),
+        withTiming(0.02, { duration: 1400 }),
+        withTiming(1, { duration: 550, easing: Easing.in(Easing.cubic) }, (done) => {
+          if (done) runOnJS(cycleToNextEdge)();
+        })
+      )
+    );
+
+    // 2. Walk legs while climbing out, pause legs (gentle hand wave) while looking, walk legs again while climbing back
+    walkGait.value = withDelay(
+      350,
+      withSequence(
+        withTiming(1, { duration: 550 }),
+        withTiming(0.15, { duration: 950 }),
+        withTiming(0.85, { duration: 400 }),
+        withTiming(0.15, { duration: 1200 }),
+        withTiming(1, { duration: 550 })
+      )
+    );
+
+    // 3. Curious head/body tilt left & right while peeking
+    tilt.value = withDelay(
+      850,
+      withSequence(
+        withTiming(-7, { duration: 350, easing: Easing.out(Easing.quad) }),
+        withTiming(7, { duration: 450, easing: Easing.inOut(Easing.quad) }),
+        withSpring(0, { damping: 10, stiffness: 120 })
+      )
+    );
+  }, [edgeIdx, isBusy]);
+
+  const peekerTransform = useAnimatedStyle(() => {
+    // Full body scaled height is 250 * 0.44 = 110px
+    const offset = slideOut.value * 96;
+    if (edge === 'right') {
+      return {
+        transform: [
+          { translateX: offset },
+          { rotate: `${-90 + tilt.value}deg` },
+        ],
+      };
+    }
+    if (edge === 'left') {
+      return {
+        transform: [
+          { translateX: -offset },
+          { rotate: `${90 + tilt.value}deg` },
+        ],
+      };
+    }
+    // Top edge: upside-down clinging under the header bar with hands, feet & tail!
+    return {
+      transform: [
+        { translateY: -offset },
+        { rotate: `${180 + tilt.value}deg` },
+      ],
+    };
+  });
+
+  const posStyle =
+    edge === 'right'
+      ? { right: -16, top: 132 }
+      : edge === 'left'
+        ? { left: -16, top: 218 }
+        : { right: 56, top: -18 };
+
+  return (
+    <View style={[styles.peekerAnchor, posStyle]} pointerEvents="box-none">
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          cycleToNextEdge();
+        }}
+      >
+        {/* 100% Transparent Background — Full Body Cartoon Geko with Hands, Feet & Tail! */}
+        <Animated.View style={[styles.transparentPeekerWrap, peekerTransform]}>
+          <GekoWalker walk={walkGait} scale={0.44} />
+        </Animated.View>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 export const AIChatScreen = () => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -28,8 +163,38 @@ export const AIChatScreen = () => {
 
   const [error, setError] = useState<string | null>(null);
 
+  // Cartoon walking hero in empty state
+  const heroWalk = useSharedValue(1);
+  const heroPatrolX = useSharedValue(-36);
+
   useEffect(() => {
-    // Attempt to load the model on mount
+    heroWalk.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1800 }),
+        withTiming(0, { duration: 1100 }),
+        withTiming(1, { duration: 1800 }),
+        withTiming(0, { duration: 1100 })
+      ),
+      -1,
+      false
+    );
+    heroPatrolX.value = withRepeat(
+      withSequence(
+        withTiming(36, { duration: 1800, easing: Easing.inOut(Easing.quad) }),
+        withTiming(36, { duration: 1100 }),
+        withTiming(-36, { duration: 1800, easing: Easing.inOut(Easing.quad) }),
+        withTiming(-36, { duration: 1100 })
+      ),
+      -1,
+      false
+    );
+  }, []);
+
+  const heroPatrolStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: heroPatrolX.value }],
+  }));
+
+  useEffect(() => {
     const initLLM = async () => {
       try {
         const path = getModelPath('qwen2.5-1.5b-instruct-q4_k_m.gguf');
@@ -60,6 +225,7 @@ export const AIChatScreen = () => {
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {/* Top Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12, borderBottomColor: colors.border }]}>
         <View style={styles.headerLeft}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Geko</Text>
@@ -83,40 +249,52 @@ export const AIChatScreen = () => {
         </View>
       )}
 
-      <ScrollView
-        ref={scrollViewRef}
-        contentContainerStyle={styles.scrollContent}
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-      >
-        {messages.length === 0 && (
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>How can I help?</Text>
-            <View style={styles.chipsContainer}>
-              {PROMPT_CHIPS.map(chip => {
-                const IconComponent = chip.icon;
-                return (
-                  <TouchableOpacity
-                    key={chip.title}
-                    style={[styles.chip, { backgroundColor: colors.surfaceHighlight || 'rgba(255,255,255,0.06)', borderColor: colors.border }]}
-                    onPress={() => handleSend(chip.query)}
-                    activeOpacity={0.8}
-                  >
-                    <IconComponent size={18} color={chip.color} strokeWidth={2} />
-                    <Text style={[styles.chipText, { color: colors.text }]}>{chip.title}</Text>
-                  </TouchableOpacity>
-                );
-              })}
+      <View style={{ flex: 1, overflow: 'hidden' }}>
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={styles.scrollContent}
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+        >
+          {messages.length === 0 && (
+            <View style={styles.emptyState}>
+              {/* Full-Body Cartoon Walking Geko Hero Companion */}
+              <Animated.View style={[styles.heroWalkerStage, heroPatrolStyle]}>
+                <GekoWalker walk={heroWalk} scale={0.52} />
+              </Animated.View>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>How can I help?</Text>
+              <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
+                Record expenses in Taglish or ask anything about your budget
+              </Text>
+              <View style={styles.chipsContainer}>
+                {PROMPT_CHIPS.map(chip => {
+                  const IconComponent = chip.icon;
+                  return (
+                    <TouchableOpacity
+                      key={chip.title}
+                      style={[styles.chip, { backgroundColor: colors.surfaceHighlight || 'rgba(255,255,255,0.06)', borderColor: colors.border }]}
+                      onPress={() => handleSend(chip.query)}
+                      activeOpacity={0.8}
+                    >
+                      <IconComponent size={18} color={chip.color} strokeWidth={2} />
+                      <Text style={[styles.chipText, { color: colors.text }]}>{chip.title}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {messages.map((msg) => (
-          <ChatBubble key={msg.id} message={msg} onDelete={deleteMessage} />
-        ))}
-        {isGenerating && currentStream !== '' && (
-          <StreamingText text={currentStream} isGenerating={isGenerating} />
-        )}
-      </ScrollView>
+          {messages.map((msg) => (
+            <ChatBubble key={msg.id} message={msg} onDelete={deleteMessage} />
+          ))}
+          {isGenerating && currentStream !== '' && (
+            <StreamingText text={currentStream} isGenerating={isGenerating} />
+          )}
+        </ScrollView>
+
+        {/* Transparent-Background Full-Body Peeking & Climbing Geko (Right -> Left -> Top!) */}
+        <ChatEdgePeeker isBusy={isGenerating || isListening} />
+      </View>
 
       {isListening && (
         <View style={[styles.listeningBanner, { backgroundColor: colors.surfaceHighlight || 'rgba(255,255,255,0.06)' }]}>
@@ -197,11 +375,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 20,
     justifyContent: 'space-between',
+    zIndex: 10,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
   },
   headerTitle: {
     fontSize: 26,
@@ -213,9 +393,12 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  headerSub: {
-    fontSize: 12,
-    fontWeight: '600',
+  headerPatrolTrack: {
+    flex: 1,
+    height: 38,
+    marginLeft: 10,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   scrollContent: {
     padding: 20,
@@ -223,16 +406,30 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    marginTop: 40,
+    marginTop: 12,
+  },
+  heroWalkerStage: {
+    height: 132,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
   emptyTitle: {
     fontSize: 24,
-    fontWeight: '600',
-    marginBottom: 24,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    marginBottom: 6,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 22,
+    textAlign: 'center',
   },
   chipsContainer: {
     gap: 12,
     alignItems: 'center',
+    width: '100%',
   },
   chip: {
     flexDirection: 'row',
@@ -255,6 +452,15 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '600',
     letterSpacing: -0.1,
+  },
+  peekerAnchor: {
+    position: 'absolute',
+    zIndex: 20,
+  },
+  transparentPeekerWrap: {
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   inputContainer: {
     flexDirection: 'row',

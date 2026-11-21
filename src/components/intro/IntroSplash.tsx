@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Image, Dimensions, Pressable } from 'react-native';
 import Animated, {
   Easing,
+  SharedValue,
   interpolate,
   runOnJS,
   useAnimatedStyle,
@@ -12,14 +13,32 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop, Circle } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const MASCOT_SIZE = Math.min(SCREEN_W * 0.56, 240);
-const MIN_DURATION = 2600;
-export const INTRO_BG_TOP = '#3DDC84';
-export const INTRO_BG_BOTTOM = '#0C6B4E';
+const MASCOT_SIZE = Math.min(SCREEN_W * 0.64, 264);
+const MIN_DURATION = 3000;
+
+export const INTRO_BG_TOP = '#16A06B';
+export const INTRO_BG_BOTTOM = '#0E7A50';
+
+const LETTERS = ['G', 'E', 'K', 'O'] as const;
+
+// Exact normalized coordinates from the 1024x1024 flat vector mascot artwork
+const EYE_R = (104.5 / 1024) * MASCOT_SIZE;
+const EYE_D = EYE_R * 2;
+const LEFT_EYE_X = (301 / 1024) * MASCOT_SIZE - EYE_R;
+const RIGHT_EYE_X = (721 / 1024) * MASCOT_SIZE - EYE_R;
+const EYE_Y = (449 / 1024) * MASCOT_SIZE - EYE_R;
+
+const PUPIL_R = (61 / 1024) * MASCOT_SIZE;
+const PUPIL_D = PUPIL_R * 2;
+const CATCHLIGHT_R = (20.5 / 1024) * MASCOT_SIZE;
+const CATCHLIGHT_D = CATCHLIGHT_R * 2;
+const CATCHLIGHT_OFFSET_X = (27 / 1024) * MASCOT_SIZE;
+const CATCHLIGHT_OFFSET_Y = (-27 / 1024) * MASCOT_SIZE;
+const MAX_LOOK_PX = (23 / 1024) * MASCOT_SIZE;
 
 interface IntroSplashProps {
   /** True once the app (DB, stores) is ready to be shown */
@@ -28,112 +47,133 @@ interface IntroSplashProps {
   onFinish: () => void;
 }
 
-/* ───────────────────────── Floating decorations ───────────────────────── */
-
-type FloatieKind = 'coin' | 'leaf' | 'sparkle';
-
-const FLOATIES: { kind: FloatieKind; x: number; y: number; size: number; delay: number; drift: number }[] = [
-  { kind: 'coin', x: 0.12, y: 0.18, size: 30, delay: 200, drift: 14 },
-  { kind: 'leaf', x: 0.82, y: 0.14, size: 26, delay: 400, drift: 18 },
-  { kind: 'sparkle', x: 0.7, y: 0.28, size: 10, delay: 700, drift: 10 },
-  { kind: 'leaf', x: 0.08, y: 0.62, size: 22, delay: 550, drift: 16 },
-  { kind: 'coin', x: 0.86, y: 0.6, size: 24, delay: 300, drift: 12 },
-  { kind: 'sparkle', x: 0.22, y: 0.36, size: 8, delay: 900, drift: 8 },
-  { kind: 'sparkle', x: 0.78, y: 0.78, size: 9, delay: 1000, drift: 10 },
-  { kind: 'leaf', x: 0.3, y: 0.84, size: 18, delay: 800, drift: 12 },
-];
-
-const Floatie: React.FC<(typeof FLOATIES)[number]> = ({ kind, x, y, size, delay, drift }) => {
-  const appear = useSharedValue(0);
-  const bob = useSharedValue(0);
-
-  useEffect(() => {
-    appear.value = withDelay(delay, withSpring(1, { damping: 9, stiffness: 120 }));
-    bob.value = withDelay(
-      delay,
-      withRepeat(withTiming(1, { duration: 1800 + delay, easing: Easing.inOut(Easing.sin) }), -1, true)
-    );
-  }, []);
-
+/* ─── Individual Animated Letter (Glides from Right to Center) ─── */
+const AnimatedLetter: React.FC<{
+  char: string;
+  progress: SharedValue<number>;
+}> = ({ char, progress }) => {
   const style = useAnimatedStyle(() => ({
-    opacity: appear.value * (kind === 'sparkle' ? interpolate(bob.value, [0, 1], [0.35, 1]) : 0.95),
+    opacity: interpolate(progress.value, [0, 0.4, 1], [0, 0.85, 1]),
     transform: [
-      { translateY: interpolate(bob.value, [0, 1], [-drift / 2, drift / 2]) },
-      { scale: appear.value },
-      { rotate: `${interpolate(bob.value, [0, 1], kind === 'leaf' ? [-18, 18] : [-6, 6])}deg` },
+      { translateX: interpolate(progress.value, [0, 1], [54, 0]) },
+      { scale: interpolate(progress.value, [0, 1], [0.84, 1]) },
     ],
   }));
 
   return (
-    <Animated.View style={[styles.floatie, { left: `${x * 100}%`, top: `${y * 100}%` }, style]}>
-      {kind === 'coin' && (
-        <View style={[styles.coin, { width: size, height: size, borderRadius: size / 2 }]}>
-          <Text style={[styles.coinText, { fontSize: size * 0.5 }]}>₱</Text>
-        </View>
-      )}
-      {kind === 'leaf' && (
-        <View
-          style={[
-            styles.leaf,
-            { width: size, height: size * 0.62, borderTopLeftRadius: size, borderBottomRightRadius: size },
-          ]}
-        />
-      )}
-      {kind === 'sparkle' && (
-        <View style={[styles.sparkle, { width: size, height: size, borderRadius: size / 2 }]} />
-      )}
+    <Animated.View style={[styles.letterBox, style]}>
+      <Text style={styles.brandLetter}>{char}</Text>
     </Animated.View>
   );
 };
-
-/* ───────────────────────── Loading dots ───────────────────────── */
-
-const Dot: React.FC<{ index: number }> = ({ index }) => {
-  const v = useSharedValue(0);
-  useEffect(() => {
-    v.value = withDelay(
-      index * 160,
-      withRepeat(withSequence(withTiming(1, { duration: 360 }), withTiming(0, { duration: 360 })), -1, false)
-    );
-  }, []);
-  const style = useAnimatedStyle(() => ({
-    opacity: interpolate(v.value, [0, 1], [0.4, 1]),
-    transform: [{ translateY: interpolate(v.value, [0, 1], [0, -7]) }],
-  }));
-  return <Animated.View style={[styles.dot, style]} />;
-};
-
-/* ───────────────────────── Main intro ───────────────────────── */
 
 export const IntroSplash: React.FC<IntroSplashProps> = ({ ready, onFinish }) => {
   const [minTimeDone, setMinTimeDone] = useState(false);
   const exiting = useRef(false);
 
-  const mascotIn = useSharedValue(0);
-  const mascotBob = useSharedValue(0);
-  const wiggle = useSharedValue(0);
-  const glow = useSharedValue(0);
-  const tagline = useSharedValue(0);
+  // Stage appearance
+  const stageScale = useSharedValue(0.92);
+  const stageOpacity = useSharedValue(0);
+
+  // Bottom-to-top rise: 1 = hidden below bottom edge, 0.37 = peeking eyes only, 0 = full icon pose
+  const riseProgress = useSharedValue(1);
+  const headTilt = useSharedValue(0);
+  const idleBob = useSharedValue(0);
+
+  // Eye look direction (-1..1 normalized) & eyelid blink (0 = open, 1 = closed)
+  const lookX = useSharedValue(0);
+  const lookY = useSharedValue(-0.7);
+  const blink = useSharedValue(0);
+
+  // Staggered right-to-center progress for G, E, K, O + gold accent dot + subtitle
+  const letterG = useSharedValue(0);
+  const letterE = useSharedValue(0);
+  const letterK = useSharedValue(0);
+  const letterO = useSharedValue(0);
+  const dotIn = useSharedValue(0);
+  const subtitleIn = useSharedValue(0);
+
+  const progressFill = useSharedValue(0);
   const exit = useSharedValue(0);
 
   useEffect(() => {
-    // Mascot pops in, waves hello, then gently bobs
-    mascotIn.value = withSpring(1, { damping: 8, stiffness: 90, mass: 0.9 });
-    wiggle.value = withDelay(
-      550,
+    stageOpacity.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.quad) });
+    stageScale.value = withSpring(1, { damping: 14, stiffness: 120 });
+
+    // 1) Bottom-to-top choreography:
+    //    0..500ms: Slide up from bottom to peek over the edge (eyes & top of head visible)
+    //    500..1320ms: Hold peek while looking left & right
+    //    1320..1900ms: Rise all the way up from bottom to top into the full mascot mark
+    riseProgress.value = withSequence(
+      withTiming(0.37, { duration: 500, easing: Easing.out(Easing.cubic) }),
+      withTiming(0.35, { duration: 820, easing: Easing.inOut(Easing.quad) }),
+      withSpring(0, { damping: 12, stiffness: 105, mass: 0.85 })
+    );
+
+    // 2) Subtle head tilt synchronized with looking left -> right -> center
+    headTilt.value = withDelay(
+      480,
       withSequence(
-        withTiming(1, { duration: 120 }),
-        withTiming(-1, { duration: 160 }),
-        withTiming(1, { duration: 160 }),
-        withTiming(0, { duration: 140 })
+        withTiming(-2.8, { duration: 300, easing: Easing.out(Easing.quad) }),
+        withTiming(-2.8, { duration: 90 }),
+        withTiming(2.8, { duration: 340, easing: Easing.inOut(Easing.quad) }),
+        withTiming(2.8, { duration: 90 }),
+        withSpring(0, { damping: 10, stiffness: 120 })
       )
     );
-    mascotBob.value = withDelay(
-      900,
-      withRepeat(withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.sin) }), -1, true)
+
+    // 3) Pupils look up as Geko peeks, then glance Left -> Right -> track G E K O -> Center
+    lookX.value = withDelay(
+      480,
+      withSequence(
+        withTiming(-1, { duration: 280, easing: Easing.out(Easing.cubic) }),
+        withTiming(-1, { duration: 100 }),
+        withTiming(1, { duration: 340, easing: Easing.inOut(Easing.cubic) }),
+        withTiming(1, { duration: 100 }),
+        withTiming(0, { duration: 340, easing: Easing.out(Easing.cubic) })
+      )
     );
-    glow.value = withRepeat(withTiming(1, { duration: 1600, easing: Easing.inOut(Easing.quad) }), -1, true);
-    tagline.value = withDelay(1250, withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }));
+
+    lookY.value = withSequence(
+      withTiming(-0.45, { duration: 500, easing: Easing.out(Easing.quad) }),
+      withTiming(-0.2, { duration: 820 }),
+      withTiming(0.3, { duration: 260, easing: Easing.out(Easing.quad) }), // briefly glance down at G E K O arriving
+      withTiming(0, { duration: 380, easing: Easing.inOut(Easing.quad) })
+    );
+
+    // 4) Staggered Right-to-Center reveal for G · E · K · O
+    const springCfg = { damping: 14, stiffness: 135, mass: 0.8 };
+    letterG.value = withDelay(1120, withSpring(1, springCfg));
+    letterE.value = withDelay(1210, withSpring(1, springCfg));
+    letterK.value = withDelay(1300, withSpring(1, springCfg));
+    letterO.value = withDelay(1390, withSpring(1, springCfg));
+    dotIn.value = withDelay(1520, withSpring(1, { damping: 10, stiffness: 160 }));
+
+    // 5) Subtitle glides in cleanly right after G E K O settles in the center
+    subtitleIn.value = withDelay(
+      1580,
+      withTiming(1, { duration: 460, easing: Easing.out(Easing.cubic) })
+    );
+
+    // 6) Crisp double-blink once Geko and G E K O lock in place
+    blink.value = withDelay(
+      1920,
+      withSequence(
+        withTiming(1, { duration: 65 }),
+        withTiming(0, { duration: 85 }),
+        withTiming(0, { duration: 110 }),
+        withTiming(1, { duration: 65 }),
+        withTiming(0, { duration: 90 })
+      )
+    );
+
+    // 7) Gentle idle breathing after full rise
+    idleBob.value = withDelay(
+      1950,
+      withRepeat(withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.sin) }), -1, true)
+    );
+
+    progressFill.value = withTiming(1, { duration: MIN_DURATION - 250, easing: Easing.out(Easing.cubic) });
 
     const t = setTimeout(() => setMinTimeDone(true), MIN_DURATION);
     return () => clearTimeout(t);
@@ -143,7 +183,7 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ ready, onFinish }) => 
     if (exiting.current) return;
     exiting.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    exit.value = withTiming(1, { duration: 520, easing: Easing.in(Easing.cubic) }, (done) => {
+    exit.value = withTiming(1, { duration: 420, easing: Easing.in(Easing.cubic) }, (done) => {
       if (done) runOnJS(onFinish)();
     });
   };
@@ -156,84 +196,167 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ ready, onFinish }) => 
     opacity: interpolate(exit.value, [0, 1], [1, 0]),
   }));
 
-  const mascotStyle = useAnimatedStyle(() => ({
-    opacity: mascotIn.value,
+  const stageStyle = useAnimatedStyle(() => ({
+    opacity: stageOpacity.value,
     transform: [
-      { translateY: interpolate(mascotBob.value, [0, 1], [-6, 6]) + interpolate(exit.value, [0, 1], [0, -40]) },
-      { scale: interpolate(mascotIn.value, [0, 1], [0.3, 1]) * interpolate(exit.value, [0, 1], [1, 1.15]) },
-      { rotate: `${wiggle.value * 7}deg` },
+      { scale: stageScale.value * interpolate(exit.value, [0, 1], [1, 1.06]) },
+      { translateY: interpolate(exit.value, [0, 1], [0, -18]) },
     ],
   }));
 
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(glow.value, [0, 1], [0.35, 0.75]) * mascotIn.value,
-    transform: [{ scale: interpolate(glow.value, [0, 1], [0.92, 1.12]) }],
+  // Geko character rises from the bottom of the stage (translateY: MASCOT_SIZE -> 0)
+  const geckoRiseStyle = useAnimatedStyle(() => {
+    const riseY = riseProgress.value * MASCOT_SIZE * 0.92;
+    const bobY = interpolate(idleBob.value, [0, 1], [0, -5]);
+    return {
+      transform: [
+        { translateY: riseY + bobY },
+        { rotate: `${headTilt.value}deg` },
+      ],
+    };
+  });
+
+  const pupilAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: lookX.value * MAX_LOOK_PX },
+      { translateY: lookY.value * MAX_LOOK_PX },
+    ],
   }));
 
-  const shadowStyle = useAnimatedStyle(() => ({
-    opacity: mascotIn.value * 0.35,
-    transform: [{ scaleX: interpolate(mascotBob.value, [0, 1], [1.08, 0.88]) }],
+  const eyelidAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: interpolate(blink.value, [0, 1], [-EYE_D, 0]) },
+    ],
   }));
 
-  const taglineStyle = useAnimatedStyle(() => ({
-    opacity: tagline.value,
-    transform: [{ translateY: interpolate(tagline.value, [0, 1], [14, 0]) }],
+  const dotStyle = useAnimatedStyle(() => ({
+    opacity: dotIn.value,
+    transform: [
+      { translateX: interpolate(dotIn.value, [0, 1], [24, 0]) },
+      { scale: dotIn.value },
+    ],
   }));
+
+  const subtitleStyle = useAnimatedStyle(() => ({
+    opacity: subtitleIn.value,
+    transform: [
+      { translateX: interpolate(subtitleIn.value, [0, 1], [28, 0]) },
+    ],
+  }));
+
+  const progressStyle = useAnimatedStyle(() => ({
+    width: `${Math.round(progressFill.value * 100)}%`,
+  }));
+
+  const letterProgressValues = [letterG, letterE, letterK, letterO];
+
+  const renderAnimatedEye = (left: number) => (
+    <View
+      style={[
+        styles.eyeSclera,
+        {
+          left,
+          top: EYE_Y,
+          width: EYE_D,
+          height: EYE_D,
+          borderRadius: EYE_R,
+        },
+      ]}
+    >
+      <Animated.View
+        style={[
+          styles.pupil,
+          {
+            width: PUPIL_D,
+            height: PUPIL_D,
+            borderRadius: PUPIL_R,
+          },
+          pupilAnimatedStyle,
+        ]}
+      >
+        <View
+          style={[
+            styles.catchlight,
+            {
+              width: CATCHLIGHT_D,
+              height: CATCHLIGHT_D,
+              borderRadius: CATCHLIGHT_R,
+              transform: [
+                { translateX: CATCHLIGHT_OFFSET_X },
+                { translateY: CATCHLIGHT_OFFSET_Y },
+              ],
+            },
+          ]}
+        />
+      </Animated.View>
+      <Animated.View
+        style={[
+          styles.eyelid,
+          {
+            width: EYE_D,
+            height: EYE_D,
+            borderRadius: EYE_R,
+          },
+          eyelidAnimatedStyle,
+        ]}
+      />
+    </View>
+  );
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, styles.root, containerStyle]}>
       <Pressable style={StyleSheet.absoluteFill} onPress={() => ready && finish()}>
-        {/* Background gradient — sized to the container, never to Dimensions, so it can't leave a gap */}
         <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} preserveAspectRatio="none">
           <Defs>
             <LinearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
               <Stop offset="0" stopColor={INTRO_BG_TOP} />
-              <Stop offset="0.55" stopColor="#1FA971" />
+              <Stop offset="0.65" stopColor="#149664" />
               <Stop offset="1" stopColor={INTRO_BG_BOTTOM} />
             </LinearGradient>
-            <RadialGradient id="halo" cx="50%" cy="42%" r="55%">
-              <Stop offset="0" stopColor="#D9FFB0" stopOpacity="0.45" />
-              <Stop offset="1" stopColor="#D9FFB0" stopOpacity="0" />
+            <RadialGradient id="ambient" cx="50%" cy="44%" r="50%">
+              <Stop offset="0" stopColor="#4DDF94" stopOpacity="0.22" />
+              <Stop offset="1" stopColor="#16A06B" stopOpacity="0" />
             </RadialGradient>
           </Defs>
           <Rect width="100%" height="100%" fill="url(#bg)" />
-          <Rect width="100%" height="100%" fill="url(#halo)" />
-          <Circle cx="10%" cy="8%" r={120} fill="#FFFFFF" opacity={0.06} />
-          <Circle cx="95%" cy="92%" r={160} fill="#FFFFFF" opacity={0.05} />
+          <Rect width="100%" height="100%" fill="url(#ambient)" />
         </Svg>
 
-        {FLOATIES.map((f, i) => (
-          <Floatie key={i} {...f} />
-        ))}
-
         <View style={styles.center}>
-          {/* Fixed-size stage keeps glow perfectly centered behind Geko */}
-          <View style={styles.stage}>
-            <Animated.View style={[styles.glow, glowStyle]} />
-            <Animated.View style={[styles.mascotWrap, mascotStyle]}>
+          {/* Clean squircle viewport from which Geko peeks up bottom-to-top */}
+          <Animated.View style={[styles.mascotViewport, stageStyle]}>
+            <Animated.View style={[styles.geckoLayer, geckoRiseStyle]}>
               <Image
                 source={require('../../../assets/images/geko_mascot.png')}
-                style={styles.mascot}
+                style={styles.mascotImage}
                 resizeMode="cover"
                 fadeDuration={0}
               />
+              {/* Live animated eyes looking left, right, up, and blinking */}
+              {renderAnimatedEye(LEFT_EYE_X)}
+              {renderAnimatedEye(RIGHT_EYE_X)}
+            </Animated.View>
+          </Animated.View>
+
+          {/* Staggered Right-to-Center G E K O Wordmark */}
+          <View style={styles.titleContainer}>
+            <View style={styles.lettersRow}>
+              {LETTERS.map((ch, idx) => (
+                <AnimatedLetter key={ch} char={ch} progress={letterProgressValues[idx]} />
+              ))}
+              <Animated.View style={[styles.goldAccentDot, dotStyle]} />
+            </View>
+
+            <Animated.View style={[styles.subtitlePill, subtitleStyle]}>
+              <Text style={styles.subtitleText}>SMART BUDGET TRACKER</Text>
             </Animated.View>
           </View>
-
-          <Animated.View style={[styles.shadow, shadowStyle]} />
-
-          <Animated.View style={[styles.titleContainer, taglineStyle]}>
-            <Text style={styles.cleanBrandTitle}>Geko Budget Tracker</Text>
-          </Animated.View>
         </View>
 
         <View style={styles.footer}>
-          <View style={styles.dotsRow}>
-            <Dot index={0} />
-            <Dot index={1} />
-            <Dot index={2} />
+          <View style={styles.progressTrack}>
+            <Animated.View style={[styles.progressBar, progressStyle]} />
           </View>
-          <Text style={styles.footerText}>{ready ? 'Tap to continue' : 'Waking up Geko…'}</Text>
         </View>
       </Pressable>
     </Animated.View>
@@ -244,133 +367,120 @@ const styles = StyleSheet.create({
   root: {
     zIndex: 999,
     elevation: 999,
-    backgroundColor: INTRO_BG_BOTTOM,
+    backgroundColor: INTRO_BG_TOP,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 40,
+    paddingBottom: 24,
   },
-  stage: {
-    width: MASCOT_SIZE * 1.45,
-    height: MASCOT_SIZE * 1.45,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: -MASCOT_SIZE * 0.225,
-  },
-  glow: {
-    position: 'absolute',
-    width: MASCOT_SIZE * 1.45,
-    height: MASCOT_SIZE * 1.45,
-    borderRadius: MASCOT_SIZE,
-    backgroundColor: '#C6FF7A',
-  },
-  mascotWrap: {
+  mascotViewport: {
     width: MASCOT_SIZE,
     height: MASCOT_SIZE,
-    borderRadius: MASCOT_SIZE * 0.26,
+    borderRadius: MASCOT_SIZE * 0.24,
     overflow: 'hidden',
-    borderWidth: 4,
-    borderColor: 'rgba(255,255,255,0.85)',
-    shadowColor: '#06392A',
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 14,
-    backgroundColor: '#2BB673',
+    backgroundColor: '#16A06B',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    shadowColor: '#052E1E',
+    shadowOpacity: 0.28,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 12,
   },
-  mascot: {
-    width: '100%',
-    height: '100%',
+  geckoLayer: {
+    width: MASCOT_SIZE,
+    height: MASCOT_SIZE,
   },
-  shadow: {
-    width: MASCOT_SIZE * 0.6,
-    height: 14,
-    borderRadius: 10,
-    backgroundColor: '#04281D',
-    marginTop: 18,
+  mascotImage: {
+    width: MASCOT_SIZE,
+    height: MASCOT_SIZE,
+  },
+  eyeSclera: {
+    position: 'absolute',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  pupil: {
+    backgroundColor: '#145239',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catchlight: {
+    backgroundColor: '#FFFFFF',
+  },
+  eyelid: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    backgroundColor: '#4DDF94',
   },
   titleContainer: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  cleanBrandTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.8,
-    textShadowColor: 'rgba(4, 50, 35, 0.45)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
-  },
-  tagline: {
-    marginTop: 8,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#F0FFE4',
-    textAlign: 'center',
-  },
-  subTagline: {
-    marginTop: 6,
-    fontSize: 13,
-    fontWeight: '500',
-    color: 'rgba(240, 255, 228, 0.75)',
-    textAlign: 'center',
-    letterSpacing: 0.4,
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 64,
-    left: 0,
-    right: 0,
+    marginTop: 30,
     alignItems: 'center',
     gap: 12,
   },
-  dotsRow: {
+  lettersRow: {
     flexDirection: 'row',
-    gap: 8,
-    height: 16,
-    alignItems: 'flex-end',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: 10,
   },
-  dot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: '#FFFFFF',
-  },
-  footerText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.8)',
-    letterSpacing: 0.6,
-  },
-  floatie: {
-    position: 'absolute',
-  },
-  coin: {
-    backgroundColor: '#F7B733',
-    borderWidth: 2,
-    borderColor: '#C9861A',
+  letterBox: {
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#7A4A00',
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 4,
   },
-  coinText: {
-    color: '#8A4B00',
+  brandLetter: {
+    fontSize: 36,
     fontWeight: '900',
-    marginTop: -1,
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    textShadowColor: 'rgba(5, 46, 30, 0.28)',
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 8,
   },
-  leaf: {
-    backgroundColor: '#9BE564',
-    borderWidth: 1.5,
-    borderColor: '#5DBB3A',
+  goldAccentDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E7B83C',
+    marginLeft: -2,
+    marginBottom: 4,
   },
-  sparkle: {
-    backgroundColor: '#F4FFB8',
+  subtitlePill: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+  },
+  subtitleText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#D1FAE5',
+    letterSpacing: 2.2,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 56,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  progressTrack: {
+    width: 112,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: '#4DDF94',
   },
 });

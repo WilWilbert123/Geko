@@ -28,7 +28,6 @@ import {
   Edit3,
   Trash2,
   Search,
-  Sparkles,
   RotateCcw,
   CreditCard,
   Smartphone,
@@ -38,6 +37,8 @@ import {
   Landmark,
   Globe,
   ChevronRight,
+  Wallet,
+  Banknote,
 } from 'lucide-react-native';
 import { GekoCard3D } from '../components/wallet/GekoCard3D';
 import { MiniRealCard } from '../components/wallet/MiniRealCard';
@@ -106,6 +107,7 @@ export const WalletScreen = () => {
   const [newColor1, setNewColor1] = useState('#0026B3');
   const [newColor2, setNewColor2] = useState('#0055FF');
   const [newNetwork, setNewNetwork] = useState<'VISA' | 'MASTERCARD' | 'OTHER'>('OTHER');
+  const [show3DPreview, setShow3DPreview] = useState(false);
 
   // ── Edit Modal State ──
   const [editModalCard, setEditModalCard] = useState<Card | null>(null);
@@ -576,7 +578,7 @@ export const WalletScreen = () => {
                 <View style={styles.blankCardInner}>
                   <View style={styles.blankCardTop}>
                     <View style={styles.blankChipSim} />
-                    <Sparkles size={20} color={colors.primary} />
+                    <CreditCard size={20} color={colors.primary} />
                   </View>
                   <View style={styles.blankCardBottom}>
                     <Text style={[styles.blankCardNumber, { color: colors.textMuted }]}>•••• •••• •••• ••••</Text>
@@ -906,39 +908,45 @@ export const WalletScreen = () => {
         </ScrollView>
       </Animated.View>
 
-      {/* ── Comprehensive Add Account / Card Preset Modal ── */}
+      {/* ── Clean & Smooth Add Account / Card Preset Bottom Sheet ── */}
       <Modal
         visible={addModalVisible}
         transparent
         animationType="slide"
         onRequestClose={() => setAddModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.sheetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {/* Drag Handle */}
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <View>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>Add Card / Account</Text>
                 <Text style={[styles.modalSubHeader, { color: colors.textMuted }]}>
-                  Choose from 100+ cards with bespoke 3D styles
+                  Select a Philippine bank, e-wallet, or card preset
                 </Text>
               </View>
               <TouchableOpacity
-                style={styles.modalCloseBtn}
+                style={[styles.modalCloseCircle, { backgroundColor: colors.surfaceHighlight }]}
                 onPress={() => setAddModalVisible(false)}
               >
-                <X size={20} color={colors.textMuted} />
+                <X size={18} color={colors.text} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollBody}>
-              {/* Interactive Live 3D Card Preview */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.modalScrollBody}
+              contentContainerStyle={{ paddingBottom: 16 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Interactive Live 3D Card Preview (Preserving original 3D card design) */}
               {newBankName ? (
                 <View style={styles.modalPreviewContainer}>
                   <GekoCard3D
-                    balance={
-                      parseFloat(newBalance.replace(/,/g, '')) || 0
-                    }
+                    balance={parseFloat(newBalance.replace(/,/g, '')) || 0}
                     cardholderName="GEKO MEMBER"
                     expiryDate="10/29"
                     accountType={newAccountType}
@@ -954,70 +962,95 @@ export const WalletScreen = () => {
                   </Text>
                 </View>
               ) : (
-                <View style={[styles.modalEmptyPreview, { backgroundColor: colors.surfaceHighlight || '#1E293B', borderColor: colors.border }]}>
-                  <Sparkles size={22} color={colors.primary} />
-                  <Text style={[styles.modalEmptyPreviewTitle, { color: colors.text }]}>Select a Card Preset Below</Text>
-                  <Text style={[styles.modalEmptyPreviewSub, { color: colors.textMuted }]}>
-                    Tap any Philippine card or e-wallet preset to instantly style your 3D card
-                  </Text>
+                <View
+                  style={[
+                    styles.liveCardBanner,
+                    {
+                      backgroundColor: colors.surfaceHighlight || '#F8FAFC',
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <View style={styles.liveCardTopRow}>
+                    <View
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 14,
+                        backgroundColor: `${colors.primary}18`,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <CreditCard size={22} color={colors.primary} />
+                    </View>
+                    <View style={styles.liveCardInfoCol}>
+                      <Text style={[styles.liveCardTitle, { color: colors.text }]}>
+                        Select a Card Preset Below
+                      </Text>
+                      <Text style={{ fontSize: 12, color: colors.textMuted, lineHeight: 16 }}>
+                        Tap any Philippine card or e-wallet preset to preview its 3D card
+                      </Text>
+                    </View>
+                  </View>
                 </View>
               )}
 
-              {/* Category Selector Tabs */}
-              <View style={[styles.modalCatTabs, { backgroundColor: colors.surfaceHighlight || '#F1F5F9' }]}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 2, gap: 4 }}>
-                  {[
-                    { key: 'ALL', label: 'All', icon: LayoutGrid },
-                    { key: 'CREDIT', label: 'Credit', icon: CreditCard },
-                    { key: 'DIGITAL', label: 'Digital', icon: Smartphone },
-                    { key: 'EWALLET', label: 'E-Wallet', icon: Zap },
-                    { key: 'PREPAID', label: 'Prepaid', icon: Ticket },
-                    { key: 'MEMBERSHIP', label: 'Loyalty', icon: Gem },
-                    { key: 'BANK', label: 'Banks', icon: Landmark },
-                    { key: 'CUSTOM', label: 'Custom', icon: Edit3 },
-                  ].map((tab) => {
-                    const isTabActive = presetCategory === tab.key;
-                    const IconComp = tab.icon;
-                    return (
-                      <TouchableOpacity
-                        key={tab.key}
+              {/* Unclipped Horizontal Category Pill Bar */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.cleanCatTabsScroll}
+                style={styles.cleanCatTabsContainer}
+              >
+                {[
+                  { key: 'ALL', label: 'All Cards', icon: LayoutGrid },
+                  { key: 'EWALLET', label: 'E-Wallets', icon: Zap },
+                  { key: 'DIGITAL', label: 'Digital Banks', icon: Smartphone },
+                  { key: 'BANK', label: 'Banks', icon: Landmark },
+                  { key: 'CREDIT', label: 'Credit Cards', icon: CreditCard },
+                  { key: 'PREPAID', label: 'Prepaid & Toll', icon: Ticket },
+                  { key: 'MEMBERSHIP', label: 'Loyalty', icon: Gem },
+                  { key: 'CUSTOM', label: 'Custom', icon: Edit3 },
+                ].map((tab) => {
+                  const isTabActive = presetCategory === tab.key;
+                  const IconComp = tab.icon;
+                  return (
+                    <TouchableOpacity
+                      key={tab.key}
+                      style={[
+                        styles.cleanCatTabPill,
+                        isTabActive
+                          ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                          : { backgroundColor: colors.surfaceHighlight, borderColor: colors.border },
+                      ]}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        if (presetCategory !== tab.key) {
+                          setIsPresetLoading(true);
+                          setPresetCategory(tab.key as any);
+                          setTimeout(() => {
+                            setIsPresetLoading(false);
+                          }, 60);
+                        }
+                      }}
+                    >
+                      <IconComp size={13} color={isTabActive ? '#FFFFFF' : colors.textMuted} />
+                      <Text
                         style={[
-                          styles.modalCatTabBtn,
-                          { paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 5 },
-                          isTabActive && {
-                            backgroundColor: colors.surface,
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 1 },
-                            shadowOpacity: 0.12,
-                            shadowRadius: 2,
-                            elevation: 2,
+                          styles.cleanCatTabText,
+                          {
+                            color: isTabActive ? '#FFFFFF' : colors.text,
+                            fontWeight: isTabActive ? '700' : '600',
                           },
                         ]}
-                        onPress={() => {
-                          Haptics.selectionAsync();
-                          if (presetCategory !== tab.key) {
-                            setIsPresetLoading(true);
-                            setPresetCategory(tab.key as any);
-                            setTimeout(() => {
-                              setIsPresetLoading(false);
-                            }, 80);
-                          }
-                        }}
                       >
-                        <IconComp size={13} color={isTabActive ? colors.primary : colors.textMuted} />
-                        <Text
-                          style={[
-                            styles.modalCatTabText,
-                            { color: isTabActive ? colors.primary : colors.textMuted, fontWeight: isTabActive ? '700' : '500' },
-                          ]}
-                        >
-                          {tab.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
+                        {tab.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
 
               {/* Search Bar for Presets (when not in Custom) */}
               {presetCategory !== 'CUSTOM' && (
@@ -1025,7 +1058,7 @@ export const WalletScreen = () => {
                   <Search size={16} color={colors.textMuted} />
                   <TextInput
                     style={[styles.presetSearchInput, { color: colors.text }]}
-                    placeholder="Search 100+ cards (e.g. BPI Platinum, GCash, GrabPay)..."
+                    placeholder="Search 100+ cards (e.g. GCash, BPI, GoTyme, Maya)..."
                     placeholderTextColor={colors.textMuted}
                     value={presetSearch}
                     onChangeText={setPresetSearch}
@@ -1044,21 +1077,21 @@ export const WalletScreen = () => {
                   <View style={styles.presetSectionHeaderRow}>
                     <Text style={[styles.presetSectionHeader, { color: colors.textMuted }]}>
                       {presetCategory === 'CREDIT'
-                        ? 'Philippine Credit Cards (32)'
+                        ? `Philippine Credit Cards (${modalPresets.length})`
                         : presetCategory === 'DIGITAL'
-                          ? 'Philippine Digital Banks (12)'
+                          ? `Digital Banks (${modalPresets.length})`
                           : presetCategory === 'EWALLET'
-                            ? 'E-Wallets (13)'
+                            ? `E-Wallets (${modalPresets.length})`
                             : presetCategory === 'PREPAID'
-                              ? 'Prepaid & RFID Toll Cards (4)'
+                              ? `Prepaid & RFID Cards (${modalPresets.length})`
                               : presetCategory === 'MEMBERSHIP'
-                                ? 'Membership & Loyalty Cards (8)'
+                                ? `Loyalty & Memberships (${modalPresets.length})`
                                 : presetCategory === 'BANK'
-                                  ? 'Universal & Commercial Banks (54)'
-                                  : `Matching Presets (${modalPresets.length})`}
+                                  ? `Universal & Commercial Banks (${modalPresets.length})`
+                                  : `Available Presets (${modalPresets.length})`}
                     </Text>
-                    <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '600' }}>
-                      Tap to apply
+                    <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '700' }}>
+                      Tap card to select
                     </Text>
                   </View>
 
@@ -1069,7 +1102,6 @@ export const WalletScreen = () => {
                   >
                     {isPresetLoading ? (
                       <>
-                        <SkeletonPresetCard />
                         <SkeletonPresetCard />
                         <SkeletonPresetCard />
                         <SkeletonPresetCard />
@@ -1128,10 +1160,10 @@ export const WalletScreen = () => {
 
               {/* Form Input Fields */}
               <View style={styles.formFieldsBlock}>
-                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Card / Bank Name</Text>
+                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>ACCOUNT / CARD NAME</Text>
                 <TextInput
                   style={[styles.modalInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
-                  placeholder="e.g. BPI Platinum Rewards Card, GCash, GrabPay"
+                  placeholder="e.g. GCash, BPI Rewards, GoTyme Bank"
                   placeholderTextColor={colors.textMuted}
                   value={newBankName}
                   onChangeText={(val) => {
@@ -1143,69 +1175,137 @@ export const WalletScreen = () => {
                   }}
                 />
 
-                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Account Category</Text>
-                <View style={styles.typeSelectorRow}>
-                  {(['CREDIT_CARD', 'EWALLET', 'BANK', 'DEBIT', 'CASH'] as const).map((t) => (
-                    <TouchableOpacity
-                      key={t}
-                      style={[
-                        styles.typeChip,
-                        {
-                          backgroundColor: newAccountType === t ? colors.primary : colors.surfaceHighlight,
-                          borderColor: colors.border,
-                        },
-                      ]}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        setNewAccountType(t);
-                      }}
-                    >
-                      <Text style={[styles.typeChipText, { color: newAccountType === t ? '#fff' : colors.text }]}>
-                        {t === 'CREDIT_CARD' ? 'Credit Card' : t === 'EWALLET' ? 'E-Wallet' : t === 'BANK' ? 'Bank' : t}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Payment Network</Text>
-                <View style={styles.typeSelectorRow}>
-                  {(['VISA', 'MASTERCARD', 'OTHER'] as const).map((net) => (
-                    <TouchableOpacity
-                      key={net}
-                      style={[
-                        styles.typeChip,
-                        {
-                          backgroundColor: newNetwork === net ? colors.primary : colors.surfaceHighlight,
-                          borderColor: colors.border,
-                        },
-                      ]}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        setNewNetwork(net);
-                      }}
-                    >
-                      <Text style={[styles.typeChipText, { color: newNetwork === net ? '#fff' : colors.text }]}>
-                        {net}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
                 <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
-                  {newAccountType === 'CREDIT_CARD' ? 'Current Outstanding Debt (₱)' : 'Starting Balance (₱)'}
+                  {newAccountType === 'CREDIT_CARD' ? 'CURRENT OUTSTANDING DEBT (₱)' : 'STARTING BALANCE (₱)'}
                 </Text>
-                <TextInput
-                  style={[styles.modalInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
-                  placeholder={newAccountType === 'CREDIT_CARD' ? '0.00 (e.g. 5000)' : '0.00 (e.g. 150)'}
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="numeric"
-                  value={newBalance}
-                  onChangeText={setNewBalance}
-                />
+                <View style={[styles.balanceInputBox, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                  <Text style={[styles.balanceCurrencyPrefix, { color: colors.primary }]}>₱</Text>
+                  <TextInput
+                    style={[styles.balanceInputText, { color: colors.text }]}
+                    placeholder="0.00"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="decimal-pad"
+                    value={newBalance}
+                    onChangeText={setNewBalance}
+                  />
+                  {newBalance.length > 0 && (
+                    <TouchableOpacity onPress={() => setNewBalance('')}>
+                      <X size={16} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Quick Amount Chips */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, paddingVertical: 6 }}
+                >
+                  {['0', '500', '1000', '5000', '10000', '25000'].map((amt) => {
+                    const isAmtActive = newBalance === amt;
+                    return (
+                      <TouchableOpacity
+                        key={amt}
+                        style={[
+                          styles.quickAmtChip,
+                          {
+                            backgroundColor: isAmtActive ? `${colors.primary}22` : colors.surfaceHighlight,
+                            borderColor: isAmtActive ? colors.primary : colors.border,
+                          },
+                        ]}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setNewBalance(amt);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.quickAmtChipText,
+                            { color: isAmtActive ? colors.primary : colors.textMuted },
+                          ]}
+                        >
+                          ₱{Number(amt).toLocaleString()}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>ACCOUNT TYPE</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+                >
+                  {(
+                    [
+                      { key: 'EWALLET', label: 'E-Wallet' },
+                      { key: 'BANK', label: 'Bank Account' },
+                      { key: 'DEBIT', label: 'Debit Card' },
+                      { key: 'CREDIT_CARD', label: 'Credit Card' },
+                      { key: 'CASH', label: 'Physical Cash' },
+                    ] as const
+                  ).map((item) => {
+                    const active = newAccountType === item.key;
+                    return (
+                      <TouchableOpacity
+                        key={item.key}
+                        style={[
+                          styles.typeChip,
+                          {
+                            backgroundColor: active ? colors.primary : colors.surfaceHighlight,
+                            borderColor: active ? colors.primary : colors.border,
+                          },
+                        ]}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setNewAccountType(item.key);
+                        }}
+                      >
+                        <Text style={[styles.typeChipText, { color: active ? '#FFFFFF' : colors.text }]}>
+                          {item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>PAYMENT NETWORK</Text>
+                <View style={styles.typeSelectorRow}>
+                  {(
+                    [
+                      { key: 'VISA', label: 'Visa' },
+                      { key: 'MASTERCARD', label: 'Mastercard' },
+                      { key: 'OTHER', label: 'Standard / Wallet' },
+                    ] as const
+                  ).map((net) => {
+                    const active = newNetwork === net.key;
+                    return (
+                      <TouchableOpacity
+                        key={net.key}
+                        style={[
+                          styles.typeChip,
+                          {
+                            backgroundColor: active ? colors.primary : colors.surfaceHighlight,
+                            borderColor: active ? colors.primary : colors.border,
+                          },
+                        ]}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setNewNetwork(net.key);
+                        }}
+                      >
+                        <Text style={[styles.typeChipText, { color: active ? '#FFFFFF' : colors.text }]}>
+                          {net.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
 
                 {newAccountType === 'CREDIT_CARD' && (
                   <>
-                    <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Credit Limit (₱)</Text>
+                    <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>CREDIT LIMIT (₱)</Text>
                     <TextInput
                       style={[styles.modalInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
                       placeholder="50000"
@@ -1216,19 +1316,28 @@ export const WalletScreen = () => {
                     />
                   </>
                 )}
-
-                <TouchableOpacity
-                  style={[styles.createBtn, { backgroundColor: colors.primary }]}
-                  onPress={handleCreateAccount}
-                  activeOpacity={0.85}
-                >
-                  <Check size={18} color="#fff" strokeWidth={2.5} />
-                  <Text style={styles.createBtnText}>
-                    {newBankName ? `Save & Connect ${newBankName}` : 'Save Account'}
-                  </Text>
-                </TouchableOpacity>
               </View>
             </ScrollView>
+
+            {/* Pinned Bottom CTA Footer */}
+            <View style={[styles.pinnedFooter, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
+              <TouchableOpacity
+                style={[
+                  styles.createBtn,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: newBankName.trim() ? 1 : 0.55,
+                  },
+                ]}
+                onPress={handleCreateAccount}
+                activeOpacity={0.85}
+              >
+                <Check size={18} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={styles.createBtnText} numberOfLines={1}>
+                  {newBankName.trim() ? `Connect ${newBankName.trim()}` : 'Select or Enter an Account'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1619,7 +1728,159 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* Modal Styles */
+  /* Modal & Bottom Sheet Styles */
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.68)',
+    justifyContent: 'flex-end',
+  },
+  sheetCard: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    maxHeight: '92%',
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  modalCloseCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveCardBanner: {
+    borderRadius: 18,
+    borderWidth: 1.5,
+    padding: 12,
+    marginBottom: 14,
+  },
+  liveCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  liveCardInfoCol: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 6,
+  },
+  liveCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  liveCardMetaPills: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  liveCardTypePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  liveCardTypeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  liveCardNetText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  toggle3DBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 12,
+  },
+  toggle3DBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  cleanCatTabsContainer: {
+    marginBottom: 12,
+  },
+  cleanCatTabsScroll: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  cleanCatTabPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  cleanCatTabText: {
+    fontSize: 12,
+  },
+  presetMiniCardWrap: {
+    width: '100%',
+    height: 80,
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 4,
+    position: 'relative',
+  },
+  presetCheckBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  balanceInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    gap: 6,
+  },
+  balanceCurrencyPrefix: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  balanceInputText: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: '800',
+    padding: 0,
+  },
+  quickAmtChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  quickAmtChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  pinnedFooter: {
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.72)',
@@ -1636,8 +1897,8 @@ const styles = StyleSheet.create({
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 14,
   },
   modalTitle: {
     fontSize: 20,
@@ -1659,29 +1920,12 @@ const styles = StyleSheet.create({
   modalPreviewContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginTop: 12,
   },
   previewHint: {
     fontSize: 11,
     fontWeight: '500',
     marginTop: 4,
-  },
-
-  modalCatTabs: {
-    flexDirection: 'row',
-    borderRadius: 14,
-    padding: 3,
-    marginBottom: 12,
-  },
-  modalCatTabBtn: {
-    flex: 1,
-    paddingVertical: 7,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalCatTabText: {
-    fontSize: 11,
   },
 
   presetSearchBox: {
@@ -1690,7 +1934,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     paddingHorizontal: 12,
-    height: 42,
+    height: 44,
     marginBottom: 12,
     gap: 8,
   },
@@ -1720,33 +1964,10 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   presetCardItem: {
-    width: 148,
+    width: 152,
     borderRadius: 16,
     padding: 8,
     gap: 6,
-  },
-  presetColorPreview: {
-    width: '100%',
-    height: 38,
-    borderRadius: 10,
-    position: 'relative',
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  presetColorPreviewInner: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: '45%',
-    opacity: 0.7,
-  },
-  presetColorInitials: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.5,
   },
   presetItemName: {
     fontSize: 12,
@@ -1778,9 +1999,10 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 10,
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+    marginTop: 12,
     marginBottom: 6,
   },
   modalInput: {
@@ -1796,29 +2018,27 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   typeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 14,
     borderWidth: 1,
   },
   typeChipText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   createBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 48,
-    borderRadius: 16,
-    marginTop: 20,
-    marginBottom: 8,
+    height: 52,
+    borderRadius: 18,
     gap: 8,
   },
   createBtnText: {
     color: '#fff',
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   editModalBtnRow: {
     flexDirection: 'row',

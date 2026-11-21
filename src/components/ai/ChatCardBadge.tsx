@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { ExtractedCardInfo, getCanonicalBankKey } from '../../utils/cardExtractor';
 import { getBankTheme } from '../../utils/bankThemes';
 import { GekoCard3D } from '../wallet/GekoCard3D';
+import { useTheme } from '../../hooks/useTheme';
 
 interface ChatCardBadgeProps {
   cards: ExtractedCardInfo[];
@@ -42,6 +43,7 @@ export const MiniCardItem: React.FC<{ card: ExtractedCardInfo }> = ({ card }) =>
 };
 
 export const ChatCardBadgeList: React.FC<ChatCardBadgeProps> = ({ cards }) => {
+  const { colors } = useTheme();
   const uniqueCards = useMemo(() => {
     if (!cards || cards.length === 0) return [];
     const map = new Map<string, ExtractedCardInfo>();
@@ -65,7 +67,7 @@ export const ChatCardBadgeList: React.FC<ChatCardBadgeProps> = ({ cards }) => {
 
   return (
     <View style={styles.wrapper}>
-      <Text style={styles.headerLabel}>
+      <Text style={[styles.headerLabel, { color: colors.textMuted }]}>
         {uniqueCards.length === 1 ? 'ACCOUNT CARD USED' : 'YOUR ACCOUNTS'}
       </Text>
 
