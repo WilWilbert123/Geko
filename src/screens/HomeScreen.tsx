@@ -49,6 +49,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
   const [refreshing, setRefreshing] = useState(false);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
   const [inputName, setInputName] = useState(displayName || '');
 
   // Show onboarding prompt if user has not set a name yet
@@ -249,8 +250,50 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
                   <Trash2 size={16} color="#EF4444" />
                   <Text style={styles.dangerBtnText}>Reset All Financial Data</Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.dangerBtn, { borderColor: colors.border, backgroundColor: colors.background, marginTop: 4 }]}
+                  onPress={() => {
+                    setProfileModalVisible(false);
+                    setPrivacyModalVisible(true);
+                  }}
+                >
+                  <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>
+                    Privacy Policy & Data Disclosure
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* In-App Privacy Policy Modal (Required by Google Play Store Policy) */}
+      <Modal
+        visible={privacyModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPrivacyModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.profileCard, { backgroundColor: colors.surface, borderColor: colors.border, maxHeight: '82%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Privacy Policy</Text>
+              <TouchableOpacity onPress={() => setPrivacyModalVisible(false)}>
+                <X size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={[styles.modalSubtitle, { color: colors.text, fontWeight: '700', marginBottom: 8 }]}>
+                Geko Smart Budget Tracker (com.me.geko)
+              </Text>
+              <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
+                1. Local-First Data Storage: All financial records, account balances, transactions, budgets, installments, and savings goals are stored 100% locally on your device in an encrypted SQLite database. We do not require user registration and never sell or share your personal data.{'\n\n'}
+                2. Camera & Photos Permission: Used only when you scan a receipt or pick a goal photo. Receipt scans are transmitted securely over HTTPS to our OCR text extraction service solely to parse receipt totals and line items in real time.{'\n\n'}
+                3. Microphone Permission (RECORD_AUDIO): Used only when you tap the microphone button in Chat Geko for voice-to-text input. Audio is never recorded in the background.{'\n\n'}
+                4. Data Deletion: You can permanently delete all local financial data at any time from Profile → "Reset All Financial Data" or by uninstalling the app.
+              </Text>
+            </ScrollView>
           </View>
         </View>
       </Modal>

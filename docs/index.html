@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy - Geko Smart Budget Tracker</title>
+  <style>
+    :root {
+      --primary: #16A06B;
+      --primary-dark: #0E7A50;
+      --text: #0F172A;
+      --muted: #475569;
+      --bg: #F8FAFC;
+      --card: #FFFFFF;
+      --border: #E2E8F0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      padding: 32px 16px 64px;
+    }
+    .container {
+      max-width: 780px;
+      margin: 0 auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px 32px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(22, 160, 107, 0.12);
+      color: var(--primary-dark);
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 6px 12px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      letter-spacing: -0.5px;
+    }
+    .updated {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    h2 {
+      font-size: 19px;
+      margin-top: 28px;
+      margin-bottom: 10px;
+      color: var(--primary-dark);
+    }
+    p, li {
+      color: #334155;
+      font-size: 15px;
+    }
+    ul {
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 8px;
+    }
+    .highlight {
+      background: #ECFDF5;
+      border-left: 4px solid var(--primary);
+      padding: 14px 18px;
+      border-radius: 8px;
+      margin: 20px 0;
+      font-size: 14.5px;
+    }
+    footer {
+      margin-top: 36px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <span class="badge">Geko Budget Tracker</span>
+    <h1>Privacy Policy</h1>
+    <div class="updated">Effective Date: November 21, 2026 &bull; Package ID: <code>com.me.geko</code></div>
+
+    <div class="highlight">
+      <strong>Summary:</strong> Geko is an offline-first personal finance and budget tracker application. Your financial records, transactions, budgets, savings goals, and account balances are stored <strong>100% locally on your device</strong> in an encrypted SQLite database. We do not require account registration, we do not sell user data, and we do not track your personal identity.
+    </div>
+
+    <h2>1. Information We Collect and How It Is Stored</h2>
+    <ul>
+      <li><strong>Local Financial &amp; Profile Data:</strong> Any display name, bank/e-wallet card balances, transactions, budgets, installments, and savings goals you enter into Geko are stored locally on your device using an on-device SQLite database (<code>geko.sqlite</code>). This data is never uploaded to our servers.</li>
+      <li><strong>No Account or Cloud Login Required:</strong> Geko operates without requiring your email address, phone number, bank login credentials, or real credit card numbers.</li>
+    </ul>
+
+    <h2>2. Device Permissions We Request and Why</h2>
+    <p>Geko requests the following optional device permissions solely to enable in-app features initiated by you:</p>
+    <ul>
+      <li><strong>Camera &amp; Photo Library (<code>CAMERA</code> / <code>READ_EXTERNAL_STORAGE</code>):</strong> Used only when you choose to take a photo of a receipt or select a receipt/goal cover image from your gallery. When using the Optical Receipt Scanner, the selected receipt image is transmitted securely via HTTPS to our OCR processing provider (OCR.space API) solely to extract receipt text and prices in real time, and is not retained or used for advertising.</li>
+      <li><strong>Microphone (<code>RECORD_AUDIO</code>):</strong> Used only when you tap the microphone button in Geko AI Chat to dictate a budget query or expense via speech-to-text. Audio is processed only while listening is active and is never recorded or stored in the background.</li>
+    </ul>
+
+    <h2>3. Data Sharing and Third-Party Services</h2>
+    <p>We do not sell, rent, trade, or share your personal or financial data with third parties or advertisers.</p>
+    <ul>
+      <li><strong>No Advertising SDKs:</strong> Geko contains no third-party ad networks or behavioral tracking SDKs.</li>
+      <li><strong>Optical Character Recognition (OCR):</strong> When you explicitly scan a receipt image, the image payload is sent over encrypted HTTPS to OCR.space strictly to return the parsed receipt text to your device.</li>
+    </ul>
+
+    <h2>4. Data Retention, Backup, and Deletion</h2>
+    <p>Because all of your financial data resides locally on your device, you have complete control over it at all times:</p>
+    <ul>
+      <li><strong>In-App Data Deletion:</strong> You can permanently erase all transactions, accounts, budgets, and goals at any time directly inside the app by tapping your Profile on the Home screen and selecting <em>"Reset All Financial Data"</em>, or by uninstalling the Geko application.</li>
+      <li><strong>Manual Export / Backup:</strong> You may optionally export your own data to a local JSON or CSV file on your device via the Dashboard &rarr; Data &amp; AI tab.</li>
+    </ul>
+
+    <h2>5. Children's Privacy</h2>
+    <p>Geko is a general-audience personal finance utility and does not knowingly collect any personal information from children under the age of 13.</p>
+
+    <h2>6. Changes to This Privacy Policy</h2>
+    <p>We may update this Privacy Policy from time to time to reflect new app features or regulatory requirements. Any updates will be posted on this page with an updated effective date.</p>
+
+    <h2>7. Contact Us</h2>
+    <p>If you have any questions or concerns regarding this Privacy Policy or how Geko handles your data, please contact the developer:</p>
+    <p>
+      <strong>Developer:</strong> Wilbert Gamis (Geko Finance)<br />
+      <strong>App Package:</strong> com.me.geko<br />
+      <strong>Email:</strong> wilbertgamis@gmail.com
+    </p>
+
+    <footer>
+      &copy; 2026 Geko Smart Budget Tracker. All rights reserved.
+    </footer>
+  </div>
+</body>
+</html>
