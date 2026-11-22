@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, Keyboard, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
 import { useTransactions } from '../hooks/useTransactions';
@@ -19,6 +19,9 @@ import {
   ScanLine,
   HeartPulse,
   Home,
+  Briefcase,
+  TrendingUp,
+  Plus,
 } from 'lucide-react-native';
 import { ReceiptScannerModal } from '../components/receipt/ReceiptScannerModal';
 import { ParsedReceipt } from '../services/receipt/receiptParser';
@@ -36,23 +39,16 @@ const EXPENSE_CATEGORIES = [
 ];
 
 const INCOME_CATEGORIES = [
+  { id: 'Salary', icon: Briefcase },
   { id: 'Deposit', icon: DollarSign },
-  { id: 'Salary', icon: DollarSign },
-  { id: 'Cash In', icon: DollarSign },
   { id: 'Bonus', icon: Gift },
+  { id: 'Cash In', icon: Plus },
+  { id: 'Freelance', icon: Zap },
+  { id: 'Investment', icon: TrendingUp },
 ];
 
 const TRANSFER_CATEGORIES = [
   { id: 'Transfer', icon: ArrowRightLeft },
-];
-
-const DEFAULT_BANKS = [
-  { name: 'GCash', color: '#0047FF' },
-  { name: 'GoTyme', color: '#0099B8' },
-  { name: 'BPI', color: '#B30000' },
-  { name: 'Maya', color: '#006B4D' },
-  { name: 'Cash', color: '#10B981' },
-  { name: 'Landbank', color: '#004D25' },
 ];
 
 export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
@@ -60,30 +56,50 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
   const { addTransaction, transferBetweenAccounts } = useTransactions();
   const { cards } = useCards();
 
-  // Merge user's connected wallet cards with standard accounts
+  // Show ONLY user's actual cards that are registered in their wallet!
   const bankOptions = useMemo(() => {
-    const map = new Map<string, { name: string; color: string }>();
-    for (const c of cards) {
-      if (c.bankName) {
+    if (cards && cards.length > 0) {
+      return cards.map((c) => {
         const theme = getBankTheme(c.bankName, c.color1, c.color2);
-        map.set(c.bankName.toLowerCase(), { name: c.bankName, color: c.color1 || theme.bg1 });
-      }
+        const displayBal = c.type === 'CREDIT_CARD' ? (c.outstandingBalance || 0) : c.balance;
+        return {
+          id: c.id,
+          name: c.bankName,
+          color: c.color1 || theme.bg1,
+          color2: c.color2 || theme.bg2,
+          type: c.type,
+          balance: displayBal,
+          isCredit: c.type === 'CREDIT_CARD',
+        };
+      });
     }
-    for (const b of DEFAULT_BANKS) {
-      if (!map.has(b.name.toLowerCase())) {
-        map.set(b.name.toLowerCase(), b);
-      }
-    }
-    return Array.from(map.values());
+    // Only if user has zero cards in their wallet, default to Physical Cash
+    return [{ id: 'cash-default', name: 'Physical Cash', color: '#059669', color2: '#10B981', type: 'CASH' as const, balance: 0, isCredit: false }];
   }, [cards]);
 
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
   const [category, setCategory] = useState('Food');
-  const [selectedBank, setSelectedBank] = useState('GCash');
-  const [destinationBank, setDestinationBank] = useState('Maya');
+  const [selectedBank, setSelectedBank] = useState(() => {
+    if (cards && cards.length > 0) return cards[0].bankName;
+    return 'Physical Cash';
+  });
+  const [destinationBank, setDestinationBank] = useState(() => {
+    if (cards && cards.length > 1) return cards[1].bankName;
+    if (cards && cards.length === 1) return cards[0].bankName;
+    return 'Physical Cash';
+  });
   const [scannerOpen, setScannerOpen] = useState(false);
+
+  useEffect(() => {
+    if (cards && cards.length > 0) {
+      const exists = cards.some((c) => c.bankName.toLowerCase() === selectedBank.toLowerCase());
+      if (!exists) {
+        setSelectedBank(cards[0].bankName);
+      }
+    }
+  }, [cards, selectedBank]);
 
   const handleReceiptScanned = (parsed: ParsedReceipt) => {
     setAmount(parsed.total > 0 ? parsed.total.toString() : '');
@@ -94,7 +110,12 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
     setNote(itemNote);
     setType('expense');
     if (parsed.category) setCategory(parsed.category);
-    if (parsed.suggestedBank) setSelectedBank(parsed.suggestedBank);
+    if (parsed.suggestedBank) {
+      const matchedCard = bankOptions.find(b => b.name.toLowerCase() === parsed.suggestedBank?.toLowerCase());
+      if (matchedCard) {
+        setSelectedBank(matchedCard.name);
+      }
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
@@ -113,13 +134,13 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
     Haptics.selectionAsync();
     setType(newType);
     if (newType === 'income') {
-      setCategory('Deposit');
+      setCategory('Salary');
     } else if (newType === 'expense') {
       setCategory('Food');
     } else if (newType === 'transfer') {
       setCategory('Transfer');
-      if (destinationBank === selectedBank) {
-        const alt = bankOptions.find((b) => b.name !== selectedBank);
+      if (destinationBank.toLowerCase() === selectedBank.toLowerCase()) {
+        const alt = bankOptions.find((b) => b.name.toLowerCase() !== selectedBank.toLowerCase());
         if (alt) setDestinationBank(alt.name);
       }
     }
@@ -234,9 +255,16 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
           />
 
           {/* Account / Bank Selector */}
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
-            {type === 'transfer' ? 'FROM ACCOUNT' : 'ACCOUNT / CARD'}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted, marginBottom: 0 }]}>
+              {type === 'transfer' ? 'FROM ACCOUNT' : type === 'income' ? 'DEPOSIT TO ACCOUNT' : 'PAY FROM ACCOUNT'}
+            </Text>
+            {cards.length > 0 && (
+              <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>
+                {cards.length} {cards.length === 1 ? 'card available' : 'cards available'}
+              </Text>
+            )}
+          </View>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -246,26 +274,49 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
             style={styles.categoriesScroll}
           >
             {bankOptions.map(b => {
-              const isSelected = selectedBank === b.name;
+              const isSelected = selectedBank.toLowerCase() === b.name.toLowerCase();
               return (
                 <TouchableOpacity
                   key={b.name}
                   style={[
                     styles.categoryChip,
-                    { backgroundColor: isSelected ? b.color : colors.surfaceHighlight }
+                    {
+                      backgroundColor: isSelected ? b.color : colors.surfaceHighlight,
+                      borderColor: isSelected ? b.color : colors.border,
+                      borderWidth: 1,
+                    }
                   ]}
                   onPress={() => {
                     Haptics.selectionAsync();
                     setSelectedBank(b.name);
                   }}
                 >
-                  <View style={[styles.bankDot, { backgroundColor: isSelected ? '#fff' : b.color }]} />
-                  <Text style={[styles.categoryText, { color: isSelected ? '#fff' : colors.text }]}>
-                    {b.name}
-                  </Text>
+                  <View style={[styles.bankDot, { backgroundColor: isSelected ? '#FFFFFF' : b.color }]} />
+                  <View>
+                    <Text style={[styles.categoryText, { color: isSelected ? '#FFFFFF' : colors.text }]}>
+                      {b.name}
+                    </Text>
+                    {b.balance !== undefined && (
+                      <Text style={[styles.bankBalanceSub, { color: isSelected ? 'rgba(255,255,255,0.85)' : colors.textMuted }]}>
+                        ₱{Number(b.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Text>
+                    )}
+                  </View>
                 </TouchableOpacity>
               );
             })}
+
+            {/* Quick Add Card Shortcut Pill */}
+            <TouchableOpacity
+              style={[styles.addCardQuickChip, { borderColor: colors.border, backgroundColor: colors.surfaceHighlight }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                navigation.navigate('Main', { screen: 'Wallet' });
+              }}
+            >
+              <Plus size={14} color={colors.primary} />
+              <Text style={[styles.addCardQuickText, { color: colors.primary }]}>+ Add Card</Text>
+            </TouchableOpacity>
           </ScrollView>
 
           {type === 'transfer' ? (
@@ -280,23 +331,34 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
                 style={styles.categoriesScroll}
               >
                 {bankOptions.map(b => {
-                  const isSelected = destinationBank === b.name;
+                  const isSelected = destinationBank.toLowerCase() === b.name.toLowerCase();
                   return (
                     <TouchableOpacity
                       key={`dest-${b.name}`}
                       style={[
                         styles.categoryChip,
-                        { backgroundColor: isSelected ? b.color : colors.surfaceHighlight }
+                        {
+                          backgroundColor: isSelected ? b.color : colors.surfaceHighlight,
+                          borderColor: isSelected ? b.color : colors.border,
+                          borderWidth: 1,
+                        }
                       ]}
                       onPress={() => {
                         Haptics.selectionAsync();
                         setDestinationBank(b.name);
                       }}
                     >
-                      <View style={[styles.bankDot, { backgroundColor: isSelected ? '#fff' : b.color }]} />
-                      <Text style={[styles.categoryText, { color: isSelected ? '#fff' : colors.text }]}>
-                        {b.name}
-                      </Text>
+                      <View style={[styles.bankDot, { backgroundColor: isSelected ? '#FFFFFF' : b.color }]} />
+                      <View>
+                        <Text style={[styles.categoryText, { color: isSelected ? '#FFFFFF' : colors.text }]}>
+                          {b.name}
+                        </Text>
+                        {b.balance !== undefined && (
+                          <Text style={[styles.bankBalanceSub, { color: isSelected ? 'rgba(255,255,255,0.85)' : colors.textMuted }]}>
+                            ₱{Number(b.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Text>
+                        )}
+                      </View>
                     </TouchableOpacity>
                   );
                 })}
@@ -342,7 +404,13 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
 
           <TextInput
             style={[styles.noteInput, { color: colors.text, backgroundColor: colors.background }]}
-            placeholder={type === 'transfer' ? 'Transfer note (optional)...' : 'Add a note...'}
+            placeholder={
+              type === 'transfer'
+                ? 'Transfer note (optional)...'
+                : type === 'income'
+                  ? 'e.g. November Cut-off Salary, Client Project...'
+                  : 'Add a note...'
+            }
             placeholderTextColor={colors.textMuted}
             value={note}
             onChangeText={setNote}
@@ -355,7 +423,11 @@ export const AddTransactionModal: React.FC<Props> = ({ navigation }) => {
             activeOpacity={0.8}
           >
             <Text style={styles.saveBtnText}>
-              {type === 'transfer' ? `Transfer ${selectedBank} → ${destinationBank}` : 'Save Transaction'}
+              {type === 'transfer'
+                ? `Transfer ${selectedBank} → ${destinationBank}`
+                : type === 'income'
+                  ? `Save +₱${amount || '0'} Income to ${selectedBank}`
+                  : `Save -₱${amount || '0'} Expense from ${selectedBank}`}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -490,5 +562,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#92400E',
+  },
+  bankBalanceSub: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  addCardQuickChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    marginRight: 8,
+  },
+  addCardQuickText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

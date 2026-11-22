@@ -182,7 +182,7 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ ready, onFinish }) => 
   const finish = () => {
     if (exiting.current) return;
     exiting.current = true;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
     exit.value = withTiming(1, { duration: 420, easing: Easing.in(Easing.cubic) }, (done) => {
       if (done) runOnJS(onFinish)();
     });
@@ -344,12 +344,9 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ ready, onFinish }) => 
               {LETTERS.map((ch, idx) => (
                 <AnimatedLetter key={ch} char={ch} progress={letterProgressValues[idx]} />
               ))}
-              <Animated.View style={[styles.goldAccentDot, dotStyle]} />
+
             </View>
 
-            <Animated.View style={[styles.subtitlePill, subtitleStyle]}>
-              <Text style={styles.subtitleText}>SMART BUDGET TRACKER</Text>
-            </Animated.View>
           </View>
         </View>
 

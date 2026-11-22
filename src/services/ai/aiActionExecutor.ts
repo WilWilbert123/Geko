@@ -4,38 +4,117 @@ import { uuidv4 } from '../../utils/uuid';
 import { formatCurrency } from '../../utils/formatters';
 import { getInstallmentImageUri } from '../../utils/installmentExtractor';
 import { getGoalImageUri } from '../../utils/goalExtractor';
+import { getBankTheme } from '../../utils/bankThemes';
+import { getCanonicalBankKey } from '../../utils/cardExtractor';
 
 const BANK_ALIASES: Record<string, string> = {
   gcash: 'GCash',
+  'g-cash': 'GCash',
+  'g cash': 'GCash',
   maya: 'Maya',
+  paymaya: 'Maya',
+  'pay-maya': 'Maya',
+  'pay maya': 'Maya',
   gotyme: 'GoTyme',
-  cash: 'Physical Cash',
-  'physical cash': 'Physical Cash',
+  'go tyme': 'GoTyme',
+  'go-tyme': 'GoTyme',
+  'gotyme bank': 'GoTyme',
+  maribank: 'MariBank',
+  'mari bank': 'MariBank',
+  'mari-bank': 'MariBank',
+  seabank: 'SeaBank',
+  'sea bank': 'SeaBank',
+  'sea-bank': 'SeaBank',
   bdo: 'BDO',
+  'bdo bank': 'BDO',
+  'bdo unibank': 'BDO',
   bpi: 'BPI',
+  'bpi bank': 'BPI',
   pnb: 'PNB',
+  'pnb bank': 'PNB',
   unionbank: 'UnionBank',
+  'union bank': 'UnionBank',
   ub: 'UnionBank',
   metrobank: 'Metrobank',
+  'metro bank': 'Metrobank',
   rcbc: 'RCBC',
-  maribank: 'MariBank',
-  seabank: 'MariBank',
+  'rcbc bank': 'RCBC',
+  'security bank': 'Security Bank',
+  securitybank: 'Security Bank',
+  security: 'Security Bank',
+  landbank: 'Landbank',
+  'land bank': 'Landbank',
+  eastwest: 'EastWest',
+  'east west': 'EastWest',
+  'eastwest bank': 'EastWest',
+  chinabank: 'Chinabank',
+  'china bank': 'Chinabank',
+  cimb: 'CIMB Bank',
+  'cimb bank': 'CIMB Bank',
+  tonik: 'Tonik',
+  'tonik bank': 'Tonik',
+  ownbank: 'OwnBank',
+  'own bank': 'OwnBank',
+  komo: 'Komo',
+  diskartech: 'DiskarTech',
+  salmon: 'Salmon',
+  uno: 'UNO Bank',
+  'uno bank': 'UNO Bank',
+  uniondigital: 'UnionDigital',
+  'union digital': 'UnionDigital',
+  ofbank: 'OFBank',
+  netbank: 'Netbank',
+  zed: 'Zed',
   wise: 'Wise',
+  transferwise: 'Wise',
+  grabpay: 'GrabPay',
+  'grab pay': 'GrabPay',
+  shopeepay: 'ShopeePay',
+  'shopee pay': 'ShopeePay',
+  shopee: 'ShopeePay',
+  paypal: 'PayPal',
+  'pay pal': 'PayPal',
+  payoneer: 'Payoneer',
+  hsbc: 'HSBC',
+  'hsbc bank': 'HSBC',
+  visa: 'Visa',
+  mastercard: 'Mastercard',
+  'physical cash': 'Physical Cash',
+  cash: 'Physical Cash',
 };
 
-const BANK_DEFAULT_STYLES: Record<string, { c1: string; c2: string; type: 'EWALLET' | 'BANK' | 'CASH' }> = {
-  GCash: { c1: '#0055FF', c2: '#0088FF', type: 'EWALLET' },
-  Maya: { c1: '#059669', c2: '#10B981', type: 'EWALLET' },
-  GoTyme: { c1: '#00D2C8', c2: '#00A8A0', type: 'BANK' },
-  'Physical Cash': { c1: '#059669', c2: '#34D399', type: 'CASH' },
-  BDO: { c1: '#004080', c2: '#0066CC', type: 'BANK' },
-  BPI: { c1: '#6B0A14', c2: '#991B1B', type: 'BANK' },
-  PNB: { c1: '#D4AF37', c2: '#B8860B', type: 'BANK' },
-  UnionBank: { c1: '#E65100', c2: '#EA580C', type: 'BANK' },
-  Metrobank: { c1: '#0044CC', c2: '#2563EB', type: 'BANK' },
-  RCBC: { c1: '#C8981A', c2: '#EAB308', type: 'BANK' },
-  MariBank: { c1: '#E64A19', c2: '#F97316', type: 'BANK' },
-  Wise: { c1: '#64DD17', c2: '#84CC16', type: 'EWALLET' },
+const normalizeBankName = (rawName: string): string => {
+  const clean = rawName.trim().toLowerCase();
+  if (BANK_ALIASES[clean]) return BANK_ALIASES[clean];
+  for (const [key, val] of Object.entries(BANK_ALIASES)) {
+    if (clean === key || clean.startsWith(key) || clean.includes(key)) return val;
+  }
+  return rawName.charAt(0).toUpperCase() + rawName.slice(1);
+};
+
+const getBankStyle = (bankName: string) => {
+  const theme = getBankTheme(bankName);
+  const lower = bankName.toLowerCase();
+  let type: 'EWALLET' | 'BANK' | 'CASH' = 'BANK';
+  if (lower.includes('cash') && !lower.includes('gcash')) {
+    type = 'CASH';
+  } else if (
+    lower.includes('gcash') ||
+    lower.includes('maya') ||
+    lower.includes('grabpay') ||
+    lower.includes('shopee') ||
+    lower.includes('paypal') ||
+    lower.includes('payoneer') ||
+    lower.includes('wise')
+  ) {
+    type = 'EWALLET';
+  }
+  return {
+    c1: theme.bg1,
+    c2: theme.bg2,
+    type,
+    paymentNetwork: theme.network,
+  };
 };
 
 const isTagalog = (text: string): boolean => {
@@ -55,21 +134,12 @@ const isTagalog = (text: string): boolean => {
     lower.includes('nako') ||
     lower.includes('kailangan') ||
     lower.includes('sa') ||
-    lower.includes('ng')
+    lower.includes('ng') ||
+    lower.includes('bago') ||
+    lower.includes('bagong') ||
+    lower.includes('gawa') ||
+    lower.includes('gumawa')
   );
-};
-
-const normalizeBankName = (rawName: string): string => {
-  const clean = rawName.trim().toLowerCase();
-  if (BANK_ALIASES[clean]) return BANK_ALIASES[clean];
-  for (const [key, val] of Object.entries(BANK_ALIASES)) {
-    if (clean.includes(key)) return val;
-  }
-  return rawName.charAt(0).toUpperCase() + rawName.slice(1);
-};
-
-const getBankStyle = (bankName: string) => {
-  return BANK_DEFAULT_STYLES[bankName] || { c1: '#475569', c2: '#64748B', type: 'BANK' as const };
 };
 
 // In-memory store for last deleted item to support Undo
@@ -306,46 +376,118 @@ export const processAIIntent = async (
 
   // ── 1. ACCOUNT / BANK / CASH BALANCE INTENT ──────────────────
   // Matches phrases like:
-  // "add account 2000 gcash", "add 3000 to my maya", "add 5000 to my gotyme", "add 980 to my cash"
-  // "magdagdag ng 2000 sa gcash", "dagdag 3000 sa maya ko", "lagyan ng 5000 ang gotyme"
-  const isAccountIntent =
+  // "add new card maribank 500", "add new card maya 2500", "add 300 to my gotyme"
+  // "create card bdo 1000", "add account 2000 gcash", "lagyan ng 500 ang maribank"
+  const isCardKeyword =
+    lower.includes('card') ||
+    lower.includes('kard') ||
     lower.includes('account') ||
-    lower.includes('gcash') ||
-    lower.includes('maya') ||
-    lower.includes('gotyme') ||
-    lower.includes('cash') ||
-    lower.includes('bdo') ||
-    lower.includes('bpi') ||
-    lower.includes('pnb') ||
-    lower.includes('unionbank') ||
-    lower.includes('metrobank');
+    lower.includes('akawnt') ||
+    lower.includes('wallet');
 
-  if (
-    isAccountIntent &&
-    (lower.includes('add') ||
-      lower.includes('magdagdag') ||
-      lower.includes('dagdag') ||
-      lower.includes('maglagay') ||
-      lower.includes('lagyan') ||
-      lower.includes('set') ||
-      lower.includes('create')) &&
-    !lower.includes('goal') &&
-    !lower.includes('installment') &&
-    !lower.includes('hulugan')
-  ) {
-    // Extract numbers
+  const isBankKeyword = Object.keys(BANK_ALIASES).some(alias => {
+    if (alias === 'cash') {
+      return /\bcash\b/i.test(lower) && !/\bgcash\b/i.test(lower);
+    }
+    return lower.includes(alias);
+  });
+
+  const isActionVerb =
+    lower.includes('add') ||
+    lower.includes('magdagdag') ||
+    lower.includes('dagdag') ||
+    lower.includes('maglagay') ||
+    lower.includes('lagay') ||
+    lower.includes('lagyan') ||
+    lower.includes('set') ||
+    lower.includes('palitan') ||
+    lower.includes('create') ||
+    lower.includes('gumawa') ||
+    lower.includes('gawa') ||
+    lower.includes('rehistro') ||
+    lower.includes('register') ||
+    lower.includes('new') ||
+    lower.includes('bago') ||
+    lower.includes('bagong');
+
+  const isQuestionOrTutorial =
+    lower.startsWith('how') ||
+    lower.startsWith('paano') ||
+    lower.startsWith('pano') ||
+    lower.includes('how to') ||
+    lower.includes('paano mag') ||
+    lower.includes('pano mag') ||
+    lower.includes('tutorial') ||
+    lower.includes('guide') ||
+    lower.includes('who') ||
+    lower.includes('sino');
+
+  const isExcluded =
+    lower.includes('goal') ||
+    lower.includes('layunin') ||
+    lower.includes('installment') ||
+    lower.includes('hulugan') ||
+    lower.includes('monthly') ||
+    isQuestionOrTutorial;
+
+  const isAccountIntent = (isCardKeyword || isBankKeyword) && isActionVerb && !isExcluded;
+
+  if (isAccountIntent) {
+    // Extract numbers (amount)
     const numMatches = text.match(/(\d+[\d,]*\.?\d*)/g);
     if (numMatches && numMatches.length > 0) {
-      const amount = parseFloat(numMatches[0].replace(/,/g, ''));
+      const numbers = numMatches.map(n => parseFloat(n.replace(/,/g, ''))).filter(n => !isNaN(n) && n > 0);
+      const amount = numbers[0];
 
-      // Find bank keyword
-      let rawBank = 'GCash';
-      const banks = ['gcash', 'maya', 'gotyme', 'physical cash', 'cash', 'bdo', 'bpi', 'pnb', 'unionbank', 'ub', 'metrobank', 'rcbc', 'maribank', 'seabank', 'wise'];
-      for (const b of banks) {
-        if (lower.includes(b)) {
-          rawBank = b;
-          break;
+      // Extract bank keyword
+      let rawBank = '';
+
+      // Pattern 1: Explicit card/account phrase, e.g.:
+      // "add new card maribank 500", "add card GoTyme 1000", "create new card Citibank 2000"
+      const cardNamePattern = /(?:add|create|new|magdagdag|maglagay|dagdag|lagyan|gumawa)\s+(?:ng\s+)?(?:new\s+|bagong\s+)?(?:card|account|kard|wallet)\s+([A-Za-z0-9\s&-]+?)(?:\s+(?:with|na may|amount|balance|ng|sa)?\s*(?:₱|p)?\s*\d+|$)/i;
+      const cardMatch = text.match(cardNamePattern);
+      if (cardMatch && cardMatch[1]) {
+        const candidate = cardMatch[1].trim();
+        if (candidate.length > 0 && candidate.length <= 30) {
+          rawBank = candidate;
         }
+      }
+
+      // Pattern 2: Scan known bank aliases (longest first so 'security bank' matches before 'security')
+      if (!rawBank) {
+        const sortedAliases = Object.keys(BANK_ALIASES).sort((a, b) => b.length - a.length);
+        for (const alias of sortedAliases) {
+          if (alias === 'cash') {
+            if (/\bcash\b/i.test(lower) && !/\bgcash\b/i.test(lower)) {
+              rawBank = 'Physical Cash';
+              break;
+            }
+          } else {
+            const escaped = alias.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            if (new RegExp(`\\b${escaped}\\b`, 'i').test(lower) || lower.includes(alias)) {
+              rawBank = alias;
+              break;
+            }
+          }
+        }
+      }
+
+      // Pattern 3: Check if any existing card in DB matches
+      if (!rawBank) {
+        try {
+          const existingCardsRes = await db.execute('SELECT bankName FROM cards');
+          const existingCards = existingCardsRes.rows?._array || [];
+          for (const ec of existingCards) {
+            if (ec.bankName && lower.includes(ec.bankName.toLowerCase())) {
+              rawBank = ec.bankName;
+              break;
+            }
+          }
+        } catch (e) { }
+      }
+
+      if (!rawBank) {
+        rawBank = 'GCash';
       }
 
       const bankName = normalizeBankName(rawBank);
@@ -356,13 +498,21 @@ export const processAIIntent = async (
           'SELECT * FROM cards WHERE LOWER(bankName) = LOWER(?)',
           [bankName]
         );
-        const existing = existingRes.rows?._array && existingRes.rows._array.length > 0 ? existingRes.rows._array[0] : null;
+        let existing = existingRes.rows?._array && existingRes.rows._array.length > 0 ? existingRes.rows._array[0] : null;
+
+        if (!existing) {
+          const allCardsRes = await db.execute('SELECT * FROM cards');
+          const allCards = allCardsRes.rows?._array || [];
+          const targetKey = getCanonicalBankKey(bankName);
+          existing = allCards.find((c: any) => getCanonicalBankKey(c.bankName) === targetKey) || null;
+        }
 
         const date = Date.now();
+        const isSetOnly = lower.includes('set') || lower.includes('palitan to') || lower.includes('gawing');
         let finalBalance = amount;
 
         if (existing) {
-          finalBalance = Number(existing.balance || 0) + amount;
+          finalBalance = isSetOnly ? amount : Number(existing.balance || 0) + amount;
           await db.execute('UPDATE cards SET balance = ? WHERE id = ?', [finalBalance, existing.id]);
           await db.execute(
             'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -373,8 +523,8 @@ export const processAIIntent = async (
           const cardId = uuidv4();
           const cardNum = `**** ${Math.floor(1000 + Math.random() * 9000)}`;
           await db.execute(
-            'INSERT INTO cards (id, bankName, balance, color1, color2, cardNumber, type) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [cardId, bankName, amount, style.c1, style.c2, cardNum, style.type]
+            'INSERT INTO cards (id, bankName, balance, color1, color2, cardNumber, budget, type, paymentNetwork) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [cardId, bankName, amount, style.c1, style.c2, cardNum, 0, style.type, style.paymentNetwork || 'MASTERCARD']
           );
           await db.execute(
             'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -406,12 +556,13 @@ export const processAIIntent = async (
   // "Add a goal OneXplayer 40000 my savings na ako 10000 at add another goal Drone DJI neo 2 25000 price meron akong savings na 9000"
   // "Onexplayer price 40000 and savings 10000 done dji neo 2 price 25000 savings 9000"
   if (
-    lower.includes('goal') ||
-    lower.includes('layunin') ||
-    lower.includes('onexplayer') ||
-    lower.includes('oneplayer') ||
-    lower.includes('drone') ||
-    (lower.includes('ipon') && (lower.includes('target') || lower.includes('kotse') || lower.includes('car') || lower.includes('bahay') || lower.includes('house')))
+    !isQuestionOrTutorial &&
+    (lower.includes('goal') ||
+      lower.includes('layunin') ||
+      lower.includes('onexplayer') ||
+      lower.includes('oneplayer') ||
+      lower.includes('drone') ||
+      (lower.includes('ipon') && (lower.includes('target') || lower.includes('kotse') || lower.includes('car') || lower.includes('bahay') || lower.includes('house'))))
   ) {
     // Helper to split text into distinct goal clauses
     const splitGoalClauses = (rawText: string): string[] => {
@@ -691,11 +842,19 @@ export const processAIIntent = async (
         const isIncome = lower.includes('sweldo') || lower.includes('salary') || lower.includes('income') || lower.includes('deposit');
         
         let bankName = 'GCash';
-        const banks = ['gcash', 'maya', 'gotyme', 'cash', 'bdo', 'bpi', 'pnb', 'unionbank', 'metrobank'];
-        for (const b of banks) {
-          if (lower.includes(b)) {
-            bankName = normalizeBankName(b);
-            break;
+        const sortedAliases = Object.keys(BANK_ALIASES).sort((a, b) => b.length - a.length);
+        for (const alias of sortedAliases) {
+          if (alias === 'cash') {
+            if (/\bcash\b/i.test(lower) && !/\bgcash\b/i.test(lower)) {
+              bankName = 'Physical Cash';
+              break;
+            }
+          } else {
+            const escaped = alias.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            if (new RegExp(`\\b${escaped}\\b`, 'i').test(lower) || lower.includes(alias)) {
+              bankName = normalizeBankName(alias);
+              break;
+            }
           }
         }
 
