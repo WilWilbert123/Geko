@@ -340,10 +340,31 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
       }
     } else {
       // ── Bespoke Bank / Credit Card Layout ──
-      // 1. TOP-LEFT: Card Brand / Bank Name (shifted slightly to the left)
+      // 1. TOP-LEFT: Card Brand / Bank Name
       const brandStr = currentBank.toUpperCase();
-      const brandScale = brandStr.length > 25 ? 1 : brandStr.length > 17 ? 2 : 3;
-      drawString(brandStr, startX, 250, brandScale);
+      // Ensure text is always large, crisp, and easily readable (never drop to tiny scale 1)
+      if (brandStr.length > 34) {
+        // Multi-line wrap for extra long card names (35+ chars)
+        const words = brandStr.split(' ');
+        let line1 = '';
+        let line2 = '';
+        for (const w of words) {
+          if (!line1 || (line1 + ' ' + w).length <= 26) {
+            line1 = line1 ? `${line1} ${w}` : w;
+          } else {
+            line2 = line2 ? `${line2} ${w}` : w;
+          }
+        }
+        drawString(line1, startX, 264, 2);
+        if (line2) {
+          drawString(line2, startX, 244, 2);
+        }
+      } else {
+        // Scale 3 for punchy short names (<= 14 chars, e.g. BPI, MAYA, GCASH, GOTYME), scale 2 for all others (e.g. SECURITY BANK WAVE MASTERCARD)
+        const brandScale = brandStr.length <= 14 ? 3 : 2;
+        const brandY = brandScale === 3 ? 246 : 252;
+        drawString(brandStr, startX, brandY, brandScale);
+      }
 
       // 2. BOTTOM-LEFT: Balance Label & Balance Amount (shifted slightly to the left)
       const isCredit = accountType === 'CREDIT_CARD' || currentBank.toLowerCase().includes('credit');
