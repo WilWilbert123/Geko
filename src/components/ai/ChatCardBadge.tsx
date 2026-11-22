@@ -5,13 +5,22 @@ import { ExtractedCardInfo, getCanonicalBankKey } from '../../utils/cardExtracto
 import { getBankTheme } from '../../utils/bankThemes';
 import { GekoCard3D } from '../wallet/GekoCard3D';
 import { useTheme } from '../../hooks/useTheme';
+import { Card } from '../../hooks/useCards';
 
 interface ChatCardBadgeProps {
   cards: ExtractedCardInfo[];
+  liveCards?: Card[];
 }
 
-export const MiniCardItem: React.FC<{ card: ExtractedCardInfo }> = ({ card }) => {
-  const theme = getBankTheme(card.bankName, card.color1, card.color2);
+export const MiniCardItem: React.FC<{ card: ExtractedCardInfo; liveCards?: Card[] }> = ({ card, liveCards }) => {
+  const cardKey = getCanonicalBankKey(card.bankName);
+  const matchedLive = liveCards?.find(c => getCanonicalBankKey(c.bankName) === cardKey);
+
+  const effectiveBal = card.balance !== undefined && card.balance > 0
+    ? card.balance
+    : (matchedLive ? (matchedLive.type === 'CREDIT_CARD' ? (matchedLive.outstandingBalance || 0) : matchedLive.balance) : (card.balance || 0));
+
+  const theme = getBankTheme(matchedLive?.bankName || card.bankName, matchedLive?.color1 || card.color1, matchedLive?.color2 || card.color2);
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -21,19 +30,16 @@ export const MiniCardItem: React.FC<{ card: ExtractedCardInfo }> = ({ card }) =>
     <TouchableOpacity
       activeOpacity={0.92}
       onPress={handlePress}
-      style={[
-        styles.cardItem3D,
-        { backgroundColor: card.color1 || theme.bg1 }
-      ]}
+      style={styles.cardItem3D}
     >
       <GekoCard3D
-        balance={card.balance}
+        balance={effectiveBal}
         cardholderName="GEKO MEMBER"
         expiryDate="10/29"
-        accountType={card.type}
-        bankName={card.bankName}
-        color1={card.color1 || theme.bg1}
-        color2={card.color2 || theme.bg2}
+        accountType={matchedLive?.type || card.type}
+        bankName={matchedLive?.bankName || card.bankName}
+        color1={matchedLive?.color1 || card.color1 || theme.bg1}
+        color2={matchedLive?.color2 || card.color2 || theme.bg2}
         height={112}
         interactive={false}
         paymentNetwork={theme.network}
@@ -42,7 +48,7 @@ export const MiniCardItem: React.FC<{ card: ExtractedCardInfo }> = ({ card }) =>
   );
 };
 
-export const ChatCardBadgeList: React.FC<ChatCardBadgeProps> = ({ cards }) => {
+export const ChatCardBadgeList: React.FC<ChatCardBadgeProps> = ({ cards, liveCards }) => {
   const { colors } = useTheme();
   const uniqueCards = useMemo(() => {
     if (!cards || cards.length === 0) return [];
@@ -73,7 +79,7 @@ export const ChatCardBadgeList: React.FC<ChatCardBadgeProps> = ({ cards }) => {
 
       {uniqueCards.length === 1 ? (
         <View style={styles.singleCardContainer}>
-          <MiniCardItem card={uniqueCards[0]} />
+          <MiniCardItem card={uniqueCards[0]} liveCards={liveCards} />
         </View>
       ) : (
         <ScrollView
@@ -82,7 +88,7 @@ export const ChatCardBadgeList: React.FC<ChatCardBadgeProps> = ({ cards }) => {
           contentContainerStyle={styles.scrollContainer}
         >
           {uniqueCards.map((card, idx) => (
-            <MiniCardItem key={`${card.bankName}-${idx}`} card={card} />
+            <MiniCardItem key={`${card.bankName}-${idx}`} card={card} liveCards={liveCards} />
           ))}
         </ScrollView>
       )}
@@ -114,14 +120,8 @@ const styles = StyleSheet.create({
   cardItem3D: {
     width: 176,
     height: 112,
-    borderRadius: 16,
-    overflow: 'hidden',
     position: 'relative',
     backgroundColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
+    overflow: 'visible',
   },
 });

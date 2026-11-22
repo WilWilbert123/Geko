@@ -33,7 +33,7 @@ const CARD_ASPECT = 1.586;
 const CARD_WIDTH_3D = 4.8;
 const CARD_HEIGHT_3D = CARD_WIDTH_3D / CARD_ASPECT; // ~2.77
 const CARD_DEPTH_3D = 0.048;
-const CORNER_RADIUS = 0.24;
+const CORNER_RADIUS = 0.35;
 
 const parseColorToVec3 = (hex?: string, fallback: string = '#000000'): THREE.Vector3 => {
   const c = new THREE.Color(hex || fallback);
@@ -452,19 +452,17 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
     const scene = new THREE.Scene();
 
     // Camera setup:
-    // Small cards (height < 200) use 2.30z to fill edge-to-edge.
-    // Full-size Home card uses fov 46 and baseCameraZ calculated to maintain exact wide width (~93%)
+    // Dynamically calculate camera Z distance so the 3D card fits 100% inside the canvas
+    // with comfortable padding on all 4 sides regardless of width, height, or aspect ratio.
     const isSmallCard = height < 200;
-    const fov = isSmallCard ? 65 : 46;
+    const fov = isSmallCard ? 48 : 46;
     const aspect = width / glHeight;
 
-    let baseCameraZ = 2.30;
-    if (!isSmallCard) {
-      // Calculate base camera distance so the 3D card (CARD_WIDTH_3D = 4.8) occupies ~93% of the canvas width
-      const fillFractionX = 0.93;
-      const tanHalfFov = Math.tan((fov * Math.PI) / 360);
-      baseCameraZ = CARD_WIDTH_3D / (2 * fillFractionX * tanHalfFov * aspect);
-    }
+    const fillFraction = 0.92;
+    const tanHalfFov = Math.tan((fov * Math.PI) / 360);
+    const zForWidth = CARD_WIDTH_3D / (2 * fillFraction * tanHalfFov * aspect);
+    const zForHeight = CARD_HEIGHT_3D / (2 * fillFraction * tanHalfFov);
+    const baseCameraZ = Math.max(zForWidth, zForHeight);
 
     const camera = new THREE.PerspectiveCamera(fov, aspect, 0.1, 100);
     camera.position.set(0, 0, baseCameraZ);
@@ -504,29 +502,30 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
     textTextureRef.current = textTexture;
     updateCardText();
 
-    // Card Shape with rounded corners
+    // Card Shape with smooth, prominent rounded corners (ISO credit card style)
     const shape = new THREE.Shape();
     const x = -CARD_WIDTH_3D / 2;
     const y = -CARD_HEIGHT_3D / 2;
     const w = CARD_WIDTH_3D;
     const h = CARD_HEIGHT_3D;
-    const r = cornerRadius !== undefined ? cornerRadius : (isSmallCard ? 0.08 : CORNER_RADIUS);
+    const r = cornerRadius !== undefined ? cornerRadius : CORNER_RADIUS;
 
     shape.moveTo(x + r, y);
     shape.lineTo(x + w - r, y);
-    shape.quadraticCurveTo(x + w, y, x + w, y + r);
+    shape.absarc(x + w - r, y + r, r, -Math.PI / 2, 0, false);
     shape.lineTo(x + w, y + h - r);
-    shape.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    shape.absarc(x + w - r, y + h - r, r, 0, Math.PI / 2, false);
     shape.lineTo(x + r, y + h);
-    shape.quadraticCurveTo(x, y + h, x, y + h - r);
+    shape.absarc(x + r, y + h - r, r, Math.PI / 2, Math.PI, false);
     shape.lineTo(x, y + r);
-    shape.quadraticCurveTo(x, y, x + r, y);
+    shape.absarc(x + r, y + r, r, Math.PI, (3 * Math.PI) / 2, false);
 
     // Extrude geometry for milled platinum edges
     const edgeGeometry = new THREE.ExtrudeGeometry(shape, {
       depth: CARD_DEPTH_3D,
       bevelEnabled: true,
-      bevelSegments: 2,
+      bevelSegments: 3,
+      curveSegments: 16,
       steps: 1,
       bevelSize: 0.012,
       bevelThickness: 0.008,
@@ -534,7 +533,7 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
     edgeGeometry.center();
 
     // Face geometry for front and back
-    const faceGeometry = new THREE.ShapeGeometry(shape);
+    const faceGeometry = new THREE.ShapeGeometry(shape, 16);
     faceGeometry.center();
 
     // Compute normalized UV coordinates (0..1)
@@ -718,11 +717,11 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
         float customGrain = fract(sin(vUv.x * 880.0 + vUv.y * 1240.0) * 43758.54) * 0.030;
         col += vec3(customGrain);
 
-        // Double Beveled Metallic Frame Border
+        // Double Beveled Metallic Frame Border (Smooth rounded corners)
         vec2 framePos = vUv - vec2(0.5, 0.5);
-        float dFrame = sdRoundedBox(framePos, vec2(0.47, 0.46), 0.03);
+        float dFrame = sdRoundedBox(framePos, vec2(0.46, 0.44), 0.07);
         float frameBorder = smoothstep(0.003, 0.0, abs(dFrame));
-        col = mix(col, vec3(1.0), frameBorder * 0.18);
+        col = mix(col, vec3(1.0), frameBorder * 0.15);
 
         // Dynamic Anisotropic Specular Light Sheen
         float customSheen = smoothstep(0.22, 0.0, abs(vUv.x - uLightPos.x)) * (uShineIntensity + 0.35);
@@ -2081,11 +2080,11 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
         
         col += pureSilverSheen + holographicGleam;
 
-        // 10. 3D Outer Bevel Rim Light & Ambient Occlusion (Makes cards pop with real 3D physical depth)
-        vec2 bUv = abs(vUv - vec2(0.5)) * 2.0;
-        float edgeDist = max(bUv.x, bUv.y);
-        float rimGleam = smoothstep(0.92, 0.98, edgeDist) * smoothstep(1.0, 0.98, edgeDist);
-        col += vec3(0.90, 0.95, 1.0) * rimGleam * 0.35;
+        // 10. 3D Outer Bevel Rim Light & Ambient Occlusion (True rounded corner rim)
+        vec2 rimUv = vUv - vec2(0.5);
+        float dRim = sdRoundedBox(rimUv, vec2(0.47, 0.45), 0.07);
+        float rimGleam = smoothstep(0.015, 0.0, abs(dRim));
+        col += vec3(0.90, 0.95, 1.0) * rimGleam * 0.30;
 
         gl_FragColor = vec4(col, 1.0);
       }
@@ -2252,12 +2251,10 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
         // Dynamic camera pullback along Z: as the card rotates in 3D, its leading edge moves towards the camera.
         // Pulling back smoothly ensures the rotated corners and edges never balloon in screen-space NDC,
         // keeping the entire card 100% visible with zero clipping!
-        if (!isSmallCard) {
-          const forwardZ =
-            (CARD_WIDTH_3D / 2.0) * Math.sin(Math.abs(rotY.current)) +
-            (CARD_HEIGHT_3D / 2.0) * Math.sin(Math.abs(rotX.current));
-          camera.position.z = baseCameraZ + forwardZ * 0.95;
-        }
+        const forwardZ =
+          (CARD_WIDTH_3D / 2.0) * Math.sin(Math.abs(rotY.current)) +
+          (CARD_HEIGHT_3D / 2.0) * Math.sin(Math.abs(rotX.current));
+        camera.position.z = baseCameraZ + forwardZ * 0.95;
 
         const targetShine = touchActive.current ? 1.0 : 0.0;
         shineIntensity.current += (targetShine - shineIntensity.current) * 0.20;
@@ -2274,9 +2271,7 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
         currentFlipY.current = 0;
         shineIntensity.current = 0;
         lightPos.current = { x: 0.5, y: 0.5 };
-        if (!isSmallCard) {
-          camera.position.z = baseCameraZ;
-        }
+        camera.position.z = baseCameraZ;
       }
 
       frontUniforms.uShineIntensity.value = shineIntensity.current;
@@ -2328,15 +2323,15 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
 
   return (
     <View style={styles.outerContainer}>
-      {/* Full 3D WebGL Canvas */}
+      {/* Full 3D WebGL Canvas with rounded container */}
       <View
         style={[
           styles.canvasWrapper,
           {
             height,
-            backgroundColor: wrapperBg,
-            borderRadius: isSmallCard ? 12 : 0,
-            overflow: isSmallCard ? 'hidden' : 'visible',
+            backgroundColor: 'transparent',
+            borderRadius: isSmallCard ? 16 : 22,
+            overflow: 'hidden',
           },
         ]}
         {...(interactive ? panResponder.panHandlers : {})}
@@ -2346,6 +2341,8 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
             width: '100%',
             height,
             backgroundColor: 'transparent',
+            borderRadius: isSmallCard ? 16 : 22,
+            overflow: 'hidden',
             opacity: glOpacity,
           }}
           onContextCreate={onContextCreate}

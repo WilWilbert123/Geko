@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateStream } from '../services/ai/engine/llamaService';
 import { retrieveContext } from '../services/ai/rag/retriever';
@@ -69,6 +70,10 @@ export const useRAGChat = () => {
       // 0. Check & Execute Action Intent First (accounts, goals, installments, transactions)
       const actionRes = await processAIIntent(text);
       if (actionRes.executed && actionRes.message) {
+        DeviceEventEmitter.emit('transactions_updated');
+        DeviceEventEmitter.emit('goals_updated');
+        DeviceEventEmitter.emit('installments_updated');
+
         const assistantMsg: ChatMessage = {
           id: uuidv4(),
           role: 'assistant',

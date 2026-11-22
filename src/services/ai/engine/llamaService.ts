@@ -255,6 +255,43 @@ export const generateStream = async (
       lowerUserText.includes('kumusta sa') ||
       (isBankMentioned && (isExplicitQuestion || lowerUserText.includes('bal') || lowerUserText.includes('per') || lowerUserText.includes('laman'))));
 
+  const isAffordabilityQuery =
+    lowerUserText.includes('afford') ||
+    lowerUserText.includes('dinner') ||
+    lowerUserText.includes('lunch') ||
+    lowerUserText.includes('breakfast') ||
+    lowerUserText.includes('merienda') ||
+    lowerUserText.includes('hapunan') ||
+    lowerUserText.includes('tanghalian') ||
+    lowerUserText.includes('almusal') ||
+    lowerUserText.includes('can i buy') ||
+    lowerUserText.includes('can i spend') ||
+    lowerUserText.includes('should i buy') ||
+    lowerUserText.includes('kaya ba') ||
+    lowerUserText.includes('kakayanin ba') ||
+    lowerUserText.includes('afford ko ba') ||
+    lowerUserText.includes('pwede ba ako') ||
+    lowerUserText.includes('pwede ba bumili') ||
+    lowerUserText.includes('may budget pa ba');
+
+  const isGreetingQuery =
+    /^(hi|hello|hey|yo|sup|kamusta|kumusta|good morning|good afternoon|good evening|magandang araw|greetings)\b/i.test(lowerUserText.trim()) ||
+    lowerUserText.includes('who are you') ||
+    lowerUserText.includes('what can you do') ||
+    lowerUserText.includes('sino ka') ||
+    lowerUserText.includes('ano pwede mo gawin');
+
+  const isSummaryOrAdviceQuery =
+    lowerUserText.includes('financial status') ||
+    lowerUserText.includes('financial advice') ||
+    lowerUserText.includes('how am i doing') ||
+    lowerUserText.includes('how is my budget') ||
+    lowerUserText.includes('budget status') ||
+    lowerUserText.includes('kamusta budget') ||
+    lowerUserText.includes('summary') ||
+    lowerUserText.includes('overview') ||
+    lowerUserText.includes('advice');
+
   const isFinancialQuery =
     !hasValidTransactionIntent &&
     (isGoalQuery ||
@@ -263,6 +300,9 @@ export const generateStream = async (
       isWeekSpendQuery ||
       isInstallmentQuery ||
       isFollowUpQuery ||
+      isAffordabilityQuery ||
+      isGreetingQuery ||
+      isSummaryOrAdviceQuery ||
       /\bmagkano\b/i.test(lowerUserText) ||
       /\bhow much\b/i.test(lowerUserText) ||
       /\bwhat is\b/i.test(lowerUserText) ||
@@ -840,6 +880,117 @@ export const generateStream = async (
             : `Here are all your current card & wallet balances:\n\n` + cardLines.join('\n');
         }
       }
+    } else if (isAffordabilityQuery) {
+      // ── Real-Time Affordability Engine (e.g. "Can I afford dinner tonight?") ──
+      const cardsRes = await db.execute('SELECT bankName, balance, type, outstandingBalance, availableCredit FROM cards');
+      const allCards = (cardsRes.rows?._array || []) as any[];
+
+      const totalLiquid = allCards
+        .filter((c: any) => c.type !== 'CREDIT_CARD')
+        .reduce((acc: number, c: any) => acc + Number(c.balance || 0), 0);
+
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const todayTotalRes = await db.execute(
+        `SELECT SUM(amount) as grandTotal 
+         FROM transactions 
+         WHERE (type = "expense" OR type = "credit_purchase") 
+           AND CAST(date AS INTEGER) >= ?`,
+        [startOfToday]
+      );
+      const todaySpent = Number(todayTotalRes.rows?._array[0]?.grandTotal || 0);
+
+      const amtMatch = lowerUserText.match(/\d+(?:\.\d+)?/);
+      const isDinner = lowerUserText.includes('dinner') || lowerUserText.includes('hapunan');
+      const isLunch = lowerUserText.includes('lunch') || lowerUserText.includes('tanghalian');
+      const mealType = isDinner ? 'dinner' : isLunch ? 'lunch' : (isTagalog ? 'gastos' : 'expense');
+
+      const estimatedCost = amtMatch ? parseFloat(amtMatch[0]) : (isDinner || isLunch ? 250 : 300);
+      const safeBuffer = totalLiquid - estimatedCost;
+
+      if (totalLiquid === 0) {
+        fullResponse = isTagalog
+          ? `Medyo gipit tayo ngayon! ⚠️\n\n` +
+            `• **Kasalukuyang Balance:** ${symbol}0.00 sa lahat ng iyong registered cards at wallets.\n` +
+            `• **Nagastos mo ngayong araw:** ${symbol}${todaySpent.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n\n` +
+            `Wala pang laman ang iyong registered accounts. Mas mabuting mag-ingat muna o magluto sa bahay hanggang sa susunod na sahod!`
+          : `You might want to hold off! ⚠️\n\n` +
+            `• **Available Balance:** ${symbol}0.00 across your registered accounts.\n` +
+            `• **Today's Spending:** ${symbol}${todaySpent.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n\n` +
+            `Your recorded liquid funds are currently ${symbol}0.00. I recommend sticking to home-cooked meals until your next salary cutoff!`;
+      } else if (totalLiquid >= estimatedCost) {
+        const recoMin = Math.min(totalLiquid, Math.max(120, Math.round(estimatedCost * 0.7)));
+        const recoMax = Math.min(totalLiquid, Math.round(estimatedCost * 1.1));
+
+        fullResponse = isTagalog
+          ? `Oo naman! Kayang-kaya mo mag-${mealType} ngayong gabi! 🍽️✨\n\n` +
+            `💰 **Kasalukuyang Pera:** **${symbol}${totalLiquid.toLocaleString('en-US', { minimumFractionDigits: 2 })}** sa iyong registered accounts.\n` +
+            `📊 **Nagastos Mo Ngayong Araw:** **${symbol}${todaySpent.toLocaleString('en-US', { minimumFractionDigits: 2 })}**.\n\n` +
+            `💡 **Geko Budget Guide:**\n` +
+            `• Maglaan ng humigit-kumulang **${symbol}${recoMin} – ${symbol}${recoMax}** para sa iyong ${mealType}.\n` +
+            `• May matitira ka pang safe buffer na humigit-kumulang **${symbol}${Math.max(0, safeBuffer).toLocaleString('en-US', { minimumFractionDigits: 2 })}** para sa mga susunod na araw hanggang sa susunod na payday.`
+          : `Yes! You can definitely afford ${mealType} tonight! 🍽️✨\n\n` +
+            `💰 **Available Funds:** **${symbol}${totalLiquid.toLocaleString('en-US', { minimumFractionDigits: 2 })}** across your active accounts.\n` +
+            `📊 **Spent Today:** **${symbol}${todaySpent.toLocaleString('en-US', { minimumFractionDigits: 2 })}**.\n\n` +
+            `💡 **Geko Spending Recommendation:**\n` +
+            `• Target a meal budget between **${symbol}${recoMin} – ${symbol}${recoMax}**.\n` +
+            `• This leaves you with a comfortable safety cushion of **~${symbol}${Math.max(0, safeBuffer).toLocaleString('en-US', { minimumFractionDigits: 2 })}** for the rest of the week until your next payday.\n\n` +
+            `Enjoy your meal! 🦎`;
+      } else {
+        fullResponse = isTagalog
+          ? `Medyo alanganin ang budget para sa ${mealType} na ${symbol}${estimatedCost.toFixed(2)}. ⚠️\n\n` +
+            `• **Available Funds:** ${symbol}${totalLiquid.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
+            `• **Kulang:** ${symbol}${(estimatedCost - totalLiquid).toLocaleString('en-US', { minimumFractionDigits: 2 })}\n\n` +
+            `Mas ligtas na pumili ng budget option (around ${symbol}${Math.min(totalLiquid, 100).toFixed(2)}) para hindi maubos ang laman ng iyong wallet bago mag-payday!`
+          : `Your budget is a bit tight for a ${symbol}${estimatedCost.toFixed(2)} ${mealType}. ⚠️\n\n` +
+            `• **Available Funds:** ${symbol}${totalLiquid.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
+            `• **Shortfall:** ${symbol}${(estimatedCost - totalLiquid).toLocaleString('en-US', { minimumFractionDigits: 2 })}\n\n` +
+            `Consider a budget-friendly option under ${symbol}${Math.min(totalLiquid, 120).toFixed(2)} to protect your emergency cash flow!`;
+      }
+    } else if (isGreetingQuery) {
+      fullResponse = isTagalog
+        ? `Kumusta! 🦎 Ako si **Geko**, ang iyong personal financial companion.\n\n` +
+          `Narito ang mga pwede mong itanong o ipagawa sa akin:\n` +
+          `• 📝 **Mag-log ng Gastos o Sahod:** Sabihin lang *"Kumain ako 180 sa GCash"* o *"Sahod 25000"*\n` +
+          `• 💳 **Tingnan ang Balance:** *"Magkano balance ng Maya ko?"* o *"Lahat ng cards na may laman"*\n` +
+          `• 🍽️ **Budget & Affordability:** *"Can I afford dinner tonight?"*\n` +
+          `• 📅 **Cut-off & Payday:** *"Kailan ang susunod na cutoff?"* o *"Set cutoff income 20000"*\n` +
+          `• 🎯 **Savings Goals:** *"Aabot ba ako sa aking goal?"*`
+        : `Hey there! 🦎 I'm **Geko**, your offline-first smart finance assistant.\n\n` +
+          `Here are some things you can ask me anytime:\n` +
+          `• 📝 **Quick Logging:** *"Spent 150 for lunch on GCash"* or *"Received 1000 from client"*\n` +
+          `• 💳 **Check Balances:** *"What is my GCash balance?"* or *"Show all cards with money"*\n` +
+          `• 🍽️ **Affordability Advice:** *"Can I afford dinner tonight?"*\n` +
+          `• 📅 **Payday Schedules:** *"When is my next salary cutoff?"*\n` +
+          `• 🎯 **Goal Feasibility:** *"Can I reach my savings goal by December?"*`;
+    } else if (isSummaryOrAdviceQuery) {
+      const cardsRes = await db.execute('SELECT bankName, balance, type, outstandingBalance, availableCredit FROM cards');
+      const allCards = (cardsRes.rows?._array || []) as any[];
+      const totalLiquid = allCards.filter((c: any) => c.type !== 'CREDIT_CARD').reduce((acc: number, c: any) => acc + Number(c.balance || 0), 0);
+      const creditDebt = allCards.filter((c: any) => c.type === 'CREDIT_CARD').reduce((acc: number, c: any) => acc + Number(c.outstandingBalance || 0), 0);
+      const netWorth = totalLiquid - creditDebt;
+
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const todayTotalRes = await db.execute(
+        `SELECT SUM(amount) as grandTotal FROM transactions WHERE (type = "expense" OR type = "credit_purchase") AND CAST(date AS INTEGER) >= ?`,
+        [startOfToday]
+      );
+      const todaySpent = Number(todayTotalRes.rows?._array[0]?.grandTotal || 0);
+
+      fullResponse = isTagalog
+        ? `Narito ang iyong kasalukuyang financial health summary:\n\n` +
+          `• 💰 **Total Liquid Cash:** ${symbol}${totalLiquid.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
+          `• 💳 **Total Credit Card Debt:** ${symbol}${creditDebt.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
+          `• 📈 **Estimated Net Worth:** ${symbol}${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
+          `• 📉 **Gastos Ngayong Araw:** ${symbol}${todaySpent.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n\n` +
+          (totalLiquid > 1000 ? `Maayos ang iyong cash buffer! Panatilihin ang pag-track ng mga maliliit na gastos.` : `Medyo mababa ang cash buffer. Magandang mag-ingat sa mga non-essential na gastusin.`)
+        : `Here is your current real-time financial health summary:\n\n` +
+          `• 💰 **Total Liquid Cash:** ${symbol}${totalLiquid.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
+          `• 💳 **Total Credit Card Debt:** ${symbol}${creditDebt.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
+          `• 📈 **Estimated Net Worth:** ${symbol}${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n` +
+          `• 📉 **Spent Today:** ${symbol}${todaySpent.toLocaleString('en-US', { minimumFractionDigits: 2 })}\n\n` +
+          (totalLiquid > 1000 ? `Your liquid reserves are in solid shape! Keep logging your daily expenses to stay on track.` : `Keep non-essential spending minimal until your next salary cutoff to rebuild your buffer!`);
     } else {
       // ── Dynamic Specific Card/Bank Balance Lookup ──
       const cardsRes = await db.execute('SELECT bankName, balance, type, outstandingBalance, availableCredit FROM cards');
@@ -941,9 +1092,13 @@ export const generateStream = async (
     }
   }
   else {
+    const cardsRes = await db.execute('SELECT bankName, balance, type, outstandingBalance FROM cards');
+    const allCards = (cardsRes.rows?._array || []) as any[];
+    const totalLiquid = allCards.filter((c: any) => c.type !== 'CREDIT_CARD').reduce((acc: number, c: any) => acc + Number(c.balance || 0), 0);
+    
     fullResponse = isTagalog
-      ? "May maitutulong ba ako sa iyong budget, cards, o transactions ngayong araw?"
-      : "How can I help you manage your budget and cards today?";
+      ? `May kabuuang **${symbol}${totalLiquid.toLocaleString('en-US', { minimumFractionDigits: 2 })}** ka sa iyong mga registered accounts. Paano kita matutulungan? Pwede mong sabihing:\n\n• *"Gumastos ako ng 200 sa pagkain"*\n• *"Can I afford dinner tonight?"*\n• *"Magkano balance ng aking cards?"*\n• *"Kailan ang susunod na cutoff?"*`
+      : `You currently have **${symbol}${totalLiquid.toLocaleString('en-US', { minimumFractionDigits: 2 })}** in available funds across your registered accounts. Here are some things you can ask me:\n\n• *"Spent 150 on food on GCash"*\n• *"Can I afford dinner tonight?"*\n• *"Show all my card balances"*\n• *"When is my salary cutoff?"*`;
   }
 
   // Stream output token by token

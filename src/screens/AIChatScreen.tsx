@@ -24,6 +24,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../hooks/useTheme';
 import { useRAGChat } from '../hooks/useRAGChat';
+import { useCards } from '../hooks/useCards';
 import { ChatBubble } from '../components/ai/ChatBubble';
 import { StreamingText } from '../components/ai/StreamingText';
 import { GekoWalker } from '../components/intro/GekoWalker';
@@ -140,7 +141,7 @@ const ChatEdgePeeker: React.FC<{ isBusy: boolean }> = ({ isBusy }) => {
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
           cycleToNextEdge();
         }}
       >
@@ -156,6 +157,7 @@ const ChatEdgePeeker: React.FC<{ isBusy: boolean }> = ({ isBusy }) => {
 export const AIChatScreen = () => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { cards: userCards } = useCards();
   const [input, setInput] = useState('');
   const [inputHeight, setInputHeight] = useState(48);
   const { messages, isGenerating, currentStream, sendMessage, clearHistory, deleteMessage } = useRAGChat();
@@ -285,7 +287,7 @@ export const AIChatScreen = () => {
           )}
 
           {messages.map((msg) => (
-            <ChatBubble key={msg.id} message={msg} onDelete={deleteMessage} />
+            <ChatBubble key={msg.id} message={msg} userCards={userCards} onDelete={deleteMessage} />
           ))}
           {isGenerating && currentStream !== '' && (
             <StreamingText text={currentStream} isGenerating={isGenerating} />

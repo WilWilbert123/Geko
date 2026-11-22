@@ -170,6 +170,30 @@ export const extractCardsFromText = (
     }
   }
 
+  // 2.5 Action confirmation balance patterns:
+  // e.g. "**GoTyme** account! Total balance is now **₱2,500.00**", "New **GoTyme** balance: **₱1,850.00**"
+  // e.g. "Added/updated **GoTyme** account with **₱200.00** balance"
+  const confirmationPatterns = [
+    /(?:\*\*)?([A-Za-z0-9\s-]+?)(?:\*\*)?(?:\s+account|\s+card)?.*?(?:total balance|kabuuang balance|new.*?balance|bagong balance).*?₱\s*([\d,]+(?:\.\d+)?)/gi,
+    /(?:total balance|kabuuang balance|new.*?balance|bagong balance).*?(?:sa|for|of|in|to)?\s*(?:\*\*)?([A-Za-z0-9\s-]+?)(?:\*\*)?.*?:?\s*₱\s*([\d,]+(?:\.\d+)?)/gi,
+    /(?:\*\*)?([A-Za-z0-9\s-]+?)(?:\*\*)?(?:\s+account|\s+card)?.*?(?:with|na may)\s*(?:\*\*)?₱\s*([\d,]+(?:\.\d+)?)(?:\*\*)?\s*(?:balance|panimulang balance)?/gi,
+    /(?:added|naidagdag|na-add|created|success).*?(?:\*\*)?([A-Za-z0-9\s-]+?)(?:\*\*)?(?:\s+account|\s+card)?.*?(?:with|na may|balance).*?₱\s*([\d,]+(?:\.\d+)?)/gi,
+  ];
+
+  for (const pat of confirmationPatterns) {
+    let m;
+    while ((m = pat.exec(text)) !== null) {
+      const rawBank = m[1]?.trim();
+      const rawBal = parseFloat(m[2]?.replace(/,/g, ''));
+      if (rawBank && !isNaN(rawBal)) {
+        const matchRes = findMatchingBank(rawBank);
+        if (matchRes) {
+          resolveAndSetCard(matchRes.canonicalName, rawBal, matchRes.matchedCard);
+        }
+      }
+    }
+  }
+
   // 3. Check for specific cards mentioned with strict word boundaries in text
   for (const card of userCards) {
     const bKey = getCanonicalBankKey(card.bankName);
