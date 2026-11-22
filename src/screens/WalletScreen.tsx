@@ -1087,58 +1087,163 @@ export const WalletScreen = () => {
               keyboardShouldPersistTaps="handled"
             >
               {/* Interactive Live 3D Card Preview (Preserving original 3D card design) */}
-              {newBankName ? (
-                <View style={styles.modalPreviewContainer}>
-                  <GekoCard3D
-                    balance={parseFloat(newBalance.replace(/,/g, '')) || 0}
-                    cardholderName="GEKO MEMBER"
-                    expiryDate="10/29"
-                    accountType={newAccountType}
-                    bankName={newBankName}
-                    color1={newColor1}
-                    color2={newColor2}
-                    height={150}
-                    interactive={true}
-                    paymentNetwork={newNetwork}
-                  />
-                  <Text style={[styles.previewHint, { color: colors.textMuted }]}>
-                    Interactive 3D preview • Tap & drag to rotate
-                  </Text>
-                </View>
-              ) : (
-                <View
-                  style={[
-                    styles.liveCardBanner,
-                    {
-                      backgroundColor: colors.surfaceHighlight || '#F8FAFC',
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  <View style={styles.liveCardTopRow}>
-                    <View
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 14,
-                        backgroundColor: `${colors.primary}18`,
-                        alignItems: 'center',
-                        justifyContent: 'center',
+              <View style={styles.modalPreviewContainer}>
+                <GekoCard3D
+                  balance={parseFloat(newBalance.replace(/,/g, '')) || 0}
+                  cardholderName="GEKO MEMBER"
+                  expiryDate="10/29"
+                  accountType={newAccountType}
+                  bankName={newBankName || 'GEKO Card'}
+                  color1={newColor1}
+                  color2={newColor2}
+                  height={150}
+                  interactive={true}
+                  paymentNetwork={newNetwork}
+                />
+                <Text style={[styles.previewHint, { color: colors.textMuted }]}>
+                  Interactive 3D preview • Tap & drag to rotate
+                </Text>
+              </View>
+
+              {/* ── Card Color & Style Customizer (Positioned directly under 3D preview for instant real-time tweaking!) ── */}
+              <View style={{ marginBottom: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Palette size={13} color={colors.primary} />
+                    <Text style={[styles.fieldLabel, { color: colors.textMuted, marginBottom: 0 }]}>
+                      CARD COLOR & STYLE
+                    </Text>
+                  </View>
+                  {selectedPreset && (newColor1 !== selectedPreset.color1 || newColor2 !== selectedPreset.color2) && (
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setNewColor1(selectedPreset.color1);
+                        setNewColor2(selectedPreset.color2);
                       }}
                     >
-                      <CreditCard size={22} color={colors.primary} />
-                    </View>
-                    <View style={styles.liveCardInfoCol}>
-                      <Text style={[styles.liveCardTitle, { color: colors.text }]}>
-                        Select a Card Preset Below
+                      <RotateCcw size={11} color={colors.primary} />
+                      <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '700' }}>
+                        Reset to Official Theme
                       </Text>
-                      <Text style={{ fontSize: 12, color: colors.textMuted, lineHeight: 16 }}>
-                        Tap any Philippine card or e-wallet preset to preview its 3D card
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Curated Style Presets Carousel */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
+                >
+                  {CARD_STYLE_PRESETS.map((presetStyle) => {
+                    const isSelected = newColor1 === presetStyle.c1 && newColor2 === presetStyle.c2;
+                    return (
+                      <TouchableOpacity
+                        key={presetStyle.id}
+                        activeOpacity={0.8}
+                        style={[
+                          styles.stylePresetPill,
+                          {
+                            backgroundColor: isSelected ? `${colors.primary}18` : colors.surfaceHighlight,
+                            borderColor: isSelected ? colors.primary : colors.border,
+                          },
+                        ]}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setNewColor1(presetStyle.c1);
+                          setNewColor2(presetStyle.c2);
+                        }}
+                      >
+                        {/* Dual-color swatch preview */}
+                        <View style={styles.dualColorSwatch}>
+                          <View style={{ flex: 1, backgroundColor: presetStyle.c1 }} />
+                          <View style={{ flex: 1, backgroundColor: presetStyle.c2 }} />
+                        </View>
+                        <Text
+                          style={[
+                            styles.stylePresetText,
+                            { color: isSelected ? colors.primary : colors.text, fontWeight: isSelected ? '700' : '500' },
+                          ]}
+                        >
+                          {presetStyle.name}
+                        </Text>
+                        {isSelected && <Check size={12} color={colors.primary} strokeWidth={3} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* Fine-Tuning Swatches: Base & Accent */}
+                <View style={[styles.fineTuneBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  {/* Base Shade (Start Gradient) */}
+                  <View style={{ marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted }}>
+                        Base Shade (Start): <Text style={{ color: colors.text, fontWeight: '800' }}>{newColor1.toUpperCase()}</Text>
                       </Text>
+                      <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: newColor1, borderWidth: 1, borderColor: colors.border }} />
                     </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                      {POPULAR_SWATCHES.map((hex) => {
+                        const isHexActive = newColor1.toLowerCase() === hex.toLowerCase();
+                        return (
+                          <TouchableOpacity
+                            key={`c1-${hex}`}
+                            onPress={() => {
+                              Haptics.selectionAsync();
+                              setNewColor1(hex);
+                            }}
+                            style={[
+                              styles.colorDot,
+                              { backgroundColor: hex, borderColor: isHexActive ? colors.primary : 'rgba(255,255,255,0.15)' },
+                              isHexActive && styles.colorDotActive,
+                            ]}
+                          >
+                            {isHexActive && (
+                              <Check size={10} color={hex === '#FFFFFF' ? '#000000' : '#FFFFFF'} strokeWidth={3} />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Accent Glow (End Gradient) */}
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted }}>
+                        Accent Glow (End): <Text style={{ color: colors.text, fontWeight: '800' }}>{newColor2.toUpperCase()}</Text>
+                      </Text>
+                      <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: newColor2, borderWidth: 1, borderColor: colors.border }} />
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                      {POPULAR_SWATCHES.map((hex) => {
+                        const isHexActive = newColor2.toLowerCase() === hex.toLowerCase();
+                        return (
+                          <TouchableOpacity
+                            key={`c2-${hex}`}
+                            onPress={() => {
+                              Haptics.selectionAsync();
+                              setNewColor2(hex);
+                            }}
+                            style={[
+                              styles.colorDot,
+                              { backgroundColor: hex, borderColor: isHexActive ? colors.primary : 'rgba(255,255,255,0.15)' },
+                              isHexActive && styles.colorDotActive,
+                            ]}
+                          >
+                            {isHexActive && (
+                              <Check size={10} color={hex === '#FFFFFF' ? '#000000' : '#FFFFFF'} strokeWidth={3} />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
                   </View>
                 </View>
-              )}
+              </View>
 
               {/* Unclipped Horizontal Category Pill Bar */}
               <ScrollView
@@ -1465,146 +1570,6 @@ export const WalletScreen = () => {
                     />
                   </>
                 )}
-
-                {/* ── Card Color & Style Customizer ── */}
-                <View style={{ marginTop: 14 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Palette size={13} color={colors.primary} />
-                      <Text style={[styles.fieldLabel, { color: colors.textMuted, marginBottom: 0 }]}>
-                        CARD COLOR & STYLE
-                      </Text>
-                    </View>
-                    {selectedPreset && (newColor1 !== selectedPreset.color1 || newColor2 !== selectedPreset.color2) && (
-                      <TouchableOpacity
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setNewColor1(selectedPreset.color1);
-                          setNewColor2(selectedPreset.color2);
-                        }}
-                      >
-                        <RotateCcw size={11} color={colors.primary} />
-                        <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '700' }}>
-                          Reset to Official Theme
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  {/* Curated Style Presets Carousel */}
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
-                  >
-                    {CARD_STYLE_PRESETS.map((presetStyle) => {
-                      const isSelected = newColor1 === presetStyle.c1 && newColor2 === presetStyle.c2;
-                      return (
-                        <TouchableOpacity
-                          key={presetStyle.id}
-                          activeOpacity={0.8}
-                          style={[
-                            styles.stylePresetPill,
-                            {
-                              backgroundColor: isSelected ? `${colors.primary}18` : colors.surfaceHighlight,
-                              borderColor: isSelected ? colors.primary : colors.border,
-                            },
-                          ]}
-                          onPress={() => {
-                            Haptics.selectionAsync();
-                            setNewColor1(presetStyle.c1);
-                            setNewColor2(presetStyle.c2);
-                          }}
-                        >
-                          {/* Dual-color swatch preview */}
-                          <View style={styles.dualColorSwatch}>
-                            <View style={{ flex: 1, backgroundColor: presetStyle.c1 }} />
-                            <View style={{ flex: 1, backgroundColor: presetStyle.c2 }} />
-                          </View>
-                          <Text
-                            style={[
-                              styles.stylePresetText,
-                              { color: isSelected ? colors.primary : colors.text, fontWeight: isSelected ? '700' : '500' },
-                            ]}
-                          >
-                            {presetStyle.name}
-                          </Text>
-                          {isSelected && <Check size={12} color={colors.primary} strokeWidth={3} />}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-
-                  {/* Fine-Tuning Swatches: Base & Accent */}
-                  <View style={[styles.fineTuneBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    {/* Base Shade (Start Gradient) */}
-                    <View style={{ marginBottom: 10 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted }}>
-                          Base Shade (Start): <Text style={{ color: colors.text, fontWeight: '800' }}>{newColor1.toUpperCase()}</Text>
-                        </Text>
-                        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: newColor1, borderWidth: 1, borderColor: colors.border }} />
-                      </View>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                        {POPULAR_SWATCHES.map((hex) => {
-                          const isHexActive = newColor1.toLowerCase() === hex.toLowerCase();
-                          return (
-                            <TouchableOpacity
-                              key={`c1-${hex}`}
-                              onPress={() => {
-                                Haptics.selectionAsync();
-                                setNewColor1(hex);
-                              }}
-                              style={[
-                                styles.colorDot,
-                                { backgroundColor: hex, borderColor: isHexActive ? colors.primary : 'rgba(255,255,255,0.15)' },
-                                isHexActive && styles.colorDotActive,
-                              ]}
-                            >
-                              {isHexActive && (
-                                <Check size={10} color={hex === '#FFFFFF' ? '#000000' : '#FFFFFF'} strokeWidth={3} />
-                              )}
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-
-                    {/* Accent Glow (End Gradient) */}
-                    <View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted }}>
-                          Accent Glow (End): <Text style={{ color: colors.text, fontWeight: '800' }}>{newColor2.toUpperCase()}</Text>
-                        </Text>
-                        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: newColor2, borderWidth: 1, borderColor: colors.border }} />
-                      </View>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                        {POPULAR_SWATCHES.map((hex) => {
-                          const isHexActive = newColor2.toLowerCase() === hex.toLowerCase();
-                          return (
-                            <TouchableOpacity
-                              key={`c2-${hex}`}
-                              onPress={() => {
-                                Haptics.selectionAsync();
-                                setNewColor2(hex);
-                              }}
-                              style={[
-                                styles.colorDot,
-                                { backgroundColor: hex, borderColor: isHexActive ? colors.primary : 'rgba(255,255,255,0.15)' },
-                                isHexActive && styles.colorDotActive,
-                              ]}
-                            >
-                              {isHexActive && (
-                                <Check size={10} color={hex === '#FFFFFF' ? '#000000' : '#FFFFFF'} strokeWidth={3} />
-                              )}
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  </View>
-                </View>
               </View>
             </ScrollView>
 

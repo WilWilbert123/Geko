@@ -211,6 +211,7 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
 
   // Props ref so WebGL animation frame closure always accesses fresh props
   const cardPropsRef = useRef({ color1, color2, accountType, bankName, paymentNetwork });
+  cardPropsRef.current = { color1, color2, accountType, bankName, paymentNetwork };
   useEffect(() => {
     cardPropsRef.current = { color1, color2, accountType, bankName, paymentNetwork };
   }, [color1, color2, accountType, bankName, paymentNetwork]);
@@ -769,9 +770,9 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           if (gLocal.x > 0.01 && gLocal.y > 0.01) gRingMask = 0.0;
           if (gLocal.x > 0.0 && abs(gLocal.y + 0.005) < 0.012 && gLocal.x < 0.12) gRingMask = 1.0;
 
-          // Rich slightly darker Royal Navy Blue gradient
-          vec3 gcashNavyDark = vec3(0.0, 0.16, 0.65);
-          vec3 gcashBlueMid = vec3(0.0, 0.45, 0.90);
+          // Dynamic user/preset colors
+          vec3 gcashNavyDark = uColor1;
+          vec3 gcashBlueMid = uColor2;
 
           vec3 rippleCol = mix(gcashNavyDark, gcashBlueMid, ripples * ringGlow);
           col = mix(col, rippleCol, 0.82 + ripples * 0.18);
@@ -780,8 +781,8 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
         } else if (uCardType == 2) {
           // ── GOTYME REAL-WORLD BESPOKE 3D SHADER MOTIF ──
           // Sleek Dark Obsidian Top + Electric Cyan/Teal Bottom + Expanding Horizontal Line Grid & Slow Holographic Wave
-          vec3 gotymeDark = vec3(0.05, 0.07, 0.10);
-          vec3 gotymeCyan = vec3(0.0, 0.85, 0.82);
+          vec3 gotymeDark = uColor1;
+          vec3 gotymeCyan = uColor2;
 
           // 1. Vertical Split Background (Dark Top half, Electric Cyan Bottom half)
           float cyanCoverage = smoothstep(0.48, 0.40, vUv.y);
@@ -842,9 +843,9 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           float bandIndex2 = floor(rotUv.y * ribbonScale);
           float weavePattern = mod(bandIndex1 + bandIndex2, 2.0);
 
-          vec3 bpiMaroonDark = vec3(0.24, 0.02, 0.04);   // Deep Maroon (#3D050A)
-          vec3 bpiMaroonMid = vec3(0.42, 0.04, 0.08);    // Rich Maroon (#6B0A14)
-          vec3 bpiMaroonSoft = vec3(0.55, 0.07, 0.11);   // Elegant Burgundy (#8C121C)
+          vec3 bpiMaroonDark = uColor1 * 0.7;   // Deep Base Shade
+          vec3 bpiMaroonMid = uColor1;          // Rich Mid Body
+          vec3 bpiMaroonSoft = uColor2;         // Radiant Accent
 
           vec3 baseRibbon = mix(bpiMaroonDark, bpiMaroonMid, weavePattern * 0.5 + 0.5);
           baseRibbon = mix(baseRibbon, bpiMaroonSoft, (vUv.x + vUv.y) * 0.3);
@@ -865,8 +866,8 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
         } else if (uCardType == 4) {
           // ── MAYA REAL-WORLD VIBRANT PINK 3D SHADER MOTIF ──
           // Signature Vibrant Magenta Pink + GIANT 3D Faded Textured 'm' Arch Watermark & Sparkling Glitters
-          vec3 mayaMagentaDark = vec3(0.68, 0.05, 0.35); // #AD1457
-          vec3 mayaMagentaBright = vec3(0.92, 0.08, 0.45); // #E91E63
+          vec3 mayaMagentaDark = uColor1;
+          vec3 mayaMagentaBright = uColor2;
           col = mix(mayaMagentaDark, mayaMagentaBright, vUv.y * 0.6 + vUv.x * 0.4);
 
           // 1. Multi-layered 3D Radial Center Light Gradient
@@ -932,20 +933,20 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
         } else if (uCardType == 5) {
           // ── LANDBANK REAL-WORLD 3D SHADER MOTIF ──
           // Dual-Tone Forest Teal to Lime Green + Overlapping Organic Leaf Arcs & Security Lines
-          vec3 lbForestDark = vec3(0.0, 0.28, 0.22);
-          vec3 lbLimeBright = vec3(0.42, 0.65, 0.16);
+          vec3 lbForestDark = uColor1;
+          vec3 lbLimeBright = uColor2;
           col = mix(lbLimeBright, lbForestDark, vUv.x * 0.75 + (1.0 - vUv.y) * 0.25);
 
           // 1. Large Central Organic Petal Leaf Arc
           float arcCenter1 = length(vUv - vec2(-0.15, 0.25));
           float leaf1 = smoothstep(0.72, 0.71, arcCenter1);
-          vec3 leaf1Color = vec3(0.14, 0.52, 0.26);
+          vec3 leaf1Color = mix(uColor1, uColor2, 0.4);
           col = mix(col, leaf1Color, leaf1 * 0.75);
 
           // 2. Upper-Left Lime Petal Arc
           float arcCenter2 = length(vUv - vec2(0.10, 0.95));
           float leaf2 = smoothstep(0.60, 0.59, arcCenter2);
-          vec3 leaf2Color = vec3(0.48, 0.72, 0.20);
+          vec3 leaf2Color = mix(uColor1, uColor2, 0.7);
           col = mix(col, leaf2Color, leaf2 * 0.50);
 
           // 3. Silver/White Guilloche Security Arc Lines
@@ -963,9 +964,9 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
 
         } else if (uCardType == 6) {
           // ── 6. PNB / BPI / BDO 24K BRUSHED GOLD + CONCENTRIC RADIAL RIPPLE ARCS (Inspired by User Image 4) ──
-          vec3 pnbGoldDeep = vec3(0.72, 0.54, 0.14);      // Rich Bronze Gold Depth
-          vec3 pnbGoldMid = vec3(0.92, 0.76, 0.26);       // 24K Gold Body
-          vec3 pnbGoldBright = vec3(1.0, 0.90, 0.48);    // Champagne Gold Highlight
+          vec3 pnbGoldDeep = uColor1;
+          vec3 pnbGoldMid = mix(uColor1, uColor2, 0.5);
+          vec3 pnbGoldBright = uColor2;
           
           col = mix(pnbGoldDeep, pnbGoldMid, vUv.y * 0.6 + vUv.x * 0.4);
 
@@ -1003,8 +1004,8 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
         } else if (uCardType == 7) {
           // ── BDO REAL-WORLD VIRTUAL/DEBIT 3D SHADER MOTIF ──
           // Cobalt Royal Blue + Glowing Intersecting Light Grid & Rounded Node Squares
-          vec3 bdoNavyDark = vec3(0.0, 0.12, 0.42);
-          vec3 bdoNavyCobalt = vec3(0.0, 0.26, 0.68);
+          vec3 bdoNavyDark = uColor1;
+          vec3 bdoNavyCobalt = uColor2;
           col = mix(bdoNavyDark, bdoNavyCobalt, vUv.y * 0.7 + vUv.x * 0.3);
 
           // 1. Intersecting Electric Cyan Light Grid Lines
@@ -1015,7 +1016,7 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           float gridLines = max(lineH, lineV);
 
           float linePulse = sin((floor(gridUv.x) + floor(gridUv.y)) * 0.4 - uTime * 0.12) * 0.5 + 0.5;
-          vec3 cyanGlow = vec3(0.35, 0.78, 1.0);
+          vec3 cyanGlow = mix(uColor2, vec3(0.35, 0.78, 1.0), 0.5);
           col += cyanGlow * gridLines * (0.30 + linePulse * 0.25);
 
           // 2. Glowing Floating Rounded Node Squares (matching real BDO Virtual card)
@@ -1045,9 +1046,9 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
         } else if (uCardType == 8) {
           // ── MARIBANK BESPOKE 3D SHADER MOTIF ──
           // 1. Rich Deep Crimson-Coral to Sunset Tangerine Liquid Gradient
-          vec3 mariDeepCrimson = vec3(0.48, 0.06, 0.02);
-          vec3 mariSunsetOrange = vec3(0.98, 0.32, 0.06);
-          vec3 mariGoldenPeach = vec3(1.00, 0.58, 0.20);
+          vec3 mariDeepCrimson = uColor1;
+          vec3 mariSunsetOrange = uColor2;
+          vec3 mariGoldenPeach = mix(uColor2, vec3(1.00, 0.58, 0.20), 0.3);
 
           float gradMix = vUv.y * 0.65 + vUv.x * 0.35;
           col = mix(mariDeepCrimson, mariSunsetOrange, gradMix);
@@ -1080,8 +1081,8 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
         } else if (uCardType == 9) {
           // ── METROBANK BESPOKE 3D SHADER MOTIF ──
           // Royal Sapphire Blue + Diamond Crystal Lattice Matrix
-          vec3 mbBlueDark = vec3(0.0, 0.14, 0.48);
-          vec3 mbBlueLight = vec3(0.0, 0.32, 0.85);
+          vec3 mbBlueDark = uColor1;
+          vec3 mbBlueLight = uColor2;
           col = mix(mbBlueDark, mbBlueLight, vUv.y * 0.8 + vUv.x * 0.2);
 
           vec2 mbGrid = vUv * vec2(24.0, 15.0);
@@ -1094,7 +1095,7 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
         } else if (uCardType == 10) {
           // ── UNIBANK / UNIONBANK REAL-WORLD VISA INFINITE BLACK 3D SHADER MOTIF ──
           // Deep Onyx Black + Engraved Metallic Gold Roman Vault Architectural Arches & Pillars
-          vec3 ubOnyxDark = vec3(0.04, 0.04, 0.06);
+          vec3 ubOnyxDark = uColor1;
           float ubStipple = fract(sin(vUv.x * 780.0 + vUv.y * 420.0) * 43758.54) * 0.025;
           col = ubOnyxDark + vec3(ubStipple);
 
@@ -1125,7 +1126,7 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
           float archRegion = smoothstep(0.20, 0.98, vUv.x) * smoothstep(0.12, 0.98, vUv.y);
 
           // Metallic UnionBank Orange Engraving
-          vec3 ubOrange = mix(vec3(0.95, 0.42, 0.05), vec3(1.0, 0.65, 0.15), (vUv.x + vUv.y) * 0.5);
+          vec3 ubOrange = mix(uColor2 * 0.85, uColor2, (vUv.x + vUv.y) * 0.5);
           float orangeGlow = 0.75 + 0.25 * sin(vUv.x * 8.0 - uTime * 0.10);
           col = mix(col, ubOrange * orangeGlow, (allArches + filigreeHatch * archRegion * 0.50) * 0.85);
 
@@ -1143,8 +1144,8 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
         } else if (uCardType == 11) {
           // ── SECURITY BANK BESPOKE 3D SHADER MOTIF ──
           // Deep Forest Teal & Gold + Security Guilloche Lattice
-          vec3 secTealDark = vec3(0.0, 0.28, 0.30);
-          vec3 secTealLight = vec3(0.0, 0.52, 0.55);
+          vec3 secTealDark = uColor1;
+          vec3 secTealLight = uColor2;
           col = mix(secTealDark, secTealLight, vUv.y * 0.8 + vUv.x * 0.2);
 
           float secLattice = sin(vUv.x * 35.0 + vUv.y * 35.0) * cos(vUv.x * 35.0 - vUv.y * 35.0);
@@ -1154,8 +1155,8 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
         } else if (uCardType == 12) {
           // ── VISA REAL-WORLD 3D SHADER MOTIF ──
           // Deep Royal Cobalt Blue with halftone security matrix & golden glint
-          vec3 visaNavyDark = vec3(0.0, 0.16, 0.58);
-          vec3 visaNavyBright = vec3(0.0, 0.38, 0.88);
+          vec3 visaNavyDark = uColor1;
+          vec3 visaNavyBright = uColor2;
           col = mix(visaNavyDark, visaNavyBright, vUv.y * 0.7 + vUv.x * 0.3);
 
           // Halftone Dot Security Matrix
@@ -2253,8 +2254,8 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
       updateColorVec3(_targetC2, curC2, '#1E293B');
 
       if (interactive) {
-        frontUniforms.uColor1.value.lerp(_targetC1, 0.14);
-        frontUniforms.uColor2.value.lerp(_targetC2, 0.14);
+        frontUniforms.uColor1.value.lerp(_targetC1, 0.28);
+        frontUniforms.uColor2.value.lerp(_targetC2, 0.28);
       } else {
         frontUniforms.uColor1.value.copy(_targetC1);
         frontUniforms.uColor2.value.copy(_targetC2);
