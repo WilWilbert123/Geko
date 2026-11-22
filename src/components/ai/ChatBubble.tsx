@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Trash2 } from 'lucide-react-native';
 import { useTheme } from '../../hooks/useTheme';
-import { useCards } from '../../hooks/useCards';
+import { Card, useCards } from '../../hooks/useCards';
 import { useGoals } from '../../hooks/useGoals';
 import { useInstallments } from '../../hooks/useInstallments';
 import { ChatMessage } from '../../types/ai';
@@ -16,11 +16,13 @@ import { ChatInstallmentBadgeList } from './ChatInstallmentBadge';
 interface ChatBubbleProps {
   message: ChatMessage;
   onDelete?: (id: string) => void;
+  userCards?: Card[];
 }
 
-export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onDelete }) => {
+export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onDelete, userCards: propCards }) => {
   const { colors } = useTheme();
-  const { cards: userCards } = useCards();
+  const { cards: hookCards } = useCards();
+  const userCards = propCards && propCards.length > 0 ? propCards : hookCards;
   const { goals: userGoals } = useGoals();
   const { installments: userInstallments } = useInstallments();
   const isUser = message.role === 'user';
@@ -71,7 +73,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({ message, onDelete }) => 
         </Text>
 
         {!isUser && extractedCards.length > 0 && (
-          <ChatCardBadgeList cards={extractedCards} />
+          <ChatCardBadgeList cards={extractedCards} liveCards={userCards} />
         )}
 
         {!isUser && extractedGoals.length > 0 && (

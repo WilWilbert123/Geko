@@ -46,7 +46,7 @@ import { SkeletonCardListItem, SkeletonCard3D, SkeletonPresetCard } from '../com
 import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const GRID_CARD_HEIGHT = 126;
+const GRID_CARD_HEIGHT = 115;
 
 import { BANK_THEMES, getBankTheme } from '../utils/bankThemes';
 import {
@@ -78,7 +78,7 @@ export const WalletScreen = () => {
 
   const [refreshing, setRefreshing] = useState(false);
   const [filterCategory, setFilterCategory] = useState<'ALL' | 'CREDIT' | 'DIGITAL' | 'EWALLET' | 'PREPAID' | 'MEMBERSHIP' | 'BANK' | 'VISA'>('ALL');
-  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'stack'>('grid');
+  const [viewMode, setViewMode] = useState<'card' | 'grid' | 'list' | 'stack'>('card');
 
   // Animation for view mode transitions
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -433,7 +433,7 @@ export const WalletScreen = () => {
       {cards.length > 0 && (
         <View style={styles.controlsBar}>
           <Text style={[styles.subtitleText, { color: colors.textMuted }]}>
-            {viewMode === 'stack' ? 'Grouped by category.' : viewMode === 'list' ? 'List view of all cards.' : 'Hold card to inspect & edit.'}
+            {viewMode === 'stack' ? 'Grouped by category.' : viewMode === 'list' ? 'List view of all cards.' : viewMode === 'grid' ? 'Grid view of cards.' : 'Full card view. Hold to inspect & edit.'}
           </Text>
 
           {/* View Switcher Capsule Toolbar */}
@@ -462,6 +462,16 @@ export const WalletScreen = () => {
               }}
             >
               <Filter size={15} color={filterCategory !== 'ALL' ? '#FFFFFF' : colors.textMuted} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.viewToolBtn, viewMode === 'card' && styles.viewToolBtnActive]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setViewMode('card');
+              }}
+            >
+              <CreditCard size={15} color={viewMode === 'card' ? '#FFFFFF' : colors.textMuted} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -630,6 +640,40 @@ export const WalletScreen = () => {
             </View>
           )}
 
+          {/* 0. Full Card Mode View (Default - Full Width 3D Card) */}
+          {cards.length > 0 && viewMode === 'card' && (
+            <View style={styles.fullCardsContainer}>
+              {filteredCards.map((card, idx) => {
+                const theme = getBankTheme(card.bankName, card.color1, card.color2);
+                const isCredit = card.type === 'CREDIT_CARD';
+                const displayBal = isCredit ? (card.outstandingBalance || 0) : card.balance;
+
+                return (
+                  <TouchableOpacity
+                    key={`card-full-${card.id}-${idx}`}
+                    style={styles.fullCardItem3D}
+                    activeOpacity={0.92}
+                    onPress={() => handleOpenEditModal(card)}
+                  >
+                    <GekoCard3D
+                      balance={displayBal}
+                      cardholderName="GEKO MEMBER"
+                      cardNumber={card.cardNumber || '•••• •••• •••• 8842'}
+                      expiryDate="10/29"
+                      accountType={card.type}
+                      bankName={card.bankName}
+                      color1={card.color1 || theme.bg1}
+                      color2={card.color2 || theme.bg2}
+                      height={215}
+                      interactive={true}
+                      paymentNetwork={card.paymentNetwork || theme.network}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
           {/* 1. Grid Mode View */}
           {cards.length > 0 && viewMode === 'grid' && (
             <View style={styles.cardsGrid}>
@@ -641,7 +685,7 @@ export const WalletScreen = () => {
                 return (
                   <TouchableOpacity
                     key={`card-grid-${card.id}-${idx}`}
-                    style={[styles.cardItem3D, { backgroundColor: card.color1 || theme.bg1 }]}
+                    style={styles.cardItem3D}
                     activeOpacity={0.92}
                     onPress={() => handleOpenEditModal(card)}
                   >
@@ -697,7 +741,7 @@ export const WalletScreen = () => {
                         return (
                           <TouchableOpacity
                             key={`card-stack-${card.id}-${idx}`}
-                            style={[styles.stackedCardItem3D, { backgroundColor: card.color1 || theme.bg1 }]}
+                            style={styles.stackedCardItem3D}
                             activeOpacity={0.92}
                             onPress={() => handleOpenEditModal(card)}
                           >
@@ -1492,6 +1536,18 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
 
+  /* Full Card Layout Mode */
+  fullCardsContainer: {
+    gap: 16,
+    paddingBottom: 20,
+  },
+  fullCardItem3D: {
+    width: '100%',
+    height: 215,
+    backgroundColor: 'transparent',
+    overflow: 'visible',
+  },
+
   /* Grid Layout Mode */
   cardsGrid: {
     flexDirection: 'row',
@@ -1501,13 +1557,8 @@ const styles = StyleSheet.create({
   cardItem3D: {
     width: (SCREEN_WIDTH - 32 - 10) / 2,
     height: GRID_CARD_HEIGHT,
-    borderRadius: 14,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.14,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: 'transparent',
+    overflow: 'visible',
   },
 
   /* Stack / Grouped Layout Mode */
@@ -1545,13 +1596,8 @@ const styles = StyleSheet.create({
   stackedCardItem3D: {
     width: 226,
     height: 142,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.16,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: 'transparent',
+    overflow: 'visible',
   },
 
   /* List Layout Mode */

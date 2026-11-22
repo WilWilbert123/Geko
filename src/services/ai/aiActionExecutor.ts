@@ -359,15 +359,17 @@ export const processAIIntent = async (
         const existing = existingRes.rows?._array && existingRes.rows._array.length > 0 ? existingRes.rows._array[0] : null;
 
         const date = Date.now();
+        let finalBalance = amount;
 
         if (existing) {
-          const newBalance = Number(existing.balance || 0) + amount;
-          await db.execute('UPDATE cards SET balance = ? WHERE id = ?', [newBalance, existing.id]);
+          finalBalance = Number(existing.balance || 0) + amount;
+          await db.execute('UPDATE cards SET balance = ? WHERE id = ?', [finalBalance, existing.id]);
           await db.execute(
             'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [uuidv4(), amount, date, 'Deposit', 'income', `Deposit to ${bankName}`, bankName]
           );
         } else {
+          finalBalance = amount;
           const cardId = uuidv4();
           const cardNum = `**** ${Math.floor(1000 + Math.random() * 9000)}`;
           await db.execute(
@@ -384,9 +386,13 @@ export const processAIIntent = async (
 
         return {
           executed: true,
-          message: tagalog
-            ? `💳 Naisagawa na! Na-add/update ang **${bankName}** account na may **${formatCurrency(amount)}** balance.`
-            : `💳 Success! Added/updated **${bankName}** account with **${formatCurrency(amount)}** balance.`,
+          message: existing
+            ? (tagalog
+                ? `💳 Naidagdag na ang **${formatCurrency(amount)}** sa iyong **${bankName}** account! Ang kabuuang balance mo ngayon ay **${formatCurrency(finalBalance)}**.`
+                : `💳 Added **${formatCurrency(amount)}** to your **${bankName}** account! Total balance is now **${formatCurrency(finalBalance)}**.`)
+            : (tagalog
+                ? `💳 Naisagawa na! Na-create ang **${bankName}** account na may panimulang balance na **${formatCurrency(finalBalance)}**.`
+                : `💳 Success! Created **${bankName}** account with **${formatCurrency(finalBalance)}** balance.`),
         };
       } catch (e) {
         console.error('Failed to process account intent:', e);
@@ -716,13 +722,19 @@ export const processAIIntent = async (
             await db.execute('UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)', [amount, bankName]);
           }
 
+          const cardRes = await db.execute('SELECT balance FROM cards WHERE LOWER(bankName) = LOWER(?)', [bankName]);
+          const newBal = cardRes.rows?._array?.[0]?.balance;
+          const balSuffix = newBal !== undefined 
+            ? (tagalog ? ` (Bagong balance sa **${bankName}**: **${formatCurrency(Number(newBal))}**)` : ` (New **${bankName}** balance: **${formatCurrency(Number(newBal))}**)`)
+            : '';
+
           DeviceEventEmitter.emit('transactions_updated');
 
           return {
             executed: true,
             message: tagalog
-              ? `💸 Na-record ang ${isIncome ? 'kikitain' : 'gastos'}: **${note}** (**${formatCurrency(amount)}**) sa **${bankName}**.`
-              : `💸 Recorded ${isIncome ? 'income' : 'expense'}: **${note}** (**${formatCurrency(amount)}**) via **${bankName}**.`,
+              ? `💸 Na-record ang ${isIncome ? 'kikitain' : 'gastos'}: **${note}** (**${formatCurrency(amount)}**) sa **${bankName}**.${balSuffix}`
+              : `💸 Recorded ${isIncome ? 'income' : 'expense'}: **${note}** (**${formatCurrency(amount)}**) via **${bankName}**.${balSuffix}`,
           };
         } catch (e) {
           console.error('Failed to process transaction intent:', e);

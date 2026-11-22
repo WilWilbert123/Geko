@@ -1,12 +1,13 @@
 {
   "name": "Geko",
-  "version": "1.0.0",
+  "version": "1.0.5",
   "main": "expo/AppEntry.js",
   "scripts": {
     "start": "expo start --dev-client",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "postinstall": "node ./scripts/patch-expo-permissions.js",
     "build:aab": "export JAVA_HOME=/opt/homebrew/Cellar/openjdk@17/17.0.20.1/libexec/openjdk.jdk/Contents/Home && cd android && ./gradlew bundleRelease && cp app/build/outputs/bundle/release/app-release.aab ../Geko-release.aab"
   },
   "dependencies": {
