@@ -274,6 +274,121 @@ export const generateStream = async (
     lowerUserText.includes('pwede ba bumili') ||
     lowerUserText.includes('may budget pa ba');
 
+  // ── Creator & Developer Recognition ──
+  const isCreatorQuery =
+    lowerUserText.includes('who create') ||
+    lowerUserText.includes('who created') ||
+    lowerUserText.includes('who develop') ||
+    lowerUserText.includes('who developed') ||
+    lowerUserText.includes('who made you') ||
+    lowerUserText.includes('who made this') ||
+    lowerUserText.includes('who build you') ||
+    lowerUserText.includes('who built you') ||
+    lowerUserText.includes('who built this') ||
+    lowerUserText.includes('who designed you') ||
+    lowerUserText.includes('who is the creator') ||
+    lowerUserText.includes('who is your creator') ||
+    lowerUserText.includes('who is the developer') ||
+    lowerUserText.includes('who is your developer') ||
+    lowerUserText.includes('who is your maker') ||
+    lowerUserText.includes('who is the maker') ||
+    lowerUserText.includes('who is the author') ||
+    lowerUserText.includes('who is the owner') ||
+    lowerUserText.includes('who owns you') ||
+    lowerUserText.includes('who owns this app') ||
+    lowerUserText.includes('who programmed') ||
+    lowerUserText.includes('who wrote this') ||
+    lowerUserText.includes('sino gumawa') ||
+    lowerUserText.includes('sino lumikha') ||
+    lowerUserText.includes('sino nag develop') ||
+    lowerUserText.includes('sino nag-develop') ||
+    lowerUserText.includes('sino nagdevelop') ||
+    lowerUserText.includes('sino developer') ||
+    lowerUserText.includes('sino creator') ||
+    lowerUserText.includes('sino ang gumawa') ||
+    lowerUserText.includes('sino may-ari') ||
+    lowerUserText.includes('sino may ari') ||
+    lowerUserText.includes('sino ang lumikha');
+
+  // ── How to Save Card Allowance Tutorial ──
+  const isSaveAllowanceTutorial =
+    (lowerUserText.includes('allowance') || lowerUserText.includes('baon')) &&
+    (lowerUserText.includes('save') ||
+      lowerUserText.includes('ipon') ||
+      lowerUserText.includes('tipid') ||
+      lowerUserText.includes('manage') ||
+      lowerUserText.includes('budget') ||
+      lowerUserText.includes('hatiin') ||
+      lowerUserText.includes('alokasyon'));
+
+  // ── How to Save (General Savings Tutorial) ──
+  const isSaveGeneralTutorial =
+    !isSaveAllowanceTutorial &&
+    (lowerUserText.includes('how to to save') ||
+      lowerUserText.includes('how to save') ||
+      lowerUserText.includes('how do i save') ||
+      lowerUserText.includes('how can i save') ||
+      lowerUserText.includes('tips to save') ||
+      lowerUserText.includes('ways to save') ||
+      lowerUserText.includes('how to start saving') ||
+      lowerUserText.includes('pano mag save') ||
+      lowerUserText.includes('paano mag save') ||
+      lowerUserText.includes('pano mag-save') ||
+      lowerUserText.includes('paano mag-save') ||
+      lowerUserText.includes('pano mag ipon') ||
+      lowerUserText.includes('paano mag ipon') ||
+      lowerUserText.includes('pano mag-ipon') ||
+      lowerUserText.includes('paano mag-ipon') ||
+      lowerUserText.includes('paano magtipid') ||
+      lowerUserText.includes('pano magtipid') ||
+      lowerUserText.includes('paano mag tipid') ||
+      lowerUserText.includes('pano mag tipid') ||
+      ((lowerUserText.includes('paano') || lowerUserText.includes('pano') || lowerUserText.includes('how')) &&
+        (lowerUserText.includes('saving') || lowerUserText.includes('mag-ipon') || lowerUserText.includes('maka-ipon') || lowerUserText.includes('makaipon'))));
+
+  // ── How to Add New Card Tutorial ──
+  const isAddCardTutorial =
+    !hasValidTransactionIntent &&
+    (lowerUserText.includes('how to add new card') ||
+      lowerUserText.includes('how to add card') ||
+      lowerUserText.includes('how to add a card') ||
+      lowerUserText.includes('how to create card') ||
+      lowerUserText.includes('how to register card') ||
+      lowerUserText.includes('how to connect card') ||
+      lowerUserText.includes('how to add account') ||
+      lowerUserText.includes('how to add new account') ||
+      lowerUserText.includes('pano mag add ng card') ||
+      lowerUserText.includes('paano mag add ng card') ||
+      lowerUserText.includes('pano mag add card') ||
+      lowerUserText.includes('paano mag add card') ||
+      lowerUserText.includes('pano mag-add ng card') ||
+      lowerUserText.includes('paano mag-add ng card') ||
+      lowerUserText.includes('pano mag lagay ng card') ||
+      lowerUserText.includes('paano maglagay ng card') ||
+      lowerUserText.includes('pano mag gawa ng card') ||
+      lowerUserText.includes('paano gumawa ng card') ||
+      lowerUserText.includes('pano mag register ng card') ||
+      lowerUserText.includes('paano magrehistro ng card') ||
+      ((lowerUserText.includes('how to') || lowerUserText.includes('paano') || lowerUserText.includes('pano')) &&
+        (lowerUserText.includes('add') || lowerUserText.includes('lagay') || lowerUserText.includes('gawa')) &&
+        (lowerUserText.includes('card') || lowerUserText.includes('account') || lowerUserText.includes('wallet'))));
+
+  // ── General App Tutorial & Features ──
+  const isGeneralAppTutorial =
+    !isCreatorQuery &&
+    !isSaveAllowanceTutorial &&
+    !isSaveGeneralTutorial &&
+    !isAddCardTutorial &&
+    (lowerUserText.includes('tutorial') ||
+      lowerUserText.includes('how to use geko') ||
+      lowerUserText.includes('paano gamitin ang geko') ||
+      lowerUserText.includes('pano gamitin ang geko') ||
+      lowerUserText.includes('how to use this app') ||
+      lowerUserText.includes('paano gamitin tong app') ||
+      lowerUserText.includes('pano gamitin to') ||
+      lowerUserText.includes('quick start guide') ||
+      lowerUserText.includes('app guide'));
+
   const isGreetingQuery =
     /^(hi|hello|hey|yo|sup|kamusta|kumusta|good morning|good afternoon|good evening|magandang araw|greetings)\b/i.test(lowerUserText.trim()) ||
     lowerUserText.includes('who are you') ||
@@ -294,7 +409,12 @@ export const generateStream = async (
 
   const isFinancialQuery =
     !hasValidTransactionIntent &&
-    (isGoalQuery ||
+    (isCreatorQuery ||
+      isSaveAllowanceTutorial ||
+      isSaveGeneralTutorial ||
+      isAddCardTutorial ||
+      isGeneralAppTutorial ||
+      isGoalQuery ||
       isCardListQuery ||
       isTodaySpendQuery ||
       isWeekSpendQuery ||
@@ -426,7 +546,143 @@ export const generateStream = async (
   }
   // B. Check if user is asking a Financial Question (Local RAG / SQL query)
   else if (isFinancialQuery) {
-    if (isInstallmentDeductAction) {
+    if (isCreatorQuery) {
+      fullResponse = isTagalog
+        ? `Ako ay nilikha at binuo ni **Wilbert Gamis**! 🦎\n\n` +
+          `Binuo ni Wilbert ang **Geko** bilang isang matalino, pribado, at 100% offline na personal finance companion para sa bawat Pilipino. Ang layunin ay gawing simple at madali ang pamamahala ng pera nang walang anumang cloud tracking o ad spying:\n\n` +
+          `• 💳 **Lahat ng Cards & E-Wallets sa Isang Lugar**: Real-time balances para sa BPI, GCash, Maya, GoTyme, MariBank, BDO, at 100+ Philippine presets na may interactive 3D card visuals.\n` +
+          `• ⚡ **Natural Chat Logging**: Sabihin lang ang iyong gastos o kita (hal. *"Kumain 150 sa GCash"*), at agad itong naitatala nang walang paligoy-ligoy.\n` +
+          `• 🎯 **Smart Ipon Goals & Payday Cutoffs**: Awtomatikong nagkakalkula kung magkano ang itatabi sa bawat 15th at 30th na sweldo para maabot ang iyong pangarap.\n` +
+          `• 🔒 **100% Offline & Secure**: Lahat ng iyong records ay ligtas na nakatago sa iyong device lamang.\n\n` +
+          `May maitutulong ba ako sa iyong mga accounts, budget, o savings goals ngayon?`
+        : `I was created and developed by **Wilbert Gamis**! 🦎\n\n` +
+          `Wilbert built **Geko** as an offline-first, intelligent personal finance assistant designed specifically for Filipinos. The mission is to make money management simple, empowering, and completely private on your device with zero cloud tracking:\n\n` +
+          `• 💳 **All Your Cards & E-Wallets in One View**: Real-time balances with 100+ Philippine bank and digital wallet presets (BPI, GCash, Maya, GoTyme, MariBank, BDO, etc.) with interactive 3D cards.\n` +
+          `• ⚡ **Hands-Free Natural Chat**: Just type or speak to log daily expenses, check balances, or add accounts.\n` +
+          `• 🎯 **Smart Savings Goals & Payday Cutoffs**: Auto-calculated savings schedules aligned with your 15th & 30th paydays.\n` +
+          `• 🔒 **100% Offline & Private**: All your financial data stays securely on your device—never sent to third-party servers.\n\n` +
+          `Is there anything specific about your finances or accounts that I can assist you with today?`;
+    } else if (isSaveAllowanceTutorial) {
+      fullResponse = isTagalog
+        ? `Narito ang pinakamabisang gabay para makapag-save at magtipid mula sa iyong **Card Allowance**! 💳✨\n\n` +
+          `1. 🏦 **Ang 2-Card Separation Method**\n` +
+          `• **Card 1: Pang-Araw-araw na Gastos (E-Wallet)** – Gamitin ang GCash o Maya para sa pamasahe, tanghalian, at merienda.\n` +
+          `• **Card 2: Tagong Ipon (Untouchable Card)** – Magbukas ng high-yield savings card tulad ng GoTyme, SeaBank, o BPI. Huwag itong galawin para lumago ang interes.\n\n` +
+          `2. 📅 **Magtakda ng Daily Allowance Cap**\n` +
+          `• Hatiin ang kabuuang allowance sa bilang ng araw (hal. kung may ₱1,500 ka para sa 5 araw ng pasok, ang ceiling mo ay **₱300 bawat araw**).\n` +
+          `• Ilipat lamang ang panggastos para sa araw na iyon sa iyong spending card; iwanan ang natitirang ₱1,200 sa iyong savings account.\n\n` +
+          `3. ⚡ **I-record Agad ang Bawat Bawas Dito sa Geko AI**\n` +
+          `• Sa tuwing gagastos o mamamasahe, i-chat lang agad kay Geko:\n` +
+          `  - *"Bumili ng lunch 120 gamit GCash"*\n` +
+          `  - *"Pamasahe 35 sa Maya"*\n` +
+          `• Agad babawasan ni Geko ang balance ng iyong card para laging tumpak ang natitirang pera mo.\n\n` +
+          `4. 🎯 **Magbukas ng Allowance Savings Goal**\n` +
+          `• Pumunta sa **Plan** tab at pindutin ang **+ Add Goal** (hal. *"Emergency Baon"* o *"Gadget Fund"*).\n` +
+          `• Sa pagtatapos ng linggo, anuman ang matira sa iyong allowance (kahit ₱50 o ₱100), ilipat agad sa iyong Goal!`
+        : `Here is the ultimate step-by-step guide to saving from your **Card Allowance** in Geko! 💳✨\n\n` +
+          `1. 🏦 **The 2-Card Separation Rule**\n` +
+          `• **Card 1: Daily Spending (E-Wallet)** – Dedicate GCash or Maya solely for transit, lunch, and daily essentials.\n` +
+          `• **Card 2: Untouchable Savings Card** – Keep your core funds in GoTyme, SeaBank, or BPI where high daily interest accumulates.\n\n` +
+          `2. 📅 **Set a Strict Daily Spending Cap**\n` +
+          `• Divide your allowance by active days (e.g. ₱1,500 across 5 days = **₱300/day maximum**).\n` +
+          `• Only fund your spending wallet with today's ₱300 allocation; keep the remaining ₱1,200 locked in your savings account.\n\n` +
+          `3. ⚡ **Log Transactions in Real-Time via Geko AI**\n` +
+          `• Whenever you buy lunch or pay transit fare, simply chat with Geko:\n` +
+          `  - *"Lunch 120 on GCash"*\n` +
+          `  - *"Commute 40 on Maya"*\n` +
+          `• Geko immediately deducts the amount from your card balance so you always know your exact remaining allowance.\n\n` +
+          `4. 🎯 **Sweep Weekly Leftovers into a Geko Goal**\n` +
+          `• Go to the **Plan** tab and tap **+ Add Goal** (e.g., *"Emergency Baon"* or *"Weekend Fund"*).\n` +
+          `• Every Friday or weekend, transfer whatever remains from your daily allowance directly into this goal!`;
+    } else if (isSaveGeneralTutorial) {
+      fullResponse = isTagalog
+        ? `Narito ang sunod-sunod na paraan kung paano mag-save at mag-ipon nang matagumpay gamit ang **Geko**! 🎯💰\n\n` +
+          `1. 🎯 **Magtakda ng Malinaw na Savings Goal**\n` +
+          `• Pumunta sa **Plan** tab sa ibaba ng screen.\n` +
+          `• Pindutin ang **+ Add Goal** at ilagay ang iyong pinag-iipunan (hal. *Emergency Fund*, *New Phone*, o *Travel*).\n` +
+          `• Ilagay ang iyong target amount at target date.\n\n` +
+          `2. 📅 **Gamitin ang Payday Cut-off Method (15th & 30th)**\n` +
+          `• Huwag mag-ipon mula sa kung ano ang "matira" sa katapusan ng buwan. Magtabi agad ng ipon sa mismong araw ng sahod!\n` +
+          `• Awtomatikong kinakalkula ni Geko kung magkano ang kailangan mong itabi bawat salary cutoff para maabot ang target mo sa tamang oras.\n\n` +
+          `3. 📊 **Sundan ang 50/30/20 Budgeting Rule**\n` +
+          `• **50% Needs (Pangangailangan)**: Upa, kuryente, tubig, pagkain, groceries, pamasahe.\n` +
+          `• **30% Wants (Kagustuhan)**: Kape, kain sa labas, sine, shopping.\n` +
+          `• **20% Savings (Ipon & Debt)**: Diretso sa emergency fund at savings accounts.\n\n` +
+          `4. 💬 **Makipag-usap kay Geko AI para sa Payo**\n` +
+          `• Pwede kang magtanong dito sa chat kahit kailan:\n` +
+          `  - *"Can I afford dinner tonight?"*\n` +
+          `  - *"Magkano kailangan kong i-save bawat cutoff?"*\n` +
+          `  - *"Aabot ba ako sa aking goal?"*`
+        : `Here is how to save money effectively using **Geko**! 🎯💰\n\n` +
+          `1. 🎯 **Set a Clear Savings Goal**\n` +
+          `• Navigate to the **Plan** tab at the bottom navigation bar.\n` +
+          `• Tap **+ Add Goal** and enter what you are saving for (e.g., *Emergency Fund*, *New Laptop*, *Travel*).\n` +
+          `• Specify your target amount and target completion date.\n\n` +
+          `2. 📅 **Follow the Payday Cut-Off Rule (15th & 30th)**\n` +
+          `• Don't save what is left after spending—spend what is left after saving! Transfer your savings allocation as soon as your salary arrives.\n` +
+          `• Geko automatically calculates the exact amount you need to lock in per cutoff to reach your goal on time.\n\n` +
+          `3. 📊 **Apply the 50/30/20 Rule**\n` +
+          `• **50% Needs**: Housing, utilities, groceries, transportation.\n` +
+          `• **30% Wants**: Dining out, coffee, entertainment, shopping.\n` +
+          `• **20% Savings**: Direct transfer into your high-yield savings and emergency fund.\n\n` +
+          `4. 💬 **Ask Geko AI for Real-Time Budget Guidance**\n` +
+          `• You can ask Geko anytime right here in chat:\n` +
+          `  - *"Can I afford dinner tonight?"*\n` +
+          `  - *"How much do I need to save each cutoff?"*\n` +
+          `  - *"Show all my cards with money"*`;
+    } else if (isAddCardTutorial) {
+      fullResponse = isTagalog
+        ? `Napakadaling magdagdag ng bagong card o account sa Geko! May **2 mabilis na paraan** para gawin ito: 💳✨\n\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `**Paraan 1: Diretso Dito sa Geko AI Chat (Pinakamabilis!)**\n` +
+          `I-type o sabihin lang dito sa chat ang gusto mong card at balance:\n` +
+          `• *"Add new card GoTyme 2500"*\n` +
+          `• *"Create card MariBank 500"*\n` +
+          `• *"Magdagdag ng card BPI 5000"*\n` +
+          `• *"Gawa ng GCash account 1500"*\n\n` +
+          `Awtomatikong irerehistro ni Geko ang iyong card, gagawan ng interactive 3D preview, at iu-update ang balance sa real time!\n\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `**Paraan 2: Sa Wallet Screen**\n` +
+          `1. Pindutin ang **Wallet** tab sa ibaba ng screen.\n` +
+          `2. Pindutin ang **+ Add Account** button sa itaas sa kanan.\n` +
+          `3. **Pumili ng Preset**: Pumili mula sa 100+ Philippine presets (BPI, Maya, GCash, GoTyme, MariBank, BDO, Seabank, Landbank, atbp.) o mag-type ng sariling pangalan.\n` +
+          `4. **Baguhin ang Kulay at Estilo**: Sa ilalim ng 3D card preview, pumili ng paborito mong color style tulad ng *Sapphire Ocean*, *Emerald*, o *Neon Magenta*.\n` +
+          `5. **Ilagay ang Starting Balance**: I-type ang kasalukuyang pera sa card.\n` +
+          `6. Pindutin ang **Connect Account**!`
+        : `Adding a new card or account in Geko is fast and seamless! You have **2 easy options**: 💳✨\n\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `**Method 1: Direct in Geko AI Chat (Instant & Hands-Free)**\n` +
+          `Simply type or speak to Geko right here in chat:\n` +
+          `• *"Add new card GoTyme 2500"*\n` +
+          `• *"Create card MariBank 500"*\n` +
+          `• *"Add account BPI 10000"*\n` +
+          `• *"Magdagdag ng GCash 1500"*\n\n` +
+          `Geko AI will automatically register the card, create the interactive 3D card preview, and update your live balance immediately!\n\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `**Method 2: Via the Wallet Screen**\n` +
+          `1. Tap the **Wallet** tab at the bottom navigation bar.\n` +
+          `2. Tap the **+ Add Account** button at the top right.\n` +
+          `3. **Select a Preset**: Choose from 100+ Philippine presets (BPI, GCash, Maya, GoTyme, MariBank, BDO, Seabank, Landbank, etc.) or enter a custom card name.\n` +
+          `4. **Customize Color & Style**: Right beneath the interactive 3D preview, tap any style preset (*Sapphire Ocean*, *Emerald*, *Neon Magenta*, etc.) or choose custom gradient swatches.\n` +
+          `5. **Set Starting Balance**: Enter the current account balance.\n` +
+          `6. Tap **Connect Account** to finish!`;
+    } else if (isGeneralAppTutorial) {
+      fullResponse = isTagalog
+        ? `Maligayang pagdating sa **Geko**! 🦎 Narito ang mabilisang gabay sa mga pangunahing feature ng app:\n\n` +
+          `• 💳 **Wallet & Accounts**: Tingnan at i-customize ang iyong mga bangko at e-wallets gamit ang interactive 3D cards na may real-time balances.\n` +
+          `• 📝 **Natural Chat Logging**: Sabihin lang kay Geko ang iyong mga gastusin (hal. *"Kumain 180 sa GCash"* o *"Sahod 25000"*) para maitala agad.\n` +
+          `• 📸 **Receipt & Bill Scanner**: Pindutin ang center **+** button at piliin ang *"Scan Receipt / Bill to Auto-Fill"* para awtomatikong basahin ang mga resibo.\n` +
+          `• 🎯 **Savings Goals & Cutoffs**: Sa **Plan** tab, magtakda ng mga layunin. Awtomatikong tutukuyin ni Geko kung magkano ang dapat itabi sa bawat 15th at 30th na sweldo.\n` +
+          `• 🍽️ **Smart Affordability**: Tanungin si Geko *"Can I afford dinner tonight?"* bago gumastos para makasiguro sa budget.\n` +
+          `• 🔒 **100% Offline & Private**: Lahat ng iyong datos ay mananatili lamang sa iyong cellphone.`
+        : `Welcome to **Geko**! 🦎 Here is a quick overview of how to get the most out of the app:\n\n` +
+          `• 💳 **Wallet & Accounts**: View and manage all your bank cards and e-wallets with interactive 3D cards and real-time balances.\n` +
+          `• 📝 **Instant Chat Logging**: Tell Geko about your daily expenses (e.g. *"Spent 150 on food on GCash"*) and it will log them hands-free.\n` +
+          `• 📸 **Receipt & Bill Scanner**: Tap the center **+** button and select *"Scan Receipt / Bill to Auto-Fill"* to extract totals from physical receipts.\n` +
+          `• 🎯 **Savings Goals & Payday Cutoffs**: On the **Plan** tab, track savings goals with auto-calculated allocations for every 15th & 30th payday.\n` +
+          `• 🍽️ **Real-Time Affordability**: Ask Geko *"Can I afford dinner tonight?"* to verify your safe spending buffer.\n` +
+          `• 🔒 **100% Offline & Private**: Your financial data is securely stored locally on your device with zero cloud tracking.`;
+    } else if (isInstallmentDeductAction) {
       // ── Execute Real-Time Installment Cut-Off Deduction ──
       await db.execute(`
         CREATE TABLE IF NOT EXISTS installments (

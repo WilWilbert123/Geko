@@ -410,12 +410,25 @@ export const processAIIntent = async (
     lower.includes('bago') ||
     lower.includes('bagong');
 
+  const isQuestionOrTutorial =
+    lower.startsWith('how') ||
+    lower.startsWith('paano') ||
+    lower.startsWith('pano') ||
+    lower.includes('how to') ||
+    lower.includes('paano mag') ||
+    lower.includes('pano mag') ||
+    lower.includes('tutorial') ||
+    lower.includes('guide') ||
+    lower.includes('who') ||
+    lower.includes('sino');
+
   const isExcluded =
     lower.includes('goal') ||
     lower.includes('layunin') ||
     lower.includes('installment') ||
     lower.includes('hulugan') ||
-    lower.includes('monthly');
+    lower.includes('monthly') ||
+    isQuestionOrTutorial;
 
   const isAccountIntent = (isCardKeyword || isBankKeyword) && isActionVerb && !isExcluded;
 
@@ -543,12 +556,13 @@ export const processAIIntent = async (
   // "Add a goal OneXplayer 40000 my savings na ako 10000 at add another goal Drone DJI neo 2 25000 price meron akong savings na 9000"
   // "Onexplayer price 40000 and savings 10000 done dji neo 2 price 25000 savings 9000"
   if (
-    lower.includes('goal') ||
-    lower.includes('layunin') ||
-    lower.includes('onexplayer') ||
-    lower.includes('oneplayer') ||
-    lower.includes('drone') ||
-    (lower.includes('ipon') && (lower.includes('target') || lower.includes('kotse') || lower.includes('car') || lower.includes('bahay') || lower.includes('house')))
+    !isQuestionOrTutorial &&
+    (lower.includes('goal') ||
+      lower.includes('layunin') ||
+      lower.includes('onexplayer') ||
+      lower.includes('oneplayer') ||
+      lower.includes('drone') ||
+      (lower.includes('ipon') && (lower.includes('target') || lower.includes('kotse') || lower.includes('car') || lower.includes('bahay') || lower.includes('house'))))
   ) {
     // Helper to split text into distinct goal clauses
     const splitGoalClauses = (rawText: string): string[] => {
