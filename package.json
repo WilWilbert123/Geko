@@ -8,7 +8,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "postinstall": "node ./scripts/patch-expo-permissions.js",
-    "build:aab": "export JAVA_HOME=/opt/homebrew/Cellar/openjdk@17/17.0.20.1/libexec/openjdk.jdk/Contents/Home && cd android && ./gradlew bundleRelease && cp app/build/outputs/bundle/release/app-release.aab ../Geko-release.aab"
+    "build:aab": "export JAVA_HOME=/opt/homebrew/Cellar/openjdk@17/17.0.20.1/libexec/openjdk.jdk/Contents/Home && cd android && ./gradlew bundleRelease && mv app/build/outputs/bundle/release/app-release.aab ../Geko-release.aab"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.0.2",
