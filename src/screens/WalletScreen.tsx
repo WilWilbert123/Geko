@@ -12,6 +12,7 @@ import {
   Alert,
   Animated,
   Platform,
+  FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
@@ -182,6 +183,12 @@ export const WalletScreen = () => {
       return true;
     });
   }, [cards, filterCategory]);
+
+  // Load top 5 cards first for buttery smooth performance, with quick load-more
+  const [cardLimit, setCardLimit] = useState(5);
+  const displayedCards = useMemo(() => {
+    return filteredCards.slice(0, cardLimit);
+  }, [filteredCards, cardLimit]);
 
   // Filtered preset cards inside Add Account Modal
   const modalPresets = useMemo(() => {
@@ -643,7 +650,7 @@ export const WalletScreen = () => {
           {/* 0. Full Card Mode View (Default - Full Width 3D Card) */}
           {cards.length > 0 && viewMode === 'card' && (
             <View style={styles.fullCardsContainer}>
-              {filteredCards.map((card, idx) => {
+              {displayedCards.map((card, idx) => {
                 const theme = getBankTheme(card.bankName, card.color1, card.color2);
                 const isCredit = card.type === 'CREDIT_CARD';
                 const displayBal = isCredit ? (card.outstandingBalance || 0) : card.balance;
@@ -671,39 +678,101 @@ export const WalletScreen = () => {
                   </TouchableOpacity>
                 );
               })}
+
+              {/* Smooth Load More / Collapse Pill */}
+              {filteredCards.length > cardLimit && (
+                <TouchableOpacity
+                  style={[styles.loadMorePill, { backgroundColor: colors.surfaceHighlight || '#1E293B', borderColor: colors.border }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setCardLimit((prev) => prev + 5);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.loadMoreText, { color: colors.primary }]}>
+                    Showing {displayedCards.length} of {filteredCards.length} accounts • Tap to load more (+5)
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {filteredCards.length > 5 && cardLimit >= filteredCards.length && (
+                <TouchableOpacity
+                  style={[styles.loadMorePill, { backgroundColor: colors.surfaceHighlight || '#1E293B', borderColor: colors.border }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setCardLimit(5);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.loadMoreText, { color: colors.textMuted }]}>
+                    Showing all {filteredCards.length} accounts • Show top 5
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
           {/* 1. Grid Mode View */}
           {cards.length > 0 && viewMode === 'grid' && (
-            <View style={styles.cardsGrid}>
-              {filteredCards.map((card, idx) => {
-                const theme = getBankTheme(card.bankName, card.color1, card.color2);
-                const isCredit = card.type === 'CREDIT_CARD';
-                const displayBal = isCredit ? (card.outstandingBalance || 0) : card.balance;
+            <View>
+              <View style={styles.cardsGrid}>
+                {displayedCards.map((card, idx) => {
+                  const theme = getBankTheme(card.bankName, card.color1, card.color2);
+                  const isCredit = card.type === 'CREDIT_CARD';
+                  const displayBal = isCredit ? (card.outstandingBalance || 0) : card.balance;
 
-                return (
-                  <TouchableOpacity
-                    key={`card-grid-${card.id}-${idx}`}
-                    style={styles.cardItem3D}
-                    activeOpacity={0.92}
-                    onPress={() => handleOpenEditModal(card)}
-                  >
-                    <GekoCard3D
-                      balance={displayBal}
-                      cardholderName="GEKO MEMBER"
-                      expiryDate="10/29"
-                      accountType={card.type}
-                      bankName={card.bankName}
-                      color1={card.color1 || theme.bg1}
-                      color2={card.color2 || theme.bg2}
-                      height={GRID_CARD_HEIGHT}
-                      interactive={false}
-                      paymentNetwork={card.paymentNetwork || theme.network}
-                    />
-                  </TouchableOpacity>
-                );
-              })}
+                  return (
+                    <TouchableOpacity
+                      key={`card-grid-${card.id}-${idx}`}
+                      style={styles.cardItem3D}
+                      activeOpacity={0.92}
+                      onPress={() => handleOpenEditModal(card)}
+                    >
+                      <GekoCard3D
+                        balance={displayBal}
+                        cardholderName="GEKO MEMBER"
+                        expiryDate="10/29"
+                        accountType={card.type}
+                        bankName={card.bankName}
+                        color1={card.color1 || theme.bg1}
+                        color2={card.color2 || theme.bg2}
+                        height={GRID_CARD_HEIGHT}
+                        interactive={false}
+                        paymentNetwork={card.paymentNetwork || theme.network}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Smooth Load More / Collapse Pill for Grid */}
+              {filteredCards.length > cardLimit && (
+                <TouchableOpacity
+                  style={[styles.loadMorePill, { backgroundColor: colors.surfaceHighlight || '#1E293B', borderColor: colors.border, marginTop: 14 }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setCardLimit((prev) => prev + 6);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.loadMoreText, { color: colors.primary }]}>
+                    Showing {displayedCards.length} of {filteredCards.length} accounts • Tap to load more (+6)
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {filteredCards.length > 5 && cardLimit >= filteredCards.length && (
+                <TouchableOpacity
+                  style={[styles.loadMorePill, { backgroundColor: colors.surfaceHighlight || '#1E293B', borderColor: colors.border, marginTop: 14 }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setCardLimit(6);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.loadMoreText, { color: colors.textMuted }]}>
+                    Showing all {filteredCards.length} accounts • Show top 6
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -1139,20 +1208,25 @@ export const WalletScreen = () => {
                     </Text>
                   </View>
 
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.presetsListHorizontal}
-                  >
-                    {isPresetLoading ? (
-                      <>
-                        <SkeletonPresetCard />
-                        <SkeletonPresetCard />
-                        <SkeletonPresetCard />
-                        <SkeletonPresetCard />
-                      </>
-                    ) : (
-                      modalPresets.map((preset, idx) => {
+                  {isPresetLoading ? (
+                    <View style={styles.presetsListHorizontal}>
+                      <SkeletonPresetCard />
+                      <SkeletonPresetCard />
+                      <SkeletonPresetCard />
+                      <SkeletonPresetCard />
+                    </View>
+                  ) : (
+                    <FlatList
+                      data={modalPresets}
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      keyExtractor={(preset, idx) => `modal-preset-${preset.id}-${idx}`}
+                      initialNumToRender={5}
+                      maxToRenderPerBatch={5}
+                      windowSize={3}
+                      removeClippedSubviews={Platform.OS === 'android'}
+                      contentContainerStyle={styles.presetsListHorizontal}
+                      renderItem={({ item: preset, index: idx }) => {
                         const isSelected = selectedPreset?.id === preset.id || newBankName === preset.name;
                         return (
                           <TouchableOpacity
@@ -1196,9 +1270,9 @@ export const WalletScreen = () => {
                             </View>
                           </TouchableOpacity>
                         );
-                      })
-                    )}
-                  </ScrollView>
+                      }}
+                    />
+                  )}
                 </View>
               )}
 
@@ -1559,6 +1633,21 @@ const styles = StyleSheet.create({
     height: GRID_CARD_HEIGHT,
     backgroundColor: 'transparent',
     overflow: 'visible',
+  },
+  loadMorePill: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginTop: 8,
+  },
+  loadMoreText: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
 
   /* Stack / Grouped Layout Mode */
