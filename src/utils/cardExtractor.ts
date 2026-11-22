@@ -170,36 +170,37 @@ export const extractCardsFromText = (
     }
   }
 
-  // 2.5 Action confirmation balance patterns:
-  // e.g. "**GoTyme** account! Total balance is now **₱2,500.00**", "New **GoTyme** balance: **₱1,850.00**"
-  // e.g. "Added/updated **GoTyme** account with **₱200.00** balance"
-  const confirmationPatterns = [
-    /(?:\*\*)?([A-Za-z0-9\s-]+?)(?:\*\*)?(?:\s+account|\s+card)?.*?(?:total balance|kabuuang balance|new.*?balance|bagong balance).*?₱\s*([\d,]+(?:\.\d+)?)/gi,
-    /(?:total balance|kabuuang balance|new.*?balance|bagong balance).*?(?:sa|for|of|in|to)?\s*(?:\*\*)?([A-Za-z0-9\s-]+?)(?:\*\*)?.*?:?\s*₱\s*([\d,]+(?:\.\d+)?)/gi,
-    /(?:\*\*)?([A-Za-z0-9\s-]+?)(?:\*\*)?(?:\s+account|\s+card)?.*?(?:with|na may)\s*(?:\*\*)?₱\s*([\d,]+(?:\.\d+)?)(?:\*\*)?\s*(?:balance|panimulang balance)?/gi,
-    /(?:added|naidagdag|na-add|created|success).*?(?:\*\*)?([A-Za-z0-9\s-]+?)(?:\*\*)?(?:\s+account|\s+card)?.*?(?:with|na may|balance).*?₱\s*([\d,]+(?:\.\d+)?)/gi,
-  ];
-
-  for (const pat of confirmationPatterns) {
-    let m;
-    while ((m = pat.exec(text)) !== null) {
-      const rawBank = m[1]?.trim();
-      const rawBal = parseFloat(m[2]?.replace(/,/g, ''));
-      if (rawBank && !isNaN(rawBal)) {
-        const matchRes = findMatchingBank(rawBank);
-        if (matchRes) {
-          resolveAndSetCard(matchRes.canonicalName, rawBal, matchRes.matchedCard);
-        }
-      }
+  // Helper to extract confirmed balance for any bank mentioned in action confirmations
+  const extractConfirmationBalance = (targetText: string): number | null => {
+    // 1. Total balance / new balance pattern:
+    // e.g. "Total balance is now **₱2,300.00**", "Total balance: **₱2,300.00**", "kabuuang balance mo ngayon ay **₱2,300.00**", "New GoTyme balance: **₱2,300.00**"
+    const totalMatch = targetText.match(/(?:total balance|kabuuang balance|bagong balance|new.*?balance|balance is now|balance ngayon ay).*?₱\s*([\d,]+(?:\.\d+)?)/i);
+    if (totalMatch) {
+      const val = parseFloat(totalMatch[1].replace(/,/g, ''));
+      if (!isNaN(val)) return val;
     }
-  }
+
+    // 2. Initial / deposit with balance pattern:
+    // e.g. "Created GoTyme account with **₱2,000.00** balance", "na may **₱2,000.00** balance"
+    const withMatch = targetText.match(/(?:with|na may|initial balance|panimulang balance).*?₱\s*([\d,]+(?:\.\d+)?)/i);
+    if (withMatch) {
+      const val = parseFloat(withMatch[1].replace(/,/g, ''));
+      if (!isNaN(val)) return val;
+    }
+
+    return null;
+  };
+
+  const textConfirmedBal = extractConfirmationBalance(text);
 
   // 3. Check for specific cards mentioned with strict word boundaries in text
   for (const card of userCards) {
     const bKey = getCanonicalBankKey(card.bankName);
     const isMentioned = isBankInText(card.bankName, text) || (bKey && isBankInText(bKey, text));
-    if (isMentioned && !foundMap.has(bKey)) {
-      resolveAndSetCard(card.bankName, undefined, card);
+    if (isMentioned) {
+      // If the text explicitly confirms a total/new balance, prioritize that balance!
+      const balToUse = textConfirmedBal !== null ? textConfirmedBal : undefined;
+      resolveAndSetCard(card.bankName, balToUse, card);
     }
   }
 
@@ -210,14 +211,16 @@ export const extractCardsFromText = (
     const userCard = userCards.find(c => getCanonicalBankKey(c.bankName) === key);
     if (userCard) {
       // If user owns this bank and it was mentioned in text, ensure it's displayed using the user's real card
-      if (isBankInText(kBank, text) && !foundMap.has(key)) {
-        resolveAndSetCard(userCard.bankName, undefined, userCard);
+      if (isBankInText(kBank, text)) {
+        const balToUse = textConfirmedBal !== null ? textConfirmedBal : undefined;
+        resolveAndSetCard(userCard.bankName, balToUse, userCard);
       }
     } else {
       // Also render the card badge when the bot response explicitly confirms a transaction on a known bank/cash card
-      const explicitlyUsedInReply = new RegExp(`(?:nabawas|nadagdag|recorded|deducted|added).*\\b${kBank}\\b`, 'i').test(text);
-      if ((userCards.length === 0 || explicitlyUsedInReply) && isBankInText(kBank, text) && !foundMap.has(key)) {
-        resolveAndSetCard(kBank);
+      const explicitlyUsedInReply = new RegExp(`(?:nabawas|nadagdag|recorded|deducted|added|created).*\\b${kBank}\\b`, 'i').test(text);
+      if ((userCards.length === 0 || explicitlyUsedInReply) && isBankInText(kBank, text)) {
+        const balToUse = textConfirmedBal !== null ? textConfirmedBal : undefined;
+        resolveAndSetCard(kBank, balToUse);
       }
     }
   }

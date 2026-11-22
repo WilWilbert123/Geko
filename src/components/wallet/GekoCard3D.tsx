@@ -218,6 +218,16 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
   // Three.js texture ref for dynamic text updates
   const textTextureRef = useRef<THREE.DataTexture | null>(null);
   const textDataRef = useRef<Uint8Array>(new Uint8Array(TEX_W * TEX_H * 4));
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (cleanupRef.current) {
+        cleanupRef.current();
+        cleanupRef.current = null;
+      }
+    };
+  }, []);
 
   const toggleHidden = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -446,10 +456,25 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
       return { rangeMin: 127, rangeMax: 127, precision: 23 };
     };
 
+    // Polyfill getParameter for VERSION / VENDOR strings to avoid Hermes undefined.indexOf crash in Three.js WebGLState
+    const origGetParameter = gl.getParameter ? gl.getParameter.bind(gl) : null;
+    gl.getParameter = (pname: number) => {
+      try {
+        const val = origGetParameter ? origGetParameter(pname) : null;
+        if (val !== undefined && val !== null) return val;
+      } catch (e) { }
+      if (pname === (gl.VERSION || 0x1F02)) return 'WebGL 1.0 (OpenGL ES 2.0)';
+      if (pname === (gl.SHADING_LANGUAGE_VERSION || 0x8B8C)) return 'WebGL GLSL ES 1.0';
+      if (pname === (gl.VENDOR || 0x1F00)) return 'WebKit';
+      if (pname === (gl.RENDERER || 0x1F01)) return 'WebKit WebGL';
+      return null;
+    };
+
     const width = gl.drawingBufferWidth || (SCREEN_WIDTH - 40);
     const glHeight = gl.drawingBufferHeight || height;
 
-    const scene = new THREE.Scene();
+    try {
+      const scene = new THREE.Scene();
 
     // Camera setup:
     // Dynamically calculate camera Z distance so the 3D card fits 100% inside the canvas
@@ -2303,18 +2328,25 @@ const GekoCard3DComponent: React.FC<GekoCard3DProps> = ({
 
     animate();
 
-    return () => {
-      if (animFrameId.current) {
-        cancelAnimationFrame(animFrameId.current);
-      }
-      renderer.dispose();
-      edgeGeometry.dispose();
-      faceGeometry.dispose();
-      frontMaterial.dispose();
-      backMaterial.dispose();
-      edgeMaterial.dispose();
-      textTexture.dispose();
-    };
+      cleanupRef.current = () => {
+        if (animFrameId.current) {
+          cancelAnimationFrame(animFrameId.current);
+        }
+        try {
+          renderer.dispose();
+          edgeGeometry.dispose();
+          faceGeometry.dispose();
+          frontMaterial.dispose();
+          backMaterial.dispose();
+          edgeMaterial.dispose();
+          textTexture.dispose();
+        } catch (e) {
+          // Ignore any already-disposed resources
+        }
+      };
+    } catch (err) {
+      console.warn('GekoCard3D: GL initialization skipped/failed safely:', err);
+    }
   }, [height, color1, color2, accountType, bankName, paymentNetwork, updateCardText, cornerRadius]);
 
   const isSmallCard = height < 200;

@@ -157,10 +157,14 @@ const ChatEdgePeeker: React.FC<{ isBusy: boolean }> = ({ isBusy }) => {
 export const AIChatScreen = () => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { cards: userCards } = useCards();
+  const { cards: userCards, refresh: refreshCards } = useCards();
   const [input, setInput] = useState('');
   const [inputHeight, setInputHeight] = useState(48);
-  const { messages, isGenerating, currentStream, sendMessage, clearHistory, deleteMessage } = useRAGChat();
+  const { messages, isGenerating, currentStream, sendMessage, clearHistory, deleteMessage } = useRAGChat({
+    onActionExecuted: async () => {
+      await refreshCards();
+    },
+  });
   const scrollViewRef = useRef<ScrollView>(null);
 
   const [error, setError] = useState<string | null>(null);

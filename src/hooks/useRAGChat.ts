@@ -12,7 +12,11 @@ import { processAIIntent } from '../services/ai/aiActionExecutor';
 
 const STORAGE_KEY = 'geko_chat_history_v1';
 
-export const useRAGChat = () => {
+export interface UseRAGChatOptions {
+  onActionExecuted?: () => Promise<void> | void;
+}
+
+export const useRAGChat = (options?: UseRAGChatOptions) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentStream, setCurrentStream] = useState('');
@@ -73,6 +77,15 @@ export const useRAGChat = () => {
         DeviceEventEmitter.emit('transactions_updated');
         DeviceEventEmitter.emit('goals_updated');
         DeviceEventEmitter.emit('installments_updated');
+
+        // Immediately refresh state before creating the assistant message bubble
+        if (options?.onActionExecuted) {
+          try {
+            await options.onActionExecuted();
+          } catch (e) {
+            console.error('Failed to run onActionExecuted:', e);
+          }
+        }
 
         const assistantMsg: ChatMessage = {
           id: uuidv4(),
