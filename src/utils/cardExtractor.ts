@@ -23,6 +23,26 @@ const KNOWN_BANKS = [
   'Metrobank',
   'UnionBank',
   'Landbank',
+  'Security Bank',
+  'RCBC',
+  'EastWest',
+  'Chinabank',
+  'CIMB',
+  'Tonik',
+  'OwnBank',
+  'Komo',
+  'DiskarTech',
+  'Salmon',
+  'UNO Bank',
+  'UnionDigital',
+  'OFBank',
+  'Netbank',
+  'Zed',
+  'Wise',
+  'GrabPay',
+  'ShopeePay',
+  'PayPal',
+  'Payoneer',
   'Visa',
   'Cash',
 ];
@@ -31,7 +51,7 @@ const KNOWN_BANKS = [
 export const getCanonicalBankKey = (bankName?: string): string => {
   if (!bankName) return '';
   const lower = bankName.toLowerCase().trim();
-  if (lower === 'cash') return 'cash'; // physical on-hand cash
+  if (lower === 'cash' || lower === 'physical cash') return 'cash'; // physical on-hand cash
   if (lower.startsWith('gcash') || lower.includes('gcash')) {
     return 'gcash';
   }
@@ -41,10 +61,19 @@ export const getCanonicalBankKey = (bankName?: string): string => {
   if (lower.startsWith('gotyme') || lower.includes('gotyme')) {
     return 'gotyme';
   }
+  if (lower.startsWith('maribank') || lower.includes('maribank') || lower.includes('mari bank')) {
+    return 'maribank';
+  }
+  if (lower.startsWith('seabank') || lower.includes('seabank') || lower.includes('sea bank')) {
+    return 'seabank';
+  }
   if (lower.startsWith('grabpay') || lower.includes('grab pay') || lower.includes('grabpay')) {
     return 'grabpay';
   }
-  return lower.replace(/\s+(e-wallet|ewallet|wallet|digital bank|bank)$/i, '').trim();
+  if (lower.startsWith('shopeepay') || lower.includes('shopee pay') || lower.includes('shopee')) {
+    return 'shopee';
+  }
+  return lower.replace(/\s+(e-wallet|ewallet|wallet|digital bank|bank|philippines|card)$/i, '').trim();
 };
 
 // Accurate word-boundary text matcher to prevent "Cash" matching inside "GCash"
@@ -216,8 +245,8 @@ export const extractCardsFromText = (
         resolveAndSetCard(userCard.bankName, balToUse, userCard);
       }
     } else {
-      // Also render the card badge when the bot response explicitly confirms a transaction on a known bank/cash card
-      const explicitlyUsedInReply = new RegExp(`(?:nabawas|nadagdag|recorded|deducted|added|created).*\\b${kBank}\\b`, 'i').test(text);
+      // Also render the card badge when the bot response explicitly confirms a transaction or creation on a known bank/cash card
+      const explicitlyUsedInReply = new RegExp(`(?:nabawas|nadagdag|naidagdag|na-add|recorded|deducted|added|created|create|na-create|success|logged).*\\b${kBank}\\b`, 'i').test(text);
       if ((userCards.length === 0 || explicitlyUsedInReply) && isBankInText(kBank, text)) {
         const balToUse = textConfirmedBal !== null ? textConfirmedBal : undefined;
         resolveAndSetCard(kBank, balToUse);
