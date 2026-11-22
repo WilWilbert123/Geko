@@ -7,6 +7,7 @@
 const OCR_KEYS = [
   'K82746487988957',
   'K87899142388957',
+  'K88725888888957',
   'helloworld',
 ];
 
@@ -51,7 +52,7 @@ export async function performReceiptOCR(
       options?.onProgress?.(`Reading receipt text (Engine ${i + 1}/${OCR_KEYS.length})...`);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s safety timeout
+      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s quick failover timeout
 
       const formData = new URLSearchParams({
         apikey: key,

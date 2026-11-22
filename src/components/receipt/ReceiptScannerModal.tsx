@@ -34,7 +34,6 @@ import {
   X,
   ScanLine,
   Receipt,
-  Sparkles,
   ShoppingBag,
   Utensils,
   Car,
@@ -50,16 +49,7 @@ import {
   RefreshCw,
   Eye,
 } from 'lucide-react-native';
-
-// Safe lazy loading for expo-image-picker
-let ImagePickerModule: typeof import('expo-image-picker') | null = null;
-try {
-  if (NativeModules.ExponentImagePicker || NativeModules.ExpoImagePicker) {
-    ImagePickerModule = require('expo-image-picker');
-  }
-} catch (e) {
-  ImagePickerModule = null;
-}
+import * as ImagePicker from 'expo-image-picker';
 
 interface ReceiptScannerModalProps {
   visible: boolean;
@@ -107,11 +97,11 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
   const [showRawOCR, setShowRawOCR] = useState(false);
   const [editableRawOCR, setEditableRawOCR] = useState('');
 
-  // Merge user's connected wallet cards with standard Philippine accounts
+  // Use ONLY user's registered wallet cards
   const availableBanks = React.useMemo(() => {
     const names = cards.map((c) => c.bankName).filter(Boolean);
-    const defaults = ['GCash', 'Maya', 'GoTyme', 'BPI', 'BDO', 'Cash'];
-    return Array.from(new Set([...names, ...defaults]));
+    if (names.length > 0) return names;
+    return ['Physical Cash'];
   }, [cards]);
 
   // Scanning state
@@ -124,7 +114,10 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
   const [editStore, setEditStore] = useState('');
   const [editItems, setEditItems] = useState<ReceiptItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('Food');
-  const [selectedBank, setSelectedBank] = useState('GCash');
+  const [selectedBank, setSelectedBank] = useState(() => {
+    if (cards && cards.length > 0) return cards[0].bankName;
+    return 'Physical Cash';
+  });
   const [isSaving, setIsSaving] = useState(false);
 
   // Animated laser beam for the viewfinder
@@ -167,32 +160,15 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
   const handleLaunchCamera = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      if (!ImagePickerModule && (NativeModules.ExponentImagePicker || NativeModules.ExpoImagePicker)) {
-        try {
-          ImagePickerModule = require('expo-image-picker');
-        } catch (e) {
-          ImagePickerModule = null;
-        }
-      }
-
-      if (!ImagePickerModule || typeof ImagePickerModule.launchCameraAsync !== 'function') {
-        Alert.alert(
-          'Camera Notice',
-          'Live camera capture requires native client build (`npx expo run:android`). In the meantime, you can test with 1-Tap Realistic Samples or Paste Receipt Text!',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
-      const perm = await ImagePickerModule.requestCameraPermissionsAsync();
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
         Alert.alert('Permission Required', 'Camera permission is needed to scan receipt photos.');
         return;
       }
 
-      const result = await ImagePickerModule.launchCameraAsync({
+      const result = await ImagePicker.launchCameraAsync({
         quality: 0.85,
-        allowsEditing: true,
+        allowsEditing: false,
         base64: true,
       });
 
@@ -211,32 +187,15 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
   const handleLaunchGallery = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      if (!ImagePickerModule && (NativeModules.ExponentImagePicker || NativeModules.ExpoImagePicker)) {
-        try {
-          ImagePickerModule = require('expo-image-picker');
-        } catch (e) {
-          ImagePickerModule = null;
-        }
-      }
-
-      if (!ImagePickerModule || typeof ImagePickerModule.launchImageLibraryAsync !== 'function') {
-        Alert.alert(
-          'Gallery Notice',
-          'Photo library access requires native client build. You can test with 1-Tap Realistic Samples or Paste Receipt Text!',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
-      const perm = await ImagePickerModule.requestMediaLibraryPermissionsAsync();
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
         Alert.alert('Permission Required', 'Gallery access is needed to select receipt photos.');
         return;
       }
 
-      const result = await ImagePickerModule.launchImageLibraryAsync({
+      const result = await ImagePicker.launchImageLibraryAsync({
         quality: 0.85,
-        allowsEditing: true,
+        allowsEditing: false,
         base64: true,
       });
 
