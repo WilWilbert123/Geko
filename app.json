@@ -2,7 +2,7 @@
   "expo": {
     "name": "Geko",
     "slug": "geko",
-    "version": "1.0.9",
+    "version": "1.0.10",
     "sdkVersion": "51.0.0",
     "icon": "./assets/images/Geko.png",
     "splash": {
@@ -16,7 +16,7 @@
     ],
     "android": {
       "package": "com.gekobudgettracker.app",
-      "versionCode": 12,
+      "versionCode": 13,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/geko_adaptive_foreground.png",
         "backgroundColor": "#16A06B"
