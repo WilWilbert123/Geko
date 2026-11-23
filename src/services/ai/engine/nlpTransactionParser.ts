@@ -442,6 +442,9 @@ export const detectBank = (text: string): string | undefined => {
 const detectCategory = (text: string, isIncome: boolean): string => {
   if (isIncome) return 'Cash In';
   const lower = text.toLowerCase();
+  if (lower.includes('debt') || lower.includes('utang') || lower.includes('loan') || lower.includes('pautang') || lower.includes('hiram')) {
+    return 'Debt';
+  }
   for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     if (keywords.some((kw) => lower.includes(kw))) {
       return cat;
@@ -456,22 +459,19 @@ const cleanNote = (rawText: string, isIncome: boolean = false): string => {
   let lower = rawText.toLowerCase();
   const isLost = ['nawala', 'nawalan', 'lost', 'missing', 'stolen', 'nanakaw', 'nahulog'].some(w => lower.includes(w));
 
-  // Special handling for Utang / Debt payment
-  if (lower.includes('utang') || lower.includes('debt') || lower.includes('loan')) {
-    const stripped = lower
-      .replace(/\b(nag|ay|ito|eto|itong|etong|nito|neto|ang|yung|ung|bayad|nagbayad|pambayad|pambili|ng|nang|sa|kay|para|at|na|gamit|gamitan|gotyme|gcash|maya|bpi|bdo|cash)\b/g, ' ')
-      .replace(/\d+(?:\.\d+)?(?:k)?/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (!stripped || stripped === 'utang' || stripped === 'debt' || stripped === 'loan') {
-      return 'Utang';
-    } else {
-      return stripped
-        .split(' ')
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ');
+  // Special handling for Utang / Debt / Loans
+  if (lower.includes('utang') || lower.includes('debt') || lower.includes('loan') || lower.includes('pautang') || lower.includes('hiram')) {
+    const targetMatch = rawText.match(/(?:to|kay|kina|from|galing\s+kay|galing\s+sa)\s+([a-zA-Z0-9_\-]+)/i);
+    let person = targetMatch ? targetMatch[1].trim() : '';
+    if (/^(?:my|the|a|an|ang|mga|sa|ko|mo|natin|namin|account|card|bank)$/i.test(person)) {
+      person = '';
     }
+    const formattedPerson = person ? person.charAt(0).toUpperCase() + person.slice(1) : '';
+
+    if (lower.includes('pautang')) {
+      return formattedPerson ? `Pautang kay ${formattedPerson}` : 'Pautang';
+    }
+    return formattedPerson ? `Debt to ${formattedPerson}` : 'Utang / Debt';
   }
 
   // 1. Strip payment method phrases and bank references so they never pollute the note
@@ -619,13 +619,34 @@ export const parseTransactionsFromText = (input: string): ParsedTransaction[] =>
           .filter(Boolean);
 
   for (const segment of segments) {
-    const segmentBank = detectBank(segment) || defaultBank || 'GCash';
+    const lowerSegment = segment.toLowerCase();
+    const isDebtOrLoan =
+      lowerSegment.includes('debt') ||
+      lowerSegment.includes('utang') ||
+      lowerSegment.includes('loan') ||
+      lowerSegment.includes('pautang') ||
+      lowerSegment.includes('hiram') ||
+      lowerSegment.includes('babayaran');
+
+    const isExplicitExpense =
+      isDebtOrLoan ||
+      lowerSegment.includes('spent') ||
+      lowerSegment.includes('spend') ||
+      lowerSegment.includes('gastos') ||
+      lowerSegment.includes('bili') ||
+      lowerSegment.includes('bumili') ||
+      lowerSegment.includes('bayad') ||
+      lowerSegment.includes('nagbayad') ||
+      lowerSegment.includes('bill') ||
+      lowerSegment.includes('bills');
+
+    const segmentBank = detectBank(segment) || defaultBank || (isDebtOrLoan ? 'Personal Debt' : 'Cash');
     const amount = normalizeAmount(segment);
 
     if (amount > 0) {
-      const isIncome = INCOME_KEYWORDS.some((kw) => segment.toLowerCase().includes(kw));
+      const isIncome = !isExplicitExpense && INCOME_KEYWORDS.some((kw) => lowerSegment.includes(kw));
       const categoryId = detectCategory(segment, isIncome);
-      const note = cleanNote(segment, isIncome) || (isIncome ? 'Cash-In / Deposit' : 'Expense');
+      const note = cleanNote(segment, isIncome) || (isIncome ? 'Cash-In / Deposit' : (isDebtOrLoan ? 'Utang / Debt' : 'Expense'));
       const isCredit = segmentBank.toLowerCase() === 'visa';
 
       results.push({

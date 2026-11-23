@@ -13,7 +13,8 @@ import {
   MessageSquare,
   X,
   CreditCard,
-  TrendingDown
+  TrendingDown,
+  Banknote
 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
@@ -30,7 +31,7 @@ export const ActionRow = () => {
   const navigation = useNavigation<any>();
   const { cards, creditDebt, updateCardDetails } = useCards();
   const { installments } = useInstallments();
-  const { transactions, addTransaction } = useTransactions();
+  const { transactions, addTransaction, deleteTransaction } = useTransactions();
   const [modalVisible, setModalVisible] = useState(false);
   const [installmentModalVisible, setInstallmentModalVisible] = useState(false);
   const [budgetModalVisible, setBudgetModalVisible] = useState(false);
@@ -161,9 +162,11 @@ export const ActionRow = () => {
       t.type === 'expense' &&
       ((t.note || '').toLowerCase().includes('utang') ||
         (t.categoryId || '').toLowerCase().includes('debt') ||
-        (t.categoryId || '').toLowerCase().includes('loan'))
+        (t.categoryId || '').toLowerCase().includes('loan') ||
+        (t.note || '').toLowerCase().includes('debt'))
   );
-  const totalLiabilities = creditDebt + totalInstallmentRemaining;
+  const totalUtang = utangTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+  const totalLiabilities = creditDebt + totalInstallmentRemaining + totalUtang;
 
   return (
     <>
@@ -357,6 +360,11 @@ export const ActionRow = () => {
                 <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
                   Installments: {formatCurrency(totalInstallmentRemaining)}
                 </Text>
+                {totalUtang > 0 && (
+                  <Text style={{ fontSize: 12, color: '#EF4444', marginTop: 2, fontWeight: '700' }}>
+                    Utang / Debts: {formatCurrency(totalUtang)}
+                  </Text>
+                )}
               </View>
             </View>
 
@@ -437,6 +445,40 @@ export const ActionRow = () => {
                       </View>
                     </TouchableOpacity>
                   )}
+
+                  {utangTransactions.map((ut) => (
+                    <View
+                      key={ut.id}
+                      style={[
+                        styles.actionCard,
+                        { backgroundColor: colors.surfaceHighlight, borderColor: colors.border },
+                      ]}
+                    >
+                      <View style={[styles.actionIconBox, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
+                        <Banknote size={18} color="#EF4444" />
+                      </View>
+                      <View style={styles.actionCardText}>
+                        <Text style={[styles.actionCardTitle, { color: colors.text }]}>{ut.note || 'Personal Debt'}</Text>
+                        <Text style={[styles.actionCardSubtitle, { color: colors.textMuted }]}>
+                          Liability: {formatCurrency(ut.amount)} • {ut.bankName || 'Personal'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: '#10B981',
+                          paddingHorizontal: 12,
+                          paddingVertical: 7,
+                          borderRadius: 12,
+                        }}
+                        onPress={async () => {
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          await deleteTransaction(ut.id);
+                        }}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Settle</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
                 </>
               )}
             </View>

@@ -480,9 +480,13 @@ export const generateStream = async (
             [item.amount, item.amount]
           );
         } else if (item.type === 'expense') {
-          await db.execute('UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, bankName]);
+          if (bankName.toLowerCase() !== 'personal debt' && bankName.toLowerCase() !== 'utang') {
+            await db.execute('UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, bankName]);
+          }
         } else if (item.type === 'income') {
-          await db.execute('UPDATE cards SET balance = balance + ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, bankName]);
+          if (bankName.toLowerCase() !== 'personal debt' && bankName.toLowerCase() !== 'utang') {
+            await db.execute('UPDATE cards SET balance = balance + ? WHERE LOWER(bankName) = LOWER(?)', [item.amount, bankName]);
+          }
         }
 
         savedItems.push(item);
@@ -495,7 +499,7 @@ export const generateStream = async (
         const targetBank = single.bankName || 'GCash';
         const cardRes = await db.execute('SELECT balance, outstandingBalance, type FROM cards WHERE LOWER(bankName) = LOWER(?)', [targetBank]);
         const cardRow = cardRes.rows?._array[0];
-        const isCash = targetBank.toLowerCase() === 'cash';
+        const isCash = targetBank.toLowerCase() === 'cash' || targetBank.toLowerCase() === 'physical cash';
         const walletLabel = isCash ? 'Physical Cash wallet' : `${targetBank} card`;
         const newBalStr = cardRow
           ? (cardRow.type === 'CREDIT_CARD'
@@ -516,8 +520,13 @@ export const generateStream = async (
             ? `✓ Na-record ang ${symbol}${single.amount.toFixed(2)} (${single.note}) gamit ang Visa credit card. Nadagdagan ang utang sa Visa, walang nabawas sa cash balances mo.`
             : `✓ Charged ${symbol}${single.amount.toFixed(2)} (${single.note}) to Visa credit card. Added to credit debt.`;
         } else if (single.type === 'expense') {
+          const isDebt = single.categoryId === 'Debt' || single.categoryId === 'Utang' || (single.note || '').toLowerCase().includes('debt') || (single.note || '').toLowerCase().includes('utang') || (single.note || '').toLowerCase().includes('loan') || (single.note || '').toLowerCase().includes('pautang');
           const isLost = single.categoryId === 'Adjustment' || single.note.toLowerCase().includes('lost') || single.note.toLowerCase().includes('nawala');
-          if (isLost) {
+          if (isDebt) {
+            fullResponse = isTagalog
+              ? `✓ Naitala ang ${symbol}${single.amount.toFixed(2)} utang (${single.note}). Naidagdag ito sa iyong Debt & Payoff Tracker nang hindi binabawasan ang iyong bank balances!`
+              : `✓ Recorded ${symbol}${single.amount.toFixed(2)} debt for "${single.note}". Added to your Debt & Payoff Tracker!`;
+          } else if (isLost) {
             fullResponse = isTagalog
               ? `✓ Na-record na ang nawalang ${symbol}${single.amount.toFixed(2)} (${single.note}). Nabawas na ito sa ${walletLabel} mo!${newBalStr}`
               : `✓ Recorded ${symbol}${single.amount.toFixed(2)} lost money (${single.note}). Deducted from your ${walletLabel}!${newBalStr}`;

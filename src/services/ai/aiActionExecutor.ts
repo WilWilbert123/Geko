@@ -153,6 +153,22 @@ export const processAIIntent = async (
   const db = getDb();
   const tagalog = isTagalog(text);
 
+  const isQuestionOrTutorial =
+    lower.includes('?') ||
+    lower.startsWith('how') ||
+    lower.startsWith('paano') ||
+    lower.startsWith('pano') ||
+    lower.includes('how to') ||
+    lower.includes('how do') ||
+    lower.includes('paano mag') ||
+    lower.includes('pano mag') ||
+    lower.includes('tutorial') ||
+    lower.includes('guide') ||
+    lower.includes('who') ||
+    lower.includes('sino') ||
+    lower.includes('magkano') ||
+    lower.includes('what is');
+
   // ── 0. RESET / CLEAR DATA INTENT ──────────────────────────────
   if (
     lower.includes('reset data') ||
@@ -409,18 +425,6 @@ export const processAIIntent = async (
     lower.includes('new') ||
     lower.includes('bago') ||
     lower.includes('bagong');
-
-  const isQuestionOrTutorial =
-    lower.startsWith('how') ||
-    lower.startsWith('paano') ||
-    lower.startsWith('pano') ||
-    lower.includes('how to') ||
-    lower.includes('paano mag') ||
-    lower.includes('pano mag') ||
-    lower.includes('tutorial') ||
-    lower.includes('guide') ||
-    lower.includes('who') ||
-    lower.includes('sino');
 
   const isExcluded =
     lower.includes('goal') ||
@@ -814,6 +818,94 @@ export const processAIIntent = async (
           };
         } catch (e) {
           console.error('Failed to process installment intent:', e);
+        }
+      }
+    }
+  }
+
+  // ── 3.5. DEBT / UTANG / LIABILITIES INTENT ──────────────────────
+  // Matches:
+  // "add debt to cham 1500", "utang kay cham 1500", "debt 1500 to cham", "add utang 1500 kay cham", "pautang kay cham 1500"
+  const isDebtIntent =
+    !isQuestionOrTutorial &&
+    (/\b(?:debt|utang|loan|pautang|hiram|borrow|borrowed|owe|owed)\b/i.test(lower) ||
+      lower.includes('add debt') ||
+      lower.includes('add utang') ||
+      lower.includes('may utang') ||
+      lower.includes('nagka-utang') ||
+      lower.includes('nagpautang'));
+
+  if (isDebtIntent) {
+    const numMatches = text.match(/(?:[p₱]\s*)?\b\d+(?:,\d{3})*(?:\.\d{1,2})?(?:k)?\b/gi);
+    if (numMatches && numMatches.length > 0) {
+      let amount = 0;
+      for (const m of numMatches) {
+        let cleanVal = m.replace(/[p₱,\s]/gi, '').toLowerCase();
+        let val = 0;
+        if (cleanVal.endsWith('k')) {
+          val = parseFloat(cleanVal.slice(0, -1)) * 1000;
+        } else {
+          val = parseFloat(cleanVal);
+        }
+        if (val > amount) amount = val;
+      }
+
+      if (amount > 0) {
+        // Extract counterparty / person name
+        const targetMatch = text.match(/(?:to|kay|kina|from|galing\s+kay|galing\s+sa)\s+([a-zA-Z0-9_\-]+)/i);
+        let person = targetMatch ? targetMatch[1].trim() : '';
+        if (/^(?:my|the|a|an|ang|mga|sa|ko|mo|natin|namin|account|card|bank)$/i.test(person)) {
+          person = '';
+        }
+        const formattedPerson = person ? person.charAt(0).toUpperCase() + person.slice(1) : '';
+
+        const isLent = lower.includes('pautang') || lower.includes('nagpautang') || lower.includes('lent');
+        let note = isLent
+          ? (formattedPerson ? `Pautang kay ${formattedPerson}` : 'Pautang')
+          : (formattedPerson ? `Debt to ${formattedPerson}` : 'Utang / Debt');
+
+        // Check if user explicitly mentioned a bank / payment method
+        let bankName = 'Personal Debt';
+        const sortedAliases = Object.keys(BANK_ALIASES).sort((a, b) => b.length - a.length);
+        for (const alias of sortedAliases) {
+          if (alias === 'cash') {
+            if (/\bcash\b/i.test(lower) && !/\bgcash\b/i.test(lower)) {
+              bankName = 'Physical Cash';
+              break;
+            }
+          } else {
+            const escaped = alias.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            if (new RegExp(`\\b${escaped}\\b`, 'i').test(lower)) {
+              bankName = normalizeBankName(alias);
+              break;
+            }
+          }
+        }
+
+        try {
+          const id = uuidv4();
+          const now = Date.now();
+          await db.execute(
+            'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [id, amount, now, 'Debt', 'expense', note, bankName]
+          );
+
+          if (bankName !== 'Personal Debt') {
+            await db.execute('UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)', [amount, bankName]);
+          }
+
+          DeviceEventEmitter.emit('transactions_updated');
+
+          const replyMsg = tagalog
+            ? `📋 Naitala ang utang: **${note}** (**${formatCurrency(amount)}**). Naidagdag na ito sa iyong **Debt & Payoff Tracker** nang hindi binabawasan ang iyong mga bank card!`
+            : `📋 Recorded debt: **${note}** (**${formatCurrency(amount)}**). Added to your **Debt & Payoff Tracker** without affecting your bank cards!`;
+
+          return {
+            executed: true,
+            message: replyMsg,
+          };
+        } catch (e) {
+          console.error('Failed to process debt intent:', e);
         }
       }
     }
