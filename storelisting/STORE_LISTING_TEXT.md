@@ -46,4 +46,4 @@ Your financial data is stored locally on your device in an encrypted SQLite data
 4. **`phone-2-chat-geko-ai.png`** — `1080 × 1920 px` (9:16 Phone Screenshot 2: Chat Geko Taglish Expense Logger)
 5. **`phone-3-expense-calendar.png`** — `1080 × 1920 px` (9:16 Phone Screenshot 3: Expense Calendar & Cashflow)
 6. **`phone-4-philippine-cards.png`** — `1080 × 1920 px` (9:16 Phone Screenshot 4: 100+ Philippine Banks & E-Wallets)
-7. **`phone-5-receipt-scanner.png`** — `1080 × 1920 px` (9:16 Phone Screenshot 5: Optical Receipt & Bill Scanner)
+7. **`phone-5-receipt-scanner.png`** (or **`phone-5-savings-goals.png`**) — `1080 × 1920 px` (9:16 Phone Screenshot 5: Smart Savings Goals & Payday Cutoff Planner)
