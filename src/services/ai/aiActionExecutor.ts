@@ -859,37 +859,88 @@ export const processAIIntent = async (
       }
 
       if (amount > 0) {
-        // Detect if this is money someone OWES ME (Lent / Pautang / Receivable)
+        // Detect if user is saying "I owe" vs "they owe me"
+        const isIOwe =
+          lower.includes('i owe') ||
+          lower.includes('i owed') ||
+          lower.includes('utang ko') ||
+          lower.includes('may utang ako') ||
+          lower.includes('umutang ako') ||
+          lower.includes('nagkautang ako') ||
+          lower.includes('borrowed from');
+
         const isLent =
-          lower.includes('pautang') ||
-          lower.includes('nagpautang') ||
-          lower.includes('pinautang') ||
-          lower.includes('lent') ||
-          lower.includes('owes me') ||
-          lower.includes('owe me') ||
-          lower.includes('own me') ||
-          lower.includes('utang sa akin') ||
-          lower.includes('utang sakin') ||
-          lower.includes('utang sa kin') ||
-          lower.includes('utang to me') ||
-          (lower.includes('to me') && lower.includes('utang'));
+          !isIOwe &&
+          (lower.includes('pautang') ||
+            lower.includes('nagpautang') ||
+            lower.includes('pinautang') ||
+            lower.includes('lent') ||
+            lower.includes('owes me') ||
+            lower.includes('owe me') ||
+            lower.includes('own me') ||
+            lower.includes('utang sa akin') ||
+            lower.includes('utang sakin') ||
+            lower.includes('utang sa kin') ||
+            lower.includes('utang to me') ||
+            (lower.includes('to me') && lower.includes('utang')));
 
         // Extract counterparty / person name
         let person = '';
-        // 1. Check for "Cham owes me", "Cham owe me", "Cham own me", "Cham has an utang"
-        const subjectMatch = text.match(/\b([a-zA-Z0-9_\-]+)\s+(?:owes?\s+me|own\s+me|has\s+(?:an\s+)?utang)/i);
-        if (subjectMatch) {
-          person = subjectMatch[1].trim();
+        // Pattern 1: "add 300 gino i owe" or "300 gino i owe"
+        const amtPersonMatch = text.match(/(?:add\s+)?(?:\d+(?:,\d{3})*(?:\.\d+)?(?:k)?)\s+([a-zA-Z0-9_\-]+)\s+(?:i\s+owe|who\s+i\s+owe|that\s+i\s+owe)/i);
+        if (amtPersonMatch) {
+          person = amtPersonMatch[1].trim();
         } else {
-          // 2. Check for "to Cham", "kay Cham", "kina Cham", "from Cham", "ni Cham", "si Cham", "pinautang si Cham"
-          const targetMatch = text.match(/(?:to|kay|kina|from|galing\s+kay|galing\s+sa|ni|si|pinautang|nagpautang|pautang)\s+([a-zA-Z0-9_\-]+)/i);
-          if (targetMatch) {
-            person = targetMatch[1].trim();
+          // Pattern 2: "gino 300 i owe" or "gino i owe 300"
+          const personAmtMatch = text.match(/\b([a-zA-Z0-9_\-]+)\s+(?:(?:\d+(?:,\d{3})*(?:\.\d+)?(?:k)?)\s+)?(?:i\s+owe|that\s+i\s+owe)/i);
+          if (personAmtMatch && !/^(?:add|i|owe|money|debt|utang)$/i.test(personAmtMatch[1])) {
+            person = personAmtMatch[1].trim();
+          } else {
+            // Pattern 3: "i owe gino 300" or "owe money to gino 300"
+            const iOweMatch = text.match(/\b(?:i\s+owe|owe)\s+(?:money\s+(?:to|on)\s+)?([a-zA-Z0-9_\-]+)\s+(?:\d+)/i);
+            if (iOweMatch) {
+              person = iOweMatch[1].trim();
+            } else {
+              // Pattern 4: "Cham owes me", "Cham owe me", "Cham has an utang"
+              const subjectMatch = text.match(/\b([a-zA-Z0-9_\-]+)\s+(?:owes?\s+me|own\s+me|has\s+(?:an\s+)?utang)/i);
+              if (subjectMatch) {
+                person = subjectMatch[1].trim();
+              } else {
+                // Pattern 5: "to Cham", "kay Cham", "kina Cham", "from Cham", "galing kay Cham"
+                const targetMatch = text.match(/(?:to|kay|kina|from|galing\s+kay|galing\s+sa)\s+([a-zA-Z0-9_\-]+)/i);
+                if (targetMatch) {
+                  person = targetMatch[1].trim();
+                } else {
+                  // Pattern 6: "pinautang si Cham", "pautang kay Cham"
+                  const lentMatch = text.match(/(?:pinautang|nagpautang|pautang)\s+(?:si|ni)?\s*([a-zA-Z0-9_\-]+)/i);
+                  if (lentMatch) {
+                    person = lentMatch[1].trim();
+                  }
+                }
+              }
+            }
           }
         }
-        if (/^(?:my|the|a|an|ang|mga|sa|ko|mo|natin|namin|account|card|bank|me|akin|sakin|other|people)$/i.test(person)) {
-          person = '';
+
+        // Stopwords & pronouns filtering
+        const stopWords = new Set([
+          'add', 'i', 'owe', 'owed', 'a', 'an', 'the', 'money', 'on', 'to', 'him', 'her', 'them',
+          'me', 'from', 'my', 'debt', 'utang', 'loan', 'pautang', 'cash', 'gcash', 'maya',
+          'bpi', 'gotyme', 'kay', 'si', 'ni', 'sa', 'akin', 'sakin', 'ko', 'mo', 'na', 'ng', 'din', 'rin', 'please',
+          'ako', 'ikaw', 'ka', 'siya', 'kami', 'tayo', 'kayo', 'sila', 'namin', 'natin', 'ninyo', 'nila', 'other', 'people', 'human', 'card', 'bank', 'account'
+        ]);
+
+        if (stopWords.has(person.toLowerCase()) || !person) {
+          // Token fallback: find the remaining non-stopword token
+          const tokens = text.replace(/[^a-zA-Z0-9\s]/g, ' ').split(/\s+/).filter(w => w && isNaN(Number(w)));
+          const candidate = tokens.find(t => !stopWords.has(t.toLowerCase()));
+          if (candidate) {
+            person = candidate;
+          } else {
+            person = '';
+          }
         }
+
         const formattedPerson = person ? person.charAt(0).toUpperCase() + person.slice(1) : '';
 
         const categoryId = isLent ? 'Lent' : 'Debt';

@@ -483,31 +483,72 @@ const cleanNote = (rawText: string, isIncome: boolean = false): string => {
     lower.includes('owe') ||
     lower.includes('lent')
   ) {
+    const isIOwe =
+      lower.includes('i owe') ||
+      lower.includes('i owed') ||
+      lower.includes('utang ko') ||
+      lower.includes('may utang ako') ||
+      lower.includes('umutang ako') ||
+      lower.includes('nagkautang ako') ||
+      lower.includes('borrowed from');
+
     const isLent =
-      lower.includes('pautang') ||
-      lower.includes('nagpautang') ||
-      lower.includes('pinautang') ||
-      lower.includes('lent') ||
-      lower.includes('owes me') ||
-      lower.includes('owe me') ||
-      lower.includes('own me') ||
-      lower.includes('utang to me') ||
-      lower.includes('utang sa akin') ||
-      lower.includes('utang sakin');
+      !isIOwe &&
+      (lower.includes('pautang') ||
+        lower.includes('nagpautang') ||
+        lower.includes('pinautang') ||
+        lower.includes('lent') ||
+        lower.includes('owes me') ||
+        lower.includes('owe me') ||
+        lower.includes('own me') ||
+        lower.includes('utang to me') ||
+        lower.includes('utang sa akin') ||
+        lower.includes('utang sakin'));
 
     let person = '';
-    const subjectMatch = rawText.match(/\b([a-zA-Z0-9_\-]+)\s+(?:owes?\s+me|own\s+me|has\s+(?:an\s+)?utang)/i);
-    if (subjectMatch) {
-      person = subjectMatch[1].trim();
+    const amtPersonMatch = rawText.match(/(?:add\s+)?(?:\d+(?:,\d{3})*(?:\.\d+)?(?:k)?)\s+([a-zA-Z0-9_\-]+)\s+(?:i\s+owe|who\s+i\s+owe|that\s+i\s+owe)/i);
+    if (amtPersonMatch) {
+      person = amtPersonMatch[1].trim();
     } else {
-      const targetMatch = rawText.match(/(?:to|kay|kina|from|galing\s+kay|galing\s+sa|ni|si|pinautang|nagpautang|pautang)\s+([a-zA-Z0-9_\-]+)/i);
-      if (targetMatch) {
-        person = targetMatch[1].trim();
+      const personAmtMatch = rawText.match(/\b([a-zA-Z0-9_\-]+)\s+(?:(?:\d+(?:,\d{3})*(?:\.\d+)?(?:k)?)\s+)?(?:i\s+owe|that\s+i\s+owe)/i);
+      if (personAmtMatch && !/^(?:add|i|owe|money|debt|utang)$/i.test(personAmtMatch[1])) {
+        person = personAmtMatch[1].trim();
+      } else {
+        const iOweMatch = rawText.match(/\b(?:i\s+owe|owe)\s+(?:money\s+(?:to|on)\s+)?([a-zA-Z0-9_\-]+)\s+(?:\d+)/i);
+        if (iOweMatch) {
+          person = iOweMatch[1].trim();
+        } else {
+          const subjectMatch = rawText.match(/\b([a-zA-Z0-9_\-]+)\s+(?:owes?\s+me|own\s+me|has\s+(?:an\s+)?utang)/i);
+          if (subjectMatch) {
+            person = subjectMatch[1].trim();
+          } else {
+            const targetMatch = rawText.match(/(?:to|kay|kina|from|galing\s+kay|galing\s+sa)\s+([a-zA-Z0-9_\-]+)/i);
+            if (targetMatch) {
+              person = targetMatch[1].trim();
+            } else {
+              const lentMatch = rawText.match(/(?:pinautang|nagpautang|pautang)\s+(?:si|ni)?\s*([a-zA-Z0-9_\-]+)/i);
+              if (lentMatch) {
+                person = lentMatch[1].trim();
+              }
+            }
+          }
+        }
       }
     }
-    if (/^(?:my|the|a|an|ang|mga|sa|ko|mo|natin|namin|account|card|bank|me|akin|sakin|other|people)$/i.test(person)) {
-      person = '';
+
+    const stopWords = new Set([
+      'add', 'i', 'owe', 'owed', 'a', 'an', 'the', 'money', 'on', 'to', 'him', 'her', 'them',
+      'me', 'from', 'my', 'debt', 'utang', 'loan', 'pautang', 'cash', 'gcash', 'maya',
+      'bpi', 'gotyme', 'kay', 'si', 'ni', 'sa', 'akin', 'sakin', 'ko', 'mo', 'na', 'ng', 'din', 'rin', 'please',
+      'ako', 'ikaw', 'ka', 'siya', 'kami', 'tayo', 'kayo', 'sila', 'namin', 'natin', 'ninyo', 'nila', 'other', 'people', 'human', 'card', 'bank', 'account'
+    ]);
+
+    if (stopWords.has(person.toLowerCase()) || !person) {
+      const tokens = rawText.replace(/[^a-zA-Z0-9\s]/g, ' ').split(/\s+/).filter(w => w && isNaN(Number(w)));
+      const candidate = tokens.find(t => !stopWords.has(t.toLowerCase()));
+      person = candidate || '';
     }
+
     const formattedPerson = person ? person.charAt(0).toUpperCase() + person.slice(1) : '';
 
     if (isLent) {
