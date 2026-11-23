@@ -442,6 +442,23 @@ export const detectBank = (text: string): string | undefined => {
 const detectCategory = (text: string, isIncome: boolean): string => {
   if (isIncome) return 'Cash In';
   const lower = text.toLowerCase();
+  const isLent =
+    lower.includes('pautang') ||
+    lower.includes('nagpautang') ||
+    lower.includes('pinautang') ||
+    lower.includes('lent') ||
+    lower.includes('owes me') ||
+    lower.includes('owe me') ||
+    lower.includes('own me') ||
+    lower.includes('utang to me') ||
+    lower.includes('utang sa akin') ||
+    lower.includes('utang sakin');
+  if (isLent) {
+    return 'Lent';
+  }
+  if (lower.includes('debt') || lower.includes('utang') || lower.includes('loan') || lower.includes('hiram')) {
+    return 'Debt';
+  }
   for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     if (keywords.some((kw) => lower.includes(kw))) {
       return cat;
@@ -456,22 +473,88 @@ const cleanNote = (rawText: string, isIncome: boolean = false): string => {
   let lower = rawText.toLowerCase();
   const isLost = ['nawala', 'nawalan', 'lost', 'missing', 'stolen', 'nanakaw', 'nahulog'].some(w => lower.includes(w));
 
-  // Special handling for Utang / Debt payment
-  if (lower.includes('utang') || lower.includes('debt') || lower.includes('loan')) {
-    const stripped = lower
-      .replace(/\b(nag|ay|ito|eto|itong|etong|nito|neto|ang|yung|ung|bayad|nagbayad|pambayad|pambili|ng|nang|sa|kay|para|at|na|gamit|gamitan|gotyme|gcash|maya|bpi|bdo|cash)\b/g, ' ')
-      .replace(/\d+(?:\.\d+)?(?:k)?/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+  // Special handling for Utang / Debt / Loans / Lent (Pautang)
+  if (
+    lower.includes('utang') ||
+    lower.includes('debt') ||
+    lower.includes('loan') ||
+    lower.includes('pautang') ||
+    lower.includes('hiram') ||
+    lower.includes('owe') ||
+    lower.includes('lent')
+  ) {
+    const isIOwe =
+      lower.includes('i owe') ||
+      lower.includes('i owed') ||
+      lower.includes('utang ko') ||
+      lower.includes('may utang ako') ||
+      lower.includes('umutang ako') ||
+      lower.includes('nagkautang ako') ||
+      lower.includes('borrowed from');
 
-    if (!stripped || stripped === 'utang' || stripped === 'debt' || stripped === 'loan') {
-      return 'Utang';
+    const isLent =
+      !isIOwe &&
+      (lower.includes('pautang') ||
+        lower.includes('nagpautang') ||
+        lower.includes('pinautang') ||
+        lower.includes('lent') ||
+        lower.includes('owes me') ||
+        lower.includes('owe me') ||
+        lower.includes('own me') ||
+        lower.includes('utang to me') ||
+        lower.includes('utang sa akin') ||
+        lower.includes('utang sakin'));
+
+    let person = '';
+    const amtPersonMatch = rawText.match(/(?:add\s+)?(?:\d+(?:,\d{3})*(?:\.\d+)?(?:k)?)\s+([a-zA-Z0-9_\-]+)\s+(?:i\s+owe|who\s+i\s+owe|that\s+i\s+owe)/i);
+    if (amtPersonMatch) {
+      person = amtPersonMatch[1].trim();
     } else {
-      return stripped
-        .split(' ')
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ');
+      const personAmtMatch = rawText.match(/\b([a-zA-Z0-9_\-]+)\s+(?:(?:\d+(?:,\d{3})*(?:\.\d+)?(?:k)?)\s+)?(?:i\s+owe|that\s+i\s+owe)/i);
+      if (personAmtMatch && !/^(?:add|i|owe|money|debt|utang)$/i.test(personAmtMatch[1])) {
+        person = personAmtMatch[1].trim();
+      } else {
+        const iOweMatch = rawText.match(/\b(?:i\s+owe|owe)\s+(?:money\s+(?:to|on)\s+)?([a-zA-Z0-9_\-]+)\s+(?:\d+)/i);
+        if (iOweMatch) {
+          person = iOweMatch[1].trim();
+        } else {
+          const subjectMatch = rawText.match(/\b([a-zA-Z0-9_\-]+)\s+(?:owes?\s+me|own\s+me|has\s+(?:an\s+)?utang)/i);
+          if (subjectMatch) {
+            person = subjectMatch[1].trim();
+          } else {
+            const targetMatch = rawText.match(/(?:to|kay|kina|from|galing\s+kay|galing\s+sa)\s+([a-zA-Z0-9_\-]+)/i);
+            if (targetMatch) {
+              person = targetMatch[1].trim();
+            } else {
+              const lentMatch = rawText.match(/(?:pinautang|nagpautang|pautang)\s+(?:si|ni)?\s*([a-zA-Z0-9_\-]+)/i);
+              if (lentMatch) {
+                person = lentMatch[1].trim();
+              }
+            }
+          }
+        }
+      }
     }
+
+    const stopWords = new Set([
+      'add', 'i', 'owe', 'owed', 'a', 'an', 'the', 'money', 'on', 'to', 'him', 'her', 'them',
+      'me', 'from', 'my', 'debt', 'utang', 'loan', 'pautang', 'cash', 'gcash', 'maya',
+      'bpi', 'gotyme', 'kay', 'si', 'ni', 'sa', 'akin', 'sakin', 'ko', 'mo', 'na', 'ng', 'din', 'rin', 'please',
+      'ako', 'ikaw', 'ka', 'siya', 'kami', 'tayo', 'kayo', 'sila', 'namin', 'natin', 'ninyo', 'nila', 'other', 'people', 'human', 'card', 'bank', 'account'
+    ]);
+
+    if (stopWords.has(person.toLowerCase()) || !person) {
+      const tokens = rawText.replace(/[^a-zA-Z0-9\s]/g, ' ').split(/\s+/).filter(w => w && isNaN(Number(w)));
+      const candidate = tokens.find(t => !stopWords.has(t.toLowerCase()));
+      person = candidate || '';
+    }
+
+    const formattedPerson = person ? person.charAt(0).toUpperCase() + person.slice(1) : '';
+
+    if (isLent) {
+      return formattedPerson ? `${formattedPerson} owes me` : 'Pautang (Owed to Me)';
+    }
+    return formattedPerson ? `Debt to ${formattedPerson}` : 'Utang / Debt';
   }
 
   // 1. Strip payment method phrases and bank references so they never pollute the note
@@ -619,13 +702,34 @@ export const parseTransactionsFromText = (input: string): ParsedTransaction[] =>
           .filter(Boolean);
 
   for (const segment of segments) {
-    const segmentBank = detectBank(segment) || defaultBank || 'GCash';
+    const lowerSegment = segment.toLowerCase();
+    const isDebtOrLoan =
+      lowerSegment.includes('debt') ||
+      lowerSegment.includes('utang') ||
+      lowerSegment.includes('loan') ||
+      lowerSegment.includes('pautang') ||
+      lowerSegment.includes('hiram') ||
+      lowerSegment.includes('babayaran');
+
+    const isExplicitExpense =
+      isDebtOrLoan ||
+      lowerSegment.includes('spent') ||
+      lowerSegment.includes('spend') ||
+      lowerSegment.includes('gastos') ||
+      lowerSegment.includes('bili') ||
+      lowerSegment.includes('bumili') ||
+      lowerSegment.includes('bayad') ||
+      lowerSegment.includes('nagbayad') ||
+      lowerSegment.includes('bill') ||
+      lowerSegment.includes('bills');
+
+    const segmentBank = detectBank(segment) || defaultBank || (isDebtOrLoan ? 'Personal Debt' : 'Cash');
     const amount = normalizeAmount(segment);
 
     if (amount > 0) {
-      const isIncome = INCOME_KEYWORDS.some((kw) => segment.toLowerCase().includes(kw));
+      const isIncome = !isExplicitExpense && INCOME_KEYWORDS.some((kw) => lowerSegment.includes(kw));
       const categoryId = detectCategory(segment, isIncome);
-      const note = cleanNote(segment, isIncome) || (isIncome ? 'Cash-In / Deposit' : 'Expense');
+      const note = cleanNote(segment, isIncome) || (isIncome ? 'Cash-In / Deposit' : (isDebtOrLoan ? 'Utang / Debt' : 'Expense'));
       const isCredit = segmentBank.toLowerCase() === 'visa';
 
       results.push({

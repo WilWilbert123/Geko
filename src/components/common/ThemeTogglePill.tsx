@@ -11,11 +11,11 @@ interface ThemeTogglePillProps {
 
 export const ThemeTogglePill: React.FC<ThemeTogglePillProps> = ({ isDark, onToggle }) => {
   const [activeDark, setActiveDark] = useState(isDark);
-  const offset = useSharedValue(isDark ? 31 : 0);
+  const offset = useSharedValue(isDark ? 24 : 0);
 
   useEffect(() => {
     setActiveDark(isDark);
-    offset.value = withSpring(isDark ? 31 : 0, {
+    offset.value = withSpring(isDark ? 24 : 0, {
       stiffness: 350,
       damping: 25,
       mass: 0.7,
@@ -26,7 +26,7 @@ export const ThemeTogglePill: React.FC<ThemeTogglePillProps> = ({ isDark, onTogg
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const nextDark = !activeDark;
     setActiveDark(nextDark);
-    offset.value = withSpring(nextDark ? 31 : 0, {
+    offset.value = withSpring(nextDark ? 24 : 0, {
       stiffness: 350,
       damping: 25,
       mass: 0.7,
@@ -72,7 +72,7 @@ export const ThemeTogglePill: React.FC<ThemeTogglePillProps> = ({ isDark, onTogg
       {/* Sun Icon on Left */}
       <View style={styles.iconSlot}>
         <Sun
-          size={14}
+          size={12}
           color={!activeDark ? '#EAB308' : '#64748B'}
           strokeWidth={!activeDark ? 2.5 : 1.8}
         />
@@ -81,7 +81,7 @@ export const ThemeTogglePill: React.FC<ThemeTogglePillProps> = ({ isDark, onTogg
       {/* Moon Icon on Right */}
       <View style={styles.iconSlot}>
         <Moon
-          size={14}
+          size={12}
           color={activeDark ? '#818CF8' : '#64748B'}
           strokeWidth={activeDark ? 2.5 : 1.8}
         />
@@ -92,9 +92,9 @@ export const ThemeTogglePill: React.FC<ThemeTogglePillProps> = ({ isDark, onTogg
 
 const styles = StyleSheet.create({
   track: {
-    width: 65,
-    height: 34,
-    borderRadius: 17,
+    width: 52,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -104,20 +104,20 @@ const styles = StyleSheet.create({
   thumb: {
     position: 'absolute',
     left: 2,
-    top: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    top: 1,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1.5 },
     shadowOpacity: 0.18,
-    shadowRadius: 3,
+    shadowRadius: 2.5,
     elevation: 3,
     zIndex: 1,
   },
   iconSlot: {
-    width: 29,
-    height: 28,
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,

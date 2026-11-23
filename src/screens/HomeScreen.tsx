@@ -151,13 +151,21 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
                 },
               ]}
             >
-              <User size={18} color={colors.primary} strokeWidth={2} />
+              <User size={16} color={colors.primary} strokeWidth={2} />
             </View>
-            <View>
-              <Text style={[styles.greeting, { color: colors.text }]}>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[styles.greeting, { color: colors.text }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {getTimeBasedGreeting(displayName)}
               </Text>
-              <Text style={[styles.subGreeting, { color: colors.textMuted }]}>
+              <Text
+                style={[styles.subGreeting, { color: colors.textMuted }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 Personal Finance Companion
               </Text>
             </View>
@@ -315,45 +323,48 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   headerLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    marginRight: 10,
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   greeting: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
   subGreeting: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     marginTop: 1,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    flexShrink: 0,
   },
   pill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pillText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   themeBtn: {
     width: 38,

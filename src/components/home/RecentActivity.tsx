@@ -74,7 +74,7 @@ export const BANK_COLOR_SCHEMES: Record<string, { text: string; cardBg: string; 
   bpi: { text: '#991B1B', cardBg: '#6B0A14', name: 'BPI' },
   pnb: { text: '#B8860B', cardBg: '#D4AF37', name: 'PNB' },
   gcash: { text: '#2563EB', cardBg: '#0055FF', name: 'GCash' },
-  maya: { text: '#059669', cardBg: '#0B0E14', name: 'Maya' },
+  maya: { text: '#EC4899', cardBg: '#AD1457', name: 'Maya' },
   unionbank: { text: '#EA580C', cardBg: '#E65100', name: 'UnionBank' },
   ub: { text: '#EA580C', cardBg: '#E65100', name: 'UnionBank' },
   bdo: { text: '#0284C7', cardBg: '#004080', name: 'BDO' },

@@ -42,8 +42,10 @@ Your financial data is stored locally on your device in an encrypted SQLite data
 ## Visual Assets Included in `storelisting/`
 1. **`app-icon-512x512.png`** — `512 × 512 px` PNG (Google Play App Icon)
 2. **`feature-graphic-1024x500.png`** — `1024 × 500 px` PNG (Google Play Feature Graphic)
-3. **`phone-1-home-3d-wallet.png`** — `1080 × 1920 px` (9:16 Phone Screenshot 1: 3D Cards & Smart Budget Overview)
-4. **`phone-2-chat-geko-ai.png`** — `1080 × 1920 px` (9:16 Phone Screenshot 2: Chat Geko Taglish Expense Logger)
-5. **`phone-3-expense-calendar.png`** — `1080 × 1920 px` (9:16 Phone Screenshot 3: Expense Calendar & Cashflow)
-6. **`phone-4-philippine-cards.png`** — `1080 × 1920 px` (9:16 Phone Screenshot 4: 100+ Philippine Banks & E-Wallets)
-7. **`phone-5-receipt-scanner.png`** — `1080 × 1920 px` (9:16 Phone Screenshot 5: Optical Receipt & Bill Scanner)
+3. **`phone-1-home-3d-wallet.png`** — `1080 × 1920 px` (Screenshot 1: Your Money & Cards In One Place)
+4. **`phone-2-chat-geko-ai.png`** — `1080 × 1920 px` (Screenshot 2: Just Chat to Log Expenses)
+5. **`phone-3-expense-calendar.png`** — `1080 × 1920 px` (Screenshot 3: See Every Peso Day by Day)
+6. **`phone-4-philippine-cards.png`** — `1080 × 1920 px` (Screenshot 4: All Your Cards Beautifully in 3D)
+7. **`phone-5-savings-goals.png`** — `1080 × 1920 px` (Screenshot 5: Hit Your Goals Every Cutoff)
+
+Regenerate screenshots with: `swift scripts/generate_storelisting.swift`
