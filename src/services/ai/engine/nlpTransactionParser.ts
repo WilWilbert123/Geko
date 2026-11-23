@@ -442,7 +442,21 @@ export const detectBank = (text: string): string | undefined => {
 const detectCategory = (text: string, isIncome: boolean): string => {
   if (isIncome) return 'Cash In';
   const lower = text.toLowerCase();
-  if (lower.includes('debt') || lower.includes('utang') || lower.includes('loan') || lower.includes('pautang') || lower.includes('hiram')) {
+  const isLent =
+    lower.includes('pautang') ||
+    lower.includes('nagpautang') ||
+    lower.includes('pinautang') ||
+    lower.includes('lent') ||
+    lower.includes('owes me') ||
+    lower.includes('owe me') ||
+    lower.includes('own me') ||
+    lower.includes('utang to me') ||
+    lower.includes('utang sa akin') ||
+    lower.includes('utang sakin');
+  if (isLent) {
+    return 'Lent';
+  }
+  if (lower.includes('debt') || lower.includes('utang') || lower.includes('loan') || lower.includes('hiram')) {
     return 'Debt';
   }
   for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
@@ -459,17 +473,45 @@ const cleanNote = (rawText: string, isIncome: boolean = false): string => {
   let lower = rawText.toLowerCase();
   const isLost = ['nawala', 'nawalan', 'lost', 'missing', 'stolen', 'nanakaw', 'nahulog'].some(w => lower.includes(w));
 
-  // Special handling for Utang / Debt / Loans
-  if (lower.includes('utang') || lower.includes('debt') || lower.includes('loan') || lower.includes('pautang') || lower.includes('hiram')) {
-    const targetMatch = rawText.match(/(?:to|kay|kina|from|galing\s+kay|galing\s+sa)\s+([a-zA-Z0-9_\-]+)/i);
-    let person = targetMatch ? targetMatch[1].trim() : '';
-    if (/^(?:my|the|a|an|ang|mga|sa|ko|mo|natin|namin|account|card|bank)$/i.test(person)) {
+  // Special handling for Utang / Debt / Loans / Lent (Pautang)
+  if (
+    lower.includes('utang') ||
+    lower.includes('debt') ||
+    lower.includes('loan') ||
+    lower.includes('pautang') ||
+    lower.includes('hiram') ||
+    lower.includes('owe') ||
+    lower.includes('lent')
+  ) {
+    const isLent =
+      lower.includes('pautang') ||
+      lower.includes('nagpautang') ||
+      lower.includes('pinautang') ||
+      lower.includes('lent') ||
+      lower.includes('owes me') ||
+      lower.includes('owe me') ||
+      lower.includes('own me') ||
+      lower.includes('utang to me') ||
+      lower.includes('utang sa akin') ||
+      lower.includes('utang sakin');
+
+    let person = '';
+    const subjectMatch = rawText.match(/\b([a-zA-Z0-9_\-]+)\s+(?:owes?\s+me|own\s+me|has\s+(?:an\s+)?utang)/i);
+    if (subjectMatch) {
+      person = subjectMatch[1].trim();
+    } else {
+      const targetMatch = rawText.match(/(?:to|kay|kina|from|galing\s+kay|galing\s+sa|ni|si|pinautang|nagpautang|pautang)\s+([a-zA-Z0-9_\-]+)/i);
+      if (targetMatch) {
+        person = targetMatch[1].trim();
+      }
+    }
+    if (/^(?:my|the|a|an|ang|mga|sa|ko|mo|natin|namin|account|card|bank|me|akin|sakin|other|people)$/i.test(person)) {
       person = '';
     }
     const formattedPerson = person ? person.charAt(0).toUpperCase() + person.slice(1) : '';
 
-    if (lower.includes('pautang')) {
-      return formattedPerson ? `Pautang kay ${formattedPerson}` : 'Pautang';
+    if (isLent) {
+      return formattedPerson ? `${formattedPerson} owes me` : 'Pautang (Owed to Me)';
     }
     return formattedPerson ? `Debt to ${formattedPerson}` : 'Utang / Debt';
   }

@@ -823,17 +823,25 @@ export const processAIIntent = async (
     }
   }
 
-  // ── 3.5. DEBT / UTANG / LIABILITIES INTENT ──────────────────────
+  // ── 3.5. DEBT / UTANG / LIABILITIES / LENT (PAUTANG) INTENT ──────
   // Matches:
-  // "add debt to cham 1500", "utang kay cham 1500", "debt 1500 to cham", "add utang 1500 kay cham", "pautang kay cham 1500"
+  // "add debt to cham 1500", "utang kay cham 1500", "cham owes me 500", "pautang kay cham 500",
+  // "may utang sa akin si cham 500", "people who owe me 500", "pinautang ko si cham 500"
   const isDebtIntent =
     !isQuestionOrTutorial &&
-    (/\b(?:debt|utang|loan|pautang|hiram|borrow|borrowed|owe|owed)\b/i.test(lower) ||
+    (/\b(?:debt|utang|loan|pautang|hiram|borrow|borrowed|owe|owed|owes|lent|pinautang|nagpautang)\b/i.test(lower) ||
       lower.includes('add debt') ||
       lower.includes('add utang') ||
       lower.includes('may utang') ||
       lower.includes('nagka-utang') ||
-      lower.includes('nagpautang'));
+      lower.includes('owes me') ||
+      lower.includes('owe me') ||
+      lower.includes('own me') || // common typo for owe me
+      lower.includes('utang to me') ||
+      lower.includes('utang sa akin') ||
+      lower.includes('utang sakin') ||
+      lower.includes('nagpautang') ||
+      lower.includes('pinautang'));
 
   if (isDebtIntent) {
     const numMatches = text.match(/(?:[p₱]\s*)?\b\d+(?:,\d{3})*(?:\.\d{1,2})?(?:k)?\b/gi);
@@ -851,21 +859,46 @@ export const processAIIntent = async (
       }
 
       if (amount > 0) {
+        // Detect if this is money someone OWES ME (Lent / Pautang / Receivable)
+        const isLent =
+          lower.includes('pautang') ||
+          lower.includes('nagpautang') ||
+          lower.includes('pinautang') ||
+          lower.includes('lent') ||
+          lower.includes('owes me') ||
+          lower.includes('owe me') ||
+          lower.includes('own me') ||
+          lower.includes('utang sa akin') ||
+          lower.includes('utang sakin') ||
+          lower.includes('utang sa kin') ||
+          lower.includes('utang to me') ||
+          (lower.includes('to me') && lower.includes('utang'));
+
         // Extract counterparty / person name
-        const targetMatch = text.match(/(?:to|kay|kina|from|galing\s+kay|galing\s+sa)\s+([a-zA-Z0-9_\-]+)/i);
-        let person = targetMatch ? targetMatch[1].trim() : '';
-        if (/^(?:my|the|a|an|ang|mga|sa|ko|mo|natin|namin|account|card|bank)$/i.test(person)) {
+        let person = '';
+        // 1. Check for "Cham owes me", "Cham owe me", "Cham own me", "Cham has an utang"
+        const subjectMatch = text.match(/\b([a-zA-Z0-9_\-]+)\s+(?:owes?\s+me|own\s+me|has\s+(?:an\s+)?utang)/i);
+        if (subjectMatch) {
+          person = subjectMatch[1].trim();
+        } else {
+          // 2. Check for "to Cham", "kay Cham", "kina Cham", "from Cham", "ni Cham", "si Cham", "pinautang si Cham"
+          const targetMatch = text.match(/(?:to|kay|kina|from|galing\s+kay|galing\s+sa|ni|si|pinautang|nagpautang|pautang)\s+([a-zA-Z0-9_\-]+)/i);
+          if (targetMatch) {
+            person = targetMatch[1].trim();
+          }
+        }
+        if (/^(?:my|the|a|an|ang|mga|sa|ko|mo|natin|namin|account|card|bank|me|akin|sakin|other|people)$/i.test(person)) {
           person = '';
         }
         const formattedPerson = person ? person.charAt(0).toUpperCase() + person.slice(1) : '';
 
-        const isLent = lower.includes('pautang') || lower.includes('nagpautang') || lower.includes('lent');
-        let note = isLent
-          ? (formattedPerson ? `Pautang kay ${formattedPerson}` : 'Pautang')
+        const categoryId = isLent ? 'Lent' : 'Debt';
+        const note = isLent
+          ? (formattedPerson ? `${formattedPerson} owes me` : 'Pautang (Owed to Me)')
           : (formattedPerson ? `Debt to ${formattedPerson}` : 'Utang / Debt');
 
-        // Check if user explicitly mentioned a bank / payment method
-        let bankName = 'Personal Debt';
+        // Check if user explicitly mentioned a bank / payment method they lent from or borrowed from
+        let bankName = isLent ? 'Personal Receivable' : 'Personal Debt';
         const sortedAliases = Object.keys(BANK_ALIASES).sort((a, b) => b.length - a.length);
         for (const alias of sortedAliases) {
           if (alias === 'cash') {
@@ -887,25 +920,95 @@ export const processAIIntent = async (
           const now = Date.now();
           await db.execute(
             'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [id, amount, now, 'Debt', 'expense', note, bankName]
+            [id, amount, now, categoryId, 'expense', note, bankName]
           );
 
-          if (bankName !== 'Personal Debt') {
+          // Only deduct balance if user explicitly mentioned a funded card/wallet (e.g. "pinautang ko gamit GCash")
+          if (bankName !== 'Personal Debt' && bankName !== 'Personal Receivable') {
             await db.execute('UPDATE cards SET balance = balance - ? WHERE LOWER(bankName) = LOWER(?)', [amount, bankName]);
           }
 
           DeviceEventEmitter.emit('transactions_updated');
 
-          const replyMsg = tagalog
-            ? `📋 Naitala ang utang: **${note}** (**${formatCurrency(amount)}**). Naidagdag na ito sa iyong **Debt & Payoff Tracker** nang hindi binabawasan ang iyong mga bank card!`
-            : `📋 Recorded debt: **${note}** (**${formatCurrency(amount)}**). Added to your **Debt & Payoff Tracker** without affecting your bank cards!`;
+          const replyMsg = isLent
+            ? (tagalog
+                ? `📋 Naitala ang pautang: **${note}** (**${formatCurrency(amount)}**). Makikita mo ito sa iyong **Debt & Payoff Tracker** sa ilalim ng **"Owed to Me (Pautang)"**!`
+                : `📋 Recorded receivable: **${note}** (**${formatCurrency(amount)}**). Added to your **Debt & Payoff Tracker** under **"Owed to Me (Pautang)"**!`)
+            : (tagalog
+                ? `📋 Naitala ang utang: **${note}** (**${formatCurrency(amount)}**). Naidagdag na ito sa iyong **Debt & Payoff Tracker** sa **"I Owe (Utang Ko)"**!`
+                : `📋 Recorded debt: **${note}** (**${formatCurrency(amount)}**). Added to your **Debt & Payoff Tracker** under **"I Owe (Utang Ko)"**!`);
 
           return {
             executed: true,
             message: replyMsg,
           };
         } catch (e) {
-          console.error('Failed to process debt intent:', e);
+          console.error('Failed to process debt/lent intent:', e);
+        }
+      }
+    }
+  }
+
+  // ── 3.6. DEBT REPAYMENT / COLLECTED LENT INTENT ─────────────────
+  // Matches: "Cham paid me 500", "nagbayad na si cham 500", "bayad na si cham 500", "cham paid 500"
+  const isRepaymentIntent =
+    !isQuestionOrTutorial &&
+    (/\b(?:paid\s+me|nagbayad|nag-bayad|bayad\s+na)\b/i.test(lower) ||
+      (lower.includes('paid') && (lower.includes('utang') || lower.includes('debt') || lower.includes('lent'))));
+
+  if (isRepaymentIntent) {
+    const numMatches = text.match(/(?:[p₱]\s*)?\b\d+(?:,\d{3})*(?:\.\d{1,2})?(?:k)?\b/gi);
+    if (numMatches && numMatches.length > 0) {
+      let amount = 0;
+      for (const m of numMatches) {
+        let cleanVal = m.replace(/[p₱,\s]/gi, '').toLowerCase();
+        let val = cleanVal.endsWith('k') ? parseFloat(cleanVal.slice(0, -1)) * 1000 : parseFloat(cleanVal);
+        if (val > amount) amount = val;
+      }
+
+      if (amount > 0) {
+        const pMatch =
+          text.match(/(?:si|ni|from|galing\s+kay|by)?\s*([a-zA-Z0-9_\-]+)\s+(?:paid|nagbayad|bayad)/i) ||
+          text.match(/(?:paid|nagbayad|bayad\s+na)\s+(?:si|ni)?\s*([a-zA-Z0-9_\-]+)/i);
+        let person = pMatch ? pMatch[1].trim() : '';
+        if (/^(?:my|the|a|an|ang|mga|sa|ko|mo|natin|namin|me|akin|sakin)$/i.test(person)) person = '';
+        const formattedPerson = person ? person.charAt(0).toUpperCase() + person.slice(1) : '';
+
+        try {
+          const lentRows = await db.execute(
+            "SELECT * FROM transactions WHERE categoryId = 'Lent' OR LOWER(note) LIKE '%owes me%' OR LOWER(note) LIKE '%pautang%' ORDER BY date DESC"
+          );
+          const allLent = lentRows.rows?._array || [];
+          let matchedTx =
+            allLent.find((t: any) =>
+              formattedPerson && (t.note || '').toLowerCase().includes(formattedPerson.toLowerCase())
+            ) || allLent.find((t: any) => t.amount === amount);
+
+          if (matchedTx) {
+            await db.execute('DELETE FROM transactions WHERE id = ?', [matchedTx.id]);
+          }
+
+          const id = uuidv4();
+          const now = Date.now();
+          const noteStr = formattedPerson ? `Collected payment from ${formattedPerson}` : 'Collected debt repayment';
+          await db.execute(
+            'INSERT INTO transactions (id, amount, date, categoryId, type, note, bankName) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [id, amount, now, 'Debt Repayment', 'income', noteStr, 'Physical Cash']
+          );
+          await db.execute(
+            "UPDATE cards SET balance = balance + ? WHERE LOWER(bankName) = 'cash' OR LOWER(bankName) = 'physical cash'",
+            [amount]
+          );
+
+          DeviceEventEmitter.emit('transactions_updated');
+
+          const replyMsg = tagalog
+            ? `🎉 Na-settle na ang pautang${formattedPerson ? ` ni **${formattedPerson}**` : ''} (**${formatCurrency(amount)}**)! Na-record ito bilang natanggap na bayad at naidagdag sa iyong Cash balance.`
+            : `🎉 Settled debt repayment${formattedPerson ? ` from **${formattedPerson}**` : ''} (**${formatCurrency(amount)}**)! Recorded as received income and added to your Cash balance.`;
+
+          return { executed: true, message: replyMsg };
+        } catch (e) {
+          console.error('Failed to process repayment intent:', e);
         }
       }
     }

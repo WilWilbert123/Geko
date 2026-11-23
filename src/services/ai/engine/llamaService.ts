@@ -520,12 +520,29 @@ export const generateStream = async (
             ? `✓ Na-record ang ${symbol}${single.amount.toFixed(2)} (${single.note}) gamit ang Visa credit card. Nadagdagan ang utang sa Visa, walang nabawas sa cash balances mo.`
             : `✓ Charged ${symbol}${single.amount.toFixed(2)} (${single.note}) to Visa credit card. Added to credit debt.`;
         } else if (single.type === 'expense') {
-          const isDebt = single.categoryId === 'Debt' || single.categoryId === 'Utang' || (single.note || '').toLowerCase().includes('debt') || (single.note || '').toLowerCase().includes('utang') || (single.note || '').toLowerCase().includes('loan') || (single.note || '').toLowerCase().includes('pautang');
+          const isLent =
+            single.categoryId === 'Lent' ||
+            single.categoryId === 'Pautang' ||
+            (single.note || '').toLowerCase().includes('pautang') ||
+            (single.note || '').toLowerCase().includes('owes me') ||
+            (single.note || '').toLowerCase().includes('own me') ||
+            (single.note || '').toLowerCase().includes('pinautang');
+          const isDebt =
+            !isLent &&
+            (single.categoryId === 'Debt' ||
+              single.categoryId === 'Utang' ||
+              (single.note || '').toLowerCase().includes('debt') ||
+              (single.note || '').toLowerCase().includes('utang') ||
+              (single.note || '').toLowerCase().includes('loan'));
           const isLost = single.categoryId === 'Adjustment' || single.note.toLowerCase().includes('lost') || single.note.toLowerCase().includes('nawala');
-          if (isDebt) {
+          if (isLent) {
             fullResponse = isTagalog
-              ? `✓ Naitala ang ${symbol}${single.amount.toFixed(2)} utang (${single.note}). Naidagdag ito sa iyong Debt & Payoff Tracker nang hindi binabawasan ang iyong bank balances!`
-              : `✓ Recorded ${symbol}${single.amount.toFixed(2)} debt for "${single.note}". Added to your Debt & Payoff Tracker!`;
+              ? `✓ Naitala ang ${symbol}${single.amount.toFixed(2)} pautang (${single.note}). Naidagdag ito sa iyong Debt & Payoff Tracker sa "Owed to Me (Pautang)"!`
+              : `✓ Recorded ${symbol}${single.amount.toFixed(2)} receivable for "${single.note}". Added to your Debt & Payoff Tracker under "Owed to Me (Pautang)"!`;
+          } else if (isDebt) {
+            fullResponse = isTagalog
+              ? `✓ Naitala ang ${symbol}${single.amount.toFixed(2)} utang (${single.note}). Naidagdag ito sa iyong Debt & Payoff Tracker sa "I Owe (Utang Ko)"!`
+              : `✓ Recorded ${symbol}${single.amount.toFixed(2)} debt for "${single.note}". Added to your Debt & Payoff Tracker under "I Owe (Utang Ko)"!`;
           } else if (isLost) {
             fullResponse = isTagalog
               ? `✓ Na-record na ang nawalang ${symbol}${single.amount.toFixed(2)} (${single.note}). Nabawas na ito sa ${walletLabel} mo!${newBalStr}`
