@@ -500,6 +500,18 @@ export const EWALLET_PRESETS: CardPreset[] = [
     tag: 'Mastercard tap-to-pay',
   },
   {
+    id: 'maya-ewallet',
+    name: 'Maya',
+    shortName: 'Maya',
+    category: 'EWALLET',
+    type: 'EWALLET',
+    network: 'VISA',
+    color1: '#AD1457',
+    color2: '#EC4899',
+    badgeText: 'E-Wallet',
+    tag: 'All-in-one wallet, savings & crypto',
+  },
+  {
     id: 'maya-visa-card',
     name: 'Maya Visa Card',
     shortName: 'Maya Visa',
@@ -507,9 +519,9 @@ export const EWALLET_PRESETS: CardPreset[] = [
     type: 'EWALLET',
     network: 'VISA',
     color1: '#AD1457',
-    color2: '#D81B60',
+    color2: '#EC4899',
     badgeText: 'E-Wallet',
-    tag: 'Black matte Visa EMV',
+    tag: 'Signature pink Visa EMV',
   },
   {
     id: 'maya-mastercard',
@@ -518,10 +530,10 @@ export const EWALLET_PRESETS: CardPreset[] = [
     category: 'EWALLET',
     type: 'EWALLET',
     network: 'MASTERCARD',
-    color1: '#2E0854',
-    color2: '#D946EF',
+    color1: '#AD1457',
+    color2: '#EC4899',
     badgeText: 'E-Wallet',
-    tag: 'Cyber magenta Mastercard',
+    tag: 'Cyber pink Mastercard',
   },
   {
     id: 'grabpay-mastercard',
@@ -1362,9 +1374,9 @@ export const PHILIPPINE_BANK_PRESETS: CardPreset[] = [
     shortName: 'Maya Bank',
     category: 'BANK',
     type: 'BANK',
-    network: 'MASTERCARD',
-    color1: '#090D16',
-    color2: '#00E676',
+    network: 'VISA',
+    color1: '#AD1457',
+    color2: '#EC4899',
     badgeText: 'Digital Bank',
     tag: 'Digital savings up to 14% p.a.',
   },
@@ -1733,7 +1745,15 @@ export const searchPresets = (query: string, category: PresetCategory = 'ALL'): 
 
 export const findPresetByName = (name: string): CardPreset | undefined => {
   const q = (name || '').trim().toLowerCase();
+  if (!q) return undefined;
+  // 1. Exact match has priority!
+  const exact = ALL_CARD_PRESETS.find(
+    p => p.shortName.toLowerCase() === q || p.name.toLowerCase() === q
+  );
+  if (exact) return exact;
+
+  // 2. Starts-with or inclusion fallback
   return ALL_CARD_PRESETS.find(
-    p => p.shortName.toLowerCase() === q || p.name.toLowerCase() === q || q.includes(p.shortName.toLowerCase()) || p.shortName.toLowerCase().startsWith(q)
+    p => p.shortName.toLowerCase().startsWith(q) || q.includes(p.shortName.toLowerCase())
   );
 };
